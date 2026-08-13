@@ -1,0 +1,9 @@
+{
+  "name": "Psycards",
+  "short_name": "Psycards",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#1f4e78",
+  "icons": []
+}
