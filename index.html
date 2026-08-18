@@ -42,6 +42,10 @@
     .card-guide.ready{border-color:#32d66b;box-shadow:0 0 20px rgba(50,214,107,.7),0 0 0 9999px rgba(0,0,0,.28)}
     .guide-check{position:absolute;right:-17px;top:-17px;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#ffbf3f;color:#14213d;font-size:25px;font-weight:900}
     .card-guide.ready .guide-check{background:#32d66b;color:white}
+    .read-zone{position:absolute;left:4%;right:4%;border:3px dashed #55b7ff;border-radius:8px;background:rgba(31,78,120,.10);color:white;font-size:11px;font-weight:900;text-align:left;padding:3px 5px;box-sizing:border-box;text-shadow:0 1px 3px #000}
+    .name-zone{top:2%;height:18%}
+    .details-zone{left:4%;right:38%;bottom:2%;height:16%}
+    .card-guide.ready .read-zone{border-color:#32d66b}
     .camera-help{position:absolute;left:12px;right:12px;bottom:16px;text-align:center;font-weight:700;text-shadow:0 1px 4px #000}
     .camera-bottom{padding:14px 16px 20px;text-align:center;background:#07101c}
     .capture{width:78px;height:78px;border-radius:50%;border:6px solid white;background:#32d66b;padding:0}
@@ -159,7 +163,7 @@
   <div id="cameraStage" class="camera-stage">
     <video id="cameraVideo" playsinline muted></video>
     <div class="camera-shade"></div>
-    <div id="cardGuide" class="card-guide"><span class="guide-check">✓</span></div>
+    <div id="cardGuide" class="card-guide"><span class="guide-check">✓</span><div class="read-zone name-zone">NAAM</div><div class="read-zone details-zone">SET + NUMMER</div></div>
     <div id="cameraHelp" class="camera-help">Houd de volledige kaart recht en voorkom weerspiegeling</div>
   </div>
     <div class="camera-bottom"><button id="captureButton" class="capture" type="button" onclick="captureCard()" aria-label="Foto maken" disabled></button></div>
