@@ -32,6 +32,20 @@
     .scanbox{margin-top:10px;padding:12px;border-radius:12px;background:#eef5fb}
     .scanbox button{width:100%;padding:13px;font-size:16px;border-radius:12px}
     .scan-status{margin-top:8px;font-size:13px;color:#475467;line-height:1.4}
+    .camera-modal{position:fixed;inset:0;background:#07101c;z-index:50;display:flex;flex-direction:column;color:white}
+    .camera-top{display:flex;align-items:center;justify-content:space-between;padding:14px 16px}
+    .camera-top button{padding:9px 13px;font-size:14px;border-radius:10px}
+    .camera-stage{position:relative;flex:1;min-height:0;overflow:hidden;background:#000}
+    #cameraVideo{width:100%;height:100%;object-fit:cover}
+    .camera-shade{position:absolute;inset:0;background:rgba(0,0,0,.38);pointer-events:none}
+    .card-guide{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:min(68vh,78vw);aspect-ratio:63/88;border:4px solid #ffbf3f;border-radius:18px;box-shadow:0 0 0 9999px rgba(0,0,0,.28);transition:.2s}
+    .card-guide.ready{border-color:#32d66b;box-shadow:0 0 20px rgba(50,214,107,.7),0 0 0 9999px rgba(0,0,0,.28)}
+    .guide-check{position:absolute;right:-17px;top:-17px;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#ffbf3f;color:#14213d;font-size:25px;font-weight:900}
+    .card-guide.ready .guide-check{background:#32d66b;color:white}
+    .camera-help{position:absolute;left:12px;right:12px;bottom:16px;text-align:center;font-weight:700;text-shadow:0 1px 4px #000}
+    .camera-bottom{padding:14px 16px 20px;text-align:center;background:#07101c}
+    .capture{width:78px;height:78px;border-radius:50%;border:6px solid white;background:#32d66b;padding:0}
+    .capture:disabled{background:#667085;opacity:.65}
     .dot{width:8px;height:8px;border-radius:50%;background:#8bd38b}.dot.offline{background:#ffcc66}
     #login{max-width:420px;margin:42px auto}.login-button{width:100%;margin-top:16px}
     @media(max-width:520px){.grid,.row,.stats{grid-template-columns:1fr}.grid button{min-height:88px}}
@@ -74,6 +88,7 @@
       <label>📸 Foto</label>
       <input id="photo" type="file" accept="image/*" capture="environment">
       <div class="scanbox">
+        <button class="primary" type="button" onclick="openCardCamera()">📷 Open kaartscanner</button>
         <button id="scanButton" class="light" type="button" onclick="scanCard()">🔍 Lees kaart van foto</button>
         <div id="scanStatus" class="scan-status">Maak eerst een scherpe foto van de volledige voorkant.</div>
         <div id="scanResult" class="hidden">
@@ -124,6 +139,17 @@
   </section>
 </main>
 
+<section id="cameraModal" class="camera-modal hidden">
+  <div class="camera-top"><b>Kaart goed in het kader plaatsen</b><button class="light" type="button" onclick="closeCardCamera()">Sluiten</button></div>
+  <div id="cameraStage" class="camera-stage">
+    <video id="cameraVideo" playsinline muted></video>
+    <div class="camera-shade"></div>
+    <div id="cardGuide" class="card-guide"><span class="guide-check">✓</span></div>
+    <div id="cameraHelp" class="camera-help">Houd de volledige kaart recht en voorkom weerspiegeling</div>
+  </div>
+    <div class="camera-bottom"><button id="captureButton" class="capture" type="button" onclick="captureCard()" aria-label="Foto maken" disabled></button></div>
+</section>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
@@ -134,6 +160,7 @@ const SHARED_PIN='6129';
 const cloud=window.supabase.createClient(PROJECT_URL,PUBLISHABLE_KEY);
 let cardsCache=[];
 let scanCandidates=[];
+let cameraStream=null,cameraTimer=null,cameraReadyFrames=0;
 
 if(sessionStorage.getItem('psycards-login')==='yes') startApp();
 window.addEventListener('online',updateConnection);
@@ -192,6 +219,49 @@ function fileToDataURL(file){
     reader.readAsDataURL(file);
   });
 }
+async function openCardCamera(){
+  if(!navigator.mediaDevices?.getUserMedia)return alert('De camera wordt op dit toestel niet ondersteund. Gebruik de gewone fotoknop.');
+  try{
+    cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+    const video=document.getElementById('cameraVideo'); video.srcObject=cameraStream; await video.play();
+    document.getElementById('cameraModal').classList.remove('hidden'); cameraReadyFrames=0;document.getElementById('captureButton').disabled=true;
+    cameraTimer=setInterval(checkCameraQuality,450);
+  }catch(e){alert('De camera kon niet worden geopend. Geef Psycards toestemming voor de camera of gebruik de gewone fotoknop.');}
+}
+function closeCardCamera(){
+  clearInterval(cameraTimer); cameraTimer=null;
+  if(cameraStream)cameraStream.getTracks().forEach(t=>t.stop()); cameraStream=null;
+  document.getElementById('cameraModal').classList.add('hidden');
+}
+function guideVideoRect(){
+  const video=document.getElementById('cameraVideo'),stage=document.getElementById('cameraStage'),guide=document.getElementById('cardGuide');
+  const sr=stage.getBoundingClientRect(),gr=guide.getBoundingClientRect(),vw=video.videoWidth,vh=video.videoHeight;
+  const scale=Math.max(sr.width/vw,sr.height/vh),shownW=vw*scale,shownH=vh*scale;
+  const offsetX=(shownW-sr.width)/2,offsetY=(shownH-sr.height)/2;
+  return {sx:(gr.left-sr.left+offsetX)/scale,sy:(gr.top-sr.top+offsetY)/scale,sw:gr.width/scale,sh:gr.height/scale};
+}
+function checkCameraQuality(){
+  const video=document.getElementById('cameraVideo'); if(!video.videoWidth)return;
+  const r=guideVideoRect(),canvas=document.createElement('canvas'); canvas.width=160;canvas.height=224;
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(video,r.sx,r.sy,r.sw,r.sh,0,0,160,224);
+  const data=ctx.getImageData(0,0,160,224).data;let light=0,edges=0,count=0,previous=0;
+  for(let y=0;y<224;y+=3)for(let x=0;x<160;x+=3){const i=(y*160+x)*4,v=(data[i]*.299+data[i+1]*.587+data[i+2]*.114);light+=v;if(count)edges+=Math.abs(v-previous);previous=v;count++;}
+  light/=count;edges/=count;
+  const good=light>48&&light<225&&edges>13;
+  cameraReadyFrames=good?Math.min(4,cameraReadyFrames+1):0;
+  const ready=cameraReadyFrames>=3;document.getElementById('cardGuide').classList.toggle('ready',ready);
+  document.getElementById('captureButton').disabled=!ready;
+  document.getElementById('cameraHelp').textContent=ready?'✓ Goed! Houd stil en maak de foto':light<=48?'Meer licht nodig':light>=225?'Te veel licht of weerspiegeling':'Breng de kaart dichterbij en houd de camera stil';
+}
+async function captureCard(){
+  const video=document.getElementById('cameraVideo');if(!video.videoWidth)return;
+  if(cameraReadyFrames<3)return alert('Plaats de kaart eerst goed in het kader en wacht op het groene vinkje.');
+  const r=guideVideoRect(),canvas=document.createElement('canvas');canvas.width=900;canvas.height=Math.round(900*88/63);
+  canvas.getContext('2d').drawImage(video,r.sx,r.sy,r.sw,r.sh,0,0,canvas.width,canvas.height);
+  const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',.9));
+  const file=new File([blob],'kaart-scan.jpg',{type:'image/jpeg'}),transfer=new DataTransfer();transfer.items.add(file);
+  document.getElementById('photo').files=transfer.files;closeCardCamera();setScanStatus('Foto gemaakt. De kaart wordt nu gelezen…');scanCard();
+}
 function setScanStatus(message){document.getElementById('scanStatus').textContent=message;}
 function normalizeText(value){return String(value||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();}
 function scanScore(card,ocr,number,total){
@@ -215,7 +285,11 @@ async function scanCard(){
       if(m.status==='recognizing text')setScanStatus('Kaart lezen… '+Math.round((m.progress||0)*100)+'%');
       else if(m.status)setScanStatus('Kaartlezer voorbereiden…');
     }});
-    const ocr=result.data.text||'';
+    let ocr=result.data.text||'';
+    const source=new Image();source.src=image;await source.decode();
+    const crop=document.createElement('canvas');crop.width=1200;crop.height=420;
+    crop.getContext('2d').drawImage(source,0,source.height*.66,source.width,source.height*.34,0,0,crop.width,crop.height);
+    const bottom=await Tesseract.recognize(crop.toDataURL('image/jpeg',.92),'eng');ocr+='\n'+(bottom.data.text||'');
     const numberMatch=ocr.match(/\b(\d{1,3})\s*[\/|]\s*(\d{2,3})\b/);
     const number=numberMatch?.[1]||'', total=numberMatch?.[2]||'';
     if(!number)throw new Error('Het kaartnummer is niet duidelijk leesbaar. Maak een foto zonder weerspiegeling waarop ook de onderkant scherp staat.');
