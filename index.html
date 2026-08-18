@@ -88,8 +88,10 @@
       <label>Soort product</label>
       <select id="productType" onchange="updateProductForm()"><option>Pokémonkaart</option><option>Doosje</option><option>Losse sleeve</option></select>
       <div id="scannerFields">
-      <label>🖼️ Kies een gemaakte foto uit Afbeeldingen</label>
-      <input id="photo" type="file" accept="image/*" onchange="photoChosen()">
+      <label>📷 Maak een foto of scan met Samsung-camera</label>
+      <input id="cameraPhoto" type="file" accept="image/*" capture="environment" onchange="photoChosen('cameraPhoto')">
+      <label>🖼️ Of kies een gemaakte foto uit Afbeeldingen</label>
+      <input id="photo" type="file" accept="image/*" onchange="photoChosen('photo')">
       <div class="scanbox">
         <button class="primary" type="button" onclick="openCardCamera()">▣ Scan met camerakader</button>
         <button id="scanButton" class="light" type="button" onclick="scanCard()">🔄 Foto opnieuw lezen</button>
@@ -164,6 +166,7 @@ const SHARED_PIN='6129';
 const cloud=window.supabase.createClient(PROJECT_URL,PUBLISHABLE_KEY);
 let cardsCache=[];
 let scanCandidates=[];
+let selectedPhotoFile=null;
 let cameraStream=null,cameraTimer=null,cameraReadyFrames=0;
 
 if(sessionStorage.getItem('psycards-login')==='yes') startApp();
@@ -277,10 +280,10 @@ async function captureCard(){
   canvas.getContext('2d').drawImage(video,r.sx,r.sy,r.sw,r.sh,0,0,canvas.width,canvas.height);
   const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',.9));
   const file=new File([blob],'kaart-scan.jpg',{type:'image/jpeg'}),transfer=new DataTransfer();transfer.items.add(file);
-  document.getElementById('photo').files=transfer.files;closeCardCamera();setScanStatus('Foto gemaakt. De kaart wordt nu gelezen…');scanCard();
+  document.getElementById('photo').files=transfer.files;selectedPhotoFile=file;closeCardCamera();setScanStatus('Foto gemaakt. De kaart wordt nu gelezen…');scanCard();
 }
 function setScanStatus(message){document.getElementById('scanStatus').textContent=message;}
-function photoChosen(){if(document.getElementById('photo').files[0]){setScanStatus('Foto ontvangen. De kaart wordt gelezen…');scanCard();}}
+function photoChosen(sourceId){const file=document.getElementById(sourceId).files[0];if(file){selectedPhotoFile=file;setScanStatus('Foto ontvangen. De kaart wordt gelezen…');scanCard();}}
 function normalizeText(value){return String(value||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();}
 function extractCardNumber(text){
   const cleaned=String(text||'').replace(/[|\\]/g,'/');
@@ -300,7 +303,7 @@ function scanScore(card,ocr,number,total){
   return score;
 }
 async function scanCard(){
-  const file=document.getElementById('photo').files[0], button=document.getElementById('scanButton');
+  const file=selectedPhotoFile||document.getElementById('photo').files[0]||document.getElementById('cameraPhoto').files[0], button=document.getElementById('scanButton');
   if(!file)return alert('Maak of kies eerst een foto van de kaart.');
   if(!window.Tesseract)return alert('De kaartlezer kon niet worden geladen. Controleer de internetverbinding en probeer opnieuw.');
   button.disabled=true; document.getElementById('scanResult').classList.add('hidden');
@@ -344,12 +347,12 @@ async function saveCard(){
   const name=document.getElementById('name').value.trim();
   if(!name) return alert('Vul eerst de naam of omschrijving in.');
   const productType=document.getElementById('productType').value,isCard=productType==='Pokémonkaart';
-  const photo=await fileToDataURL(document.getElementById(isCard?'photo':'productPhoto').files[0]);
+  const photo=await fileToDataURL(isCard?(selectedPhotoFile||document.getElementById('photo').files[0]||document.getElementById('cameraPhoto').files[0]):document.getElementById('productPhoto').files[0]);
   const card={name,productType,condition:isCard?condition.value:productType,buy:+buy.value||0,ask:+ask.value||0,min:+min.value||0,quantity:Math.max(1,parseInt(quantity.value)||1),soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''};
   const {data,error}=await cloud.from('cards').insert(toDb(card)).select().single();
   if(error)return alert('Opslaan is niet gelukt: '+error.message);
   await loadCards();
-  ['name','buy','ask','min','photo','productPhoto'].forEach(x=>document.getElementById(x).value=''); quantity.value='1'; scanCandidates=[]; document.getElementById('scanResult').classList.add('hidden'); setScanStatus('Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.');
+  ['name','buy','ask','min','photo','cameraPhoto','productPhoto'].forEach(x=>document.getElementById(x).value=''); quantity.value='1'; scanCandidates=[]; selectedPhotoFile=null; document.getElementById('scanResult').classList.add('hidden'); setScanStatus('Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.');
   alert(displayId(data.id)+' opgeslagen');
   show('home');
 }
