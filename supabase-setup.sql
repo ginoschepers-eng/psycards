@@ -8,6 +8,7 @@ create table if not exists public.cards (
   minimum numeric(10,2) not null default 0,
   status text not null default 'Op voorraad' check (status in ('Op voorraad','Verkocht')),
   photo text,
+  product_type text not null default 'Pokémonkaart',
   quantity integer not null default 1 check (quantity > 0),
   sold_quantity integer not null default 0 check (sold_quantity >= 0),
   sold_price numeric(10,2) not null default 0,
@@ -19,6 +20,7 @@ create table if not exists public.cards (
 -- Werkt ook wanneer de tabel door een eerdere versie al bestaat.
 alter table public.cards add column if not exists quantity integer not null default 1;
 alter table public.cards add column if not exists sold_quantity integer not null default 0;
+alter table public.cards add column if not exists product_type text not null default 'Pokémonkaart';
 
 alter table public.cards enable row level security;
 
