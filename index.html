@@ -88,12 +88,11 @@
       <label>Soort product</label>
       <select id="productType" onchange="updateProductForm()"><option>Pokémonkaart</option><option>Doosje</option><option>Losse sleeve</option></select>
       <div id="scannerFields">
-      <label>📸 Foto</label>
-      <input id="photo" type="file" accept="image/*" capture="environment">
+      <label>📸 Maak een foto van de kaart</label>
+      <input id="photo" type="file" accept="image/*" capture="environment" onchange="photoChosen()">
       <div class="scanbox">
-        <button class="primary" type="button" onclick="openCardCamera()">📷 Open kaartscanner</button>
-        <button id="scanButton" class="light" type="button" onclick="scanCard()">🔍 Lees kaart van foto</button>
-        <div id="scanStatus" class="scan-status">Maak eerst een scherpe foto van de volledige voorkant.</div>
+        <button id="scanButton" class="light" type="button" onclick="scanCard()">🔄 Foto opnieuw lezen</button>
+        <div id="scanStatus" class="scan-status">Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.</div>
         <div id="scanResult" class="hidden">
           <label>Mogelijke kaart</label>
           <select id="scanMatches" onchange="chooseScanMatch()"></select>
@@ -280,6 +279,7 @@ async function captureCard(){
   document.getElementById('photo').files=transfer.files;closeCardCamera();setScanStatus('Foto gemaakt. De kaart wordt nu gelezen…');scanCard();
 }
 function setScanStatus(message){document.getElementById('scanStatus').textContent=message;}
+function photoChosen(){if(document.getElementById('photo').files[0]){setScanStatus('Foto ontvangen. De kaart wordt gelezen…');scanCard();}}
 function normalizeText(value){return String(value||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();}
 function scanScore(card,ocr,number,total){
   const text=normalizeText(ocr), name=normalizeText(card.name), setName=normalizeText(card.set?.name);
@@ -337,7 +337,7 @@ async function saveCard(){
   const {data,error}=await cloud.from('cards').insert(toDb(card)).select().single();
   if(error)return alert('Opslaan is niet gelukt: '+error.message);
   await loadCards();
-  ['name','buy','ask','min','photo','productPhoto'].forEach(x=>document.getElementById(x).value=''); quantity.value='1'; scanCandidates=[]; document.getElementById('scanResult').classList.add('hidden'); setScanStatus('Maak eerst een scherpe foto van de volledige voorkant.');
+  ['name','buy','ask','min','photo','productPhoto'].forEach(x=>document.getElementById(x).value=''); quantity.value='1'; scanCandidates=[]; document.getElementById('scanResult').classList.add('hidden'); setScanStatus('Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.');
   alert(displayId(data.id)+' opgeslagen');
   show('home');
 }
