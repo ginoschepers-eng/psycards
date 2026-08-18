@@ -91,6 +91,7 @@
       <label>📸 Maak een foto van de kaart</label>
       <input id="photo" type="file" accept="image/*" capture="environment" onchange="photoChosen()">
       <div class="scanbox">
+        <button class="primary" type="button" onclick="openCardCamera()">▣ Scan met camerakader</button>
         <button id="scanButton" class="light" type="button" onclick="scanCard()">🔄 Foto opnieuw lezen</button>
         <div id="scanStatus" class="scan-status">Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.</div>
         <div id="scanResult" class="hidden">
