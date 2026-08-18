@@ -212,8 +212,8 @@ function show(id){
   if(id==='new') updateProductForm();
 }
 async function getAll(){return await loadCards();}
-function fromDb(c){return {id:c.id,name:c.name,productType:c.product_type||'Pokémonkaart',condition:c.condition,buy:+c.buy||0,ask:+c.ask||0,min:+c.minimum||0,status:c.status,photo:c.photo||'',quantity:+c.quantity||1,soldQuantity:+c.sold_quantity||0,soldPrice:+c.sold_price||0,payment:c.payment||'',soldDate:c.sold_date||''};}
-function toDb(c){return {name:c.name,product_type:c.productType||'Pokémonkaart',condition:c.condition,buy:c.buy,ask:c.ask,minimum:c.min,status:c.status,photo:c.photo||null,quantity:c.quantity||1,sold_quantity:c.soldQuantity||0,sold_price:c.soldPrice||0,payment:c.payment||null,sold_date:c.soldDate||null};}
+function fromDb(c){const productType=['Doosje','Losse sleeve'].includes(c.condition)?c.condition:'Pokémonkaart';return {id:c.id,name:c.name,productType,condition:c.condition,buy:+c.buy||0,ask:+c.ask||0,min:+c.minimum||0,status:c.status,photo:c.photo||'',quantity:+c.quantity||1,soldQuantity:+c.sold_quantity||0,soldPrice:+c.sold_price||0,payment:c.payment||'',soldDate:c.sold_date||''};}
+function toDb(c){return {name:c.name,condition:c.condition,buy:c.buy,ask:c.ask,minimum:c.min,status:c.status,photo:c.photo||null,quantity:c.quantity||1,sold_quantity:c.soldQuantity||0,sold_price:c.soldPrice||0,payment:c.payment||null,sold_date:c.soldDate||null};}
 function displayId(id){return 'PSY-'+String(id).padStart(4,'0');}
 async function del(id){const {error}=await cloud.from('cards').delete().eq('id',id);if(error)throw error;await loadCards();}
 function fileToDataURL(file){
@@ -333,7 +333,7 @@ async function saveCard(){
   if(!name) return alert('Vul eerst de naam of omschrijving in.');
   const productType=document.getElementById('productType').value,isCard=productType==='Pokémonkaart';
   const photo=await fileToDataURL(document.getElementById(isCard?'photo':'productPhoto').files[0]);
-  const card={name,productType,condition:isCard?condition.value:'Nieuw',buy:+buy.value||0,ask:+ask.value||0,min:+min.value||0,quantity:Math.max(1,parseInt(quantity.value)||1),soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''};
+  const card={name,productType,condition:isCard?condition.value:productType,buy:+buy.value||0,ask:+ask.value||0,min:+min.value||0,quantity:Math.max(1,parseInt(quantity.value)||1),soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''};
   const {data,error}=await cloud.from('cards').insert(toDb(card)).select().single();
   if(error)return alert('Opslaan is niet gelukt: '+error.message);
   await loadCards();
@@ -365,7 +365,7 @@ async function renderStock(){
       ${c.photo?`<img class="thumb" src="${c.photo}">`:`<div class="thumb"></div>`}
       <div>
         <b>${displayId(c.id)} – ${escapeHtml(c.name)}</b>
-        <div class="muted">${escapeHtml(c.productType)} · ${escapeHtml(c.condition)}</div>
+        <div class="muted">${escapeHtml(c.productType)}${c.productType==='Pokémonkaart'?' · '+escapeHtml(c.condition):''}</div>
         <div><b>Aantal op voorraad: ${c.quantity-c.soldQuantity}</b></div>
         <div>Inkoop: €${c.buy.toFixed(2)} · Vraag: <span class="money">€${c.ask.toFixed(2)}</span></div>
         <div class="muted">Minimum: €${c.min.toFixed(2)}</div>
