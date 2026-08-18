@@ -88,8 +88,8 @@
       <label>Soort product</label>
       <select id="productType" onchange="updateProductForm()"><option>Pokémonkaart</option><option>Doosje</option><option>Losse sleeve</option></select>
       <div id="scannerFields">
-      <label>📸 Maak een foto van de kaart</label>
-      <input id="photo" type="file" accept="image/*" capture="environment" onchange="photoChosen()">
+      <label>🖼️ Kies een gemaakte foto uit Afbeeldingen</label>
+      <input id="photo" type="file" accept="image/*" onchange="photoChosen()">
       <div class="scanbox">
         <button class="primary" type="button" onclick="openCardCamera()">▣ Scan met camerakader</button>
         <button id="scanButton" class="light" type="button" onclick="scanCard()">🔄 Foto opnieuw lezen</button>
@@ -282,6 +282,13 @@ async function captureCard(){
 function setScanStatus(message){document.getElementById('scanStatus').textContent=message;}
 function photoChosen(){if(document.getElementById('photo').files[0]){setScanStatus('Foto ontvangen. De kaart wordt gelezen…');scanCard();}}
 function normalizeText(value){return String(value||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();}
+function extractCardNumber(text){
+  const cleaned=String(text||'').replace(/[|\\]/g,'/');
+  const matches=[...cleaned.matchAll(/\b([0-9IlOoSsGg]{1,3})\s*\/\s*([0-9IlOoSsGg]{2,3})\b/g)];
+  const fix=v=>v.replace(/[Il]/g,'1').replace(/[Oo]/g,'0').replace(/[Ss]/g,'5').replace(/[Gg]/g,'6');
+  for(const match of matches){const number=fix(match[1]),total=fix(match[2]);if(+number>0&&+total>=+number&&+total<=999)return {number,total};}
+  return null;
+}
 function scanScore(card,ocr,number,total){
   const text=normalizeText(ocr), name=normalizeText(card.name), setName=normalizeText(card.set?.name);
   let score=0;
@@ -308,8 +315,12 @@ async function scanCard(){
     const crop=document.createElement('canvas');crop.width=1200;crop.height=420;
     crop.getContext('2d').drawImage(source,0,source.height*.66,source.width,source.height*.34,0,0,crop.width,crop.height);
     const bottom=await Tesseract.recognize(crop.toDataURL('image/jpeg',.92),'eng');ocr+='\n'+(bottom.data.text||'');
-    const numberMatch=ocr.match(/\b(\d{1,3})\s*[\/|]\s*(\d{2,3})\b/);
-    const number=numberMatch?.[1]||'', total=numberMatch?.[2]||'';
+    const pixels=crop.getContext('2d').getImageData(0,0,crop.width,crop.height),d=pixels.data;
+    for(let i=0;i<d.length;i+=4){const v=d[i]*.299+d[i+1]*.587+d[i+2]*.114,n=v<150?0:255;d[i]=d[i+1]=d[i+2]=n;}
+    crop.getContext('2d').putImageData(pixels,0,0);
+    const contrast=await Tesseract.recognize(crop.toDataURL('image/png'),'eng');ocr+='\n'+(contrast.data.text||'');
+    const foundNumber=extractCardNumber(ocr);
+    const number=foundNumber?.number||'', total=foundNumber?.total||'';
     if(!number)throw new Error('Het kaartnummer is niet duidelijk leesbaar. Maak een foto zonder weerspiegeling waarop ook de onderkant scherp staat.');
     setScanStatus('Kaartnummer '+number+'/'+total+' gevonden. Kaart zoeken…');
     const response=await fetch('https://api.pokemontcg.io/v2/cards?q='+encodeURIComponent('number:'+number)+'&pageSize=250&select=id,name,number,set,images');
