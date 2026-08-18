@@ -38,7 +38,7 @@
     .camera-stage{position:relative;flex:1;min-height:0;overflow:hidden;background:#000}
     #cameraVideo{width:100%;height:100%;object-fit:cover}
     .camera-shade{position:absolute;inset:0;background:rgba(0,0,0,.38);pointer-events:none}
-    .card-guide{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:min(68vh,78vw);aspect-ratio:63/88;border:4px solid #ffbf3f;border-radius:18px;box-shadow:0 0 0 9999px rgba(0,0,0,.28);transition:.2s}
+    .card-guide{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:min(59vh,70vw);aspect-ratio:63/88;border:4px solid #ffbf3f;border-radius:18px;box-shadow:0 0 0 9999px rgba(0,0,0,.28);transition:.2s}
     .card-guide.ready{border-color:#32d66b;box-shadow:0 0 20px rgba(50,214,107,.7),0 0 0 9999px rgba(0,0,0,.28)}
     .guide-check{position:absolute;right:-17px;top:-17px;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#ffbf3f;color:#14213d;font-size:25px;font-weight:900}
     .card-guide.ready .guide-check{background:#32d66b;color:white}
@@ -263,16 +263,16 @@ function checkCameraQuality(){
   for(let i=0,p=0;i<data.length;i+=4,p++){const v=data[i]*.299+data[i+1]*.587+data[i+2]*.114;gray[p]=v;light+=v;}
   light/=gray.length;
   function laplacianVariance(yStart,yEnd){let sum=0,sumSq=0,n=0;for(let y=yStart+1;y<yEnd-1;y+=2)for(let x=2;x<w-2;x+=2){const p=y*w+x,v=gray[p-1]+gray[p+1]+gray[p-w]+gray[p+w]-4*gray[p];sum+=v;sumSq+=v*v;n++;}const mean=sum/n;return sumSq/n-mean*mean;}
-  const sharpAll=laplacianVariance(0,h),sharpBottom=laplacianVariance(Math.round(h*.62),h);
-  const good=light>52&&light<215&&sharpAll>75&&sharpBottom>55;
-  cameraReadyFrames=good?Math.min(4,cameraReadyFrames+1):0;
-  const ready=cameraReadyFrames>=3;document.getElementById('cardGuide').classList.toggle('ready',ready);
+  const sharpAll=laplacianVariance(0,h),sharpBottom=laplacianVariance(Math.round(h*.68),h);
+  const good=light>52&&light<215&&sharpAll>210&&sharpBottom>185;
+  cameraReadyFrames=good?Math.min(7,cameraReadyFrames+1):0;
+  const ready=cameraReadyFrames>=6;document.getElementById('cardGuide').classList.toggle('ready',ready);
   document.getElementById('captureButton').disabled=!ready;
-  document.getElementById('cameraHelp').textContent=ready?'✓ Scherp genoeg! Houd stil en maak de foto':light<=52?'Meer licht nodig':light>=215?'Te veel licht of weerspiegeling':sharpBottom<=55?'Wacht op scherpstelling van de tekst onderaan':'Houd de telefoon stil';
+  document.getElementById('cameraHelp').textContent=ready?'✓ Tekst is scherp! Houd stil en maak de foto':light<=52?'Meer licht nodig':light>=215?'Te veel licht of weerspiegeling':sharpBottom<=185?'Houd de telefoon iets verder weg en wacht tot de tekst onderaan scherp is':'Houd nog even stil…';
 }
 async function captureCard(){
   const video=document.getElementById('cameraVideo');if(!video.videoWidth)return;
-  if(cameraReadyFrames<3)return alert('Plaats de kaart eerst goed in het kader en wacht op het groene vinkje.');
+  if(cameraReadyFrames<6)return alert('Plaats de kaart eerst goed in het kader en wacht tot de kleine tekst scherp is en het vinkje groen wordt.');
   const r=guideVideoRect(),canvas=document.createElement('canvas');canvas.width=900;canvas.height=Math.round(900*88/63);
   canvas.getContext('2d').drawImage(video,r.sx,r.sy,r.sw,r.sh,0,0,canvas.width,canvas.height);
   const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',.9));
