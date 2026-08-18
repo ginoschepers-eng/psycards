@@ -114,6 +114,15 @@
           </div>
         </div>
       </div>
+      <div class="scanbox">
+        <b>Kaart niet herkend?</b>
+        <div class="muted">Vul de setafkorting en het kaartnummer zelf in.</div>
+        <div class="row">
+          <div><label>Setafkorting</label><input id="manualSetCode" placeholder="Bijv. SSP" autocapitalize="characters"></div>
+          <div><label>Kaartnummer</label><input id="manualCardNumber" placeholder="Bijv. 039/191" inputmode="text"></div>
+        </div>
+        <button class="primary" style="width:100%;padding:13px;font-size:16px;margin-top:12px" type="button" onclick="manualCardSearch()">🔎 Zoek kaart</button>
+      </div>
       </div>
       <div id="regularPhoto" class="hidden"><label>📸 Foto</label><input id="productPhoto" type="file" accept="image/*" capture="environment"></div>
       <label id="nameLabel">🃏 Kaartnaam</label>
@@ -327,6 +336,24 @@ function scanScore(card,ocr,number,total){
   if(total&&Number(card.set?.printedTotal)===Number(total))score+=18;
   return score;
 }
+async function manualCardSearch(){
+  const setCode=document.getElementById('manualSetCode').value.trim().toUpperCase().replace(/\s*(EN|NL|DE|FR|IT|ES)$/,'');
+  const rawNumber=document.getElementById('manualCardNumber').value.trim(),found=extractCardNumber(rawNumber);
+  if(!setCode)return alert('Vul de setafkorting in, bijvoorbeeld SSP.');
+  if(!found)return alert('Vul het kaartnummer in als nummer/totaal, bijvoorbeeld 039/191.');
+  setScanStatus('Set '+setCode+' en nummer '+found.number+'/'+found.total+' zoeken…');
+  try{
+    const searchNumber=String(Number(found.number)),numberQuery=found.number===searchNumber?'number:'+searchNumber:'(number:'+found.number+' OR number:'+searchNumber+')';
+    const response=await fetch('https://api.pokemontcg.io/v2/cards?q='+encodeURIComponent(numberQuery)+'&pageSize=250&select=id,name,number,set,images');
+    if(!response.ok)throw new Error('De kaartendatabase is tijdelijk niet bereikbaar.');
+    const payload=await response.json(),all=payload.data||[];
+    scanCandidates=all.filter(c=>String(c.number).replace(/^0+/,'')===found.number.replace(/^0+/,'')&&Number(c.set?.printedTotal)===Number(found.total)&&String(c.set?.ptcgoCode||'').toUpperCase()===setCode);
+    if(!scanCandidates.length)scanCandidates=all.filter(c=>String(c.number).replace(/^0+/,'')===found.number.replace(/^0+/,'')&&Number(c.set?.printedTotal)===Number(found.total));
+    if(!scanCandidates.length)throw new Error('Geen kaart gevonden met deze combinatie. Controleer de setafkorting en het nummer.');
+    document.getElementById('scanMatches').innerHTML=scanCandidates.map((c,i)=>`<option value="${i}">${escapeHtml(c.name)} — ${escapeHtml(c.set?.name||'Onbekende set')} (${escapeHtml(c.number||'')}/${c.set?.printedTotal||'?'})</option>`).join('');
+    document.getElementById('scanResult').classList.remove('hidden');chooseScanMatch();setScanStatus(scanCandidates.length===1?'Kaart gevonden. Controleer de gegevens.':'Meerdere kaarten gevonden. Kies de juiste.');
+  }catch(error){setScanStatus(error.message);}
+}
 async function scanCard(){
   const file=selectedPhotoFile||document.getElementById('photo').files[0]||document.getElementById('cameraPhoto').files[0], button=document.getElementById('scanButton');
   if(!file)return alert('Maak of kies eerst een foto van de kaart.');
@@ -386,7 +413,7 @@ async function saveCard(){
   const {data,error}=await cloud.from('cards').insert(toDb(card)).select().single();
   if(error)return alert('Opslaan is niet gelukt: '+error.message);
   await loadCards();
-  ['name','buy','ask','min','photo','cameraPhoto','productPhoto','detectedSet','detectedNumber'].forEach(x=>document.getElementById(x).value=''); quantity.value='1'; scanCandidates=[]; selectedPhotoFile=null; document.getElementById('scanResult').classList.add('hidden'); setScanStatus('Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.');
+  ['name','buy','ask','min','photo','cameraPhoto','productPhoto','detectedSet','detectedNumber','manualSetCode','manualCardNumber'].forEach(x=>document.getElementById(x).value=''); quantity.value='1'; scanCandidates=[]; selectedPhotoFile=null; document.getElementById('scanResult').classList.add('hidden'); setScanStatus('Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.');
   alert(displayId(data.id)+' opgeslagen');
   show('home');
 }
