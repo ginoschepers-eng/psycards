@@ -28,6 +28,9 @@
     nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
     nav button{padding:10px 12px;font-size:14px;border-radius:12px}
     .danger{background:#ffe1e1;color:#8a1c1c}
+    .sync{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:7px;font-size:12px;opacity:.9}
+    .dot{width:8px;height:8px;border-radius:50%;background:#8bd38b}.dot.offline{background:#ffcc66}
+    #login{max-width:420px;margin:42px auto}.login-button{width:100%;margin-top:16px}
     @media(max-width:520px){.grid,.row,.stats{grid-template-columns:1fr}.grid button{min-height:88px}}
   </style>
 </head>
@@ -37,7 +40,17 @@
   <div class="sub">Simpel kaarten bijhouden en verkopen</div>
 </header>
 <main>
-  <section id="home">
+  <section id="login">
+    <div class="card">
+      <h2>Inloggen bij Psycards</h2>
+      <div class="muted">Gebruik de gezamenlijke pincode.</div>
+      <label>Pincode</label>
+      <input id="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="current-password" placeholder="••••">
+      <button class="primary login-button" onclick="login()">Inloggen</button>
+    </div>
+  </section>
+
+  <section id="home" class="hidden">
     <div class="grid">
       <button class="primary" onclick="show('new')">➕ Nieuwe kaart</button>
       <button class="green" onclick="show('sell')">💰 Kaart verkocht</button>
@@ -46,7 +59,8 @@
     </div>
     <div class="card">
       <b>Handelsbudget: €310</b>
-      <div class="muted">Alles wordt lokaal op deze telefoon opgeslagen.</div>
+      <div class="muted">Gezamenlijke voorraad voor alle ingelogde telefoons.</div>
+      <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
     </div>
   </section>
 
@@ -60,6 +74,8 @@
       <input id="name" placeholder="Bijv. Pikachu">
       <label>Conditie</label>
       <select id="condition"><option>NM</option><option>EX</option><option>LP</option><option>PL</option></select>
+      <label>Aantal</label>
+      <input id="quantity" type="number" min="1" step="1" inputmode="numeric" value="1">
       <div class="row">
         <div><label>Gekocht voor €</label><input id="buy" type="number" step="0.01" inputmode="decimal"></div>
         <div><label>Verkopen voor €</label><input id="ask" type="number" step="0.01" inputmode="decimal"></div>
@@ -77,7 +93,9 @@
       <label>Kaart</label>
       <select id="sellCard"></select>
       <label>Verkocht voor €</label>
-      <input id="soldPrice" type="number" step="0.01" inputmode="decimal">
+      <input id="soldPrice" type="number" step="0.01" inputmode="decimal" placeholder="Prijs per kaart">
+      <label>Aantal verkocht</label>
+      <input id="sellQuantity" type="number" min="1" step="1" inputmode="numeric" value="1">
       <label>Betaalwijze</label>
       <select id="payment"><option>Contant</option><option>Betaalverzoek</option></select>
       <button class="green" style="width:100%;margin-top:16px" onclick="sellCard()">Verkoop opslaan</button>
@@ -95,67 +113,99 @@
   </section>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const BUDGET=310;
-let db;
-const req=indexedDB.open('psycardsDB',1);
-req.onupgradeneeded=e=>{
-  db=e.target.result;
-  if(!db.objectStoreNames.contains('cards')) db.createObjectStore('cards',{keyPath:'id'});
-};
-req.onsuccess=e=>{db=e.target.result;refreshSellList();};
-req.onerror=()=>alert('Opslag kon niet worden geopend.');
+const PROJECT_URL='https://nkbkxecnbaattrimzszm.supabase.co';
+const PUBLISHABLE_KEY='sb_publishable_gtf_x3dYPhaNr9SLRzpS5g_7wIlzm2J';
+const SHARED_PIN='6129';
+const cloud=window.supabase.createClient(PROJECT_URL,PUBLISHABLE_KEY);
+let cardsCache=[];
+
+if(sessionStorage.getItem('psycards-login')==='yes') startApp();
+window.addEventListener('online',updateConnection);
+window.addEventListener('offline',updateConnection);
+
+function login(){
+  if(pin.value!==SHARED_PIN){pin.value='';return alert('De pincode is niet juist.');}
+  sessionStorage.setItem('psycards-login','yes');
+  startApp();
+}
+document.getElementById('pin').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+
+async function startApp(){
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('home').classList.remove('hidden');
+  updateConnection();
+  await loadCards();
+  cloud.channel('psycards-live').on('postgres_changes',{event:'*',schema:'public',table:'cards'},async()=>{
+    await loadCards();
+    const active=document.querySelector('main>section:not(.hidden)')?.id;
+    if(active==='stock')renderStock();
+    if(active==='money')renderMoney();
+    if(active==='sell')refreshSellList();
+  }).subscribe();
+}
+
+function updateConnection(){
+  const online=navigator.onLine;
+  const dot=document.getElementById('syncDot'), text=document.getElementById('syncText');
+  if(dot)dot.classList.toggle('offline',!online);
+  if(text)text.textContent=online?'Verbonden':'Geen internetverbinding';
+}
+
+async function loadCards(){
+  const {data,error}=await cloud.from('cards').select('*').order('id',{ascending:true});
+  if(error){console.error(error);alert('De gezamenlijke voorraad kon niet worden geladen. Controleer de database-instelling.');return cardsCache;}
+  cardsCache=(data||[]).map(fromDb);
+  return cardsCache;
+}
 
 function show(id){
   document.querySelectorAll('main>section').forEach(s=>s.classList.add('hidden'));
   document.getElementById(id).classList.remove('hidden');
   if(id==='sell') refreshSellList();
 }
-function getAll(){
-  return new Promise((resolve,reject)=>{
-    const tx=db.transaction('cards','readonly'), st=tx.objectStore('cards'), r=st.getAll();
-    r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error);
-  });
-}
-function put(card){
-  return new Promise((resolve,reject)=>{
-    const tx=db.transaction('cards','readwrite'), st=tx.objectStore('cards'), r=st.put(card);
-    r.onsuccess=()=>resolve(); r.onerror=()=>reject(r.error);
-  });
-}
-function del(id){
-  return new Promise((resolve,reject)=>{
-    const tx=db.transaction('cards','readwrite'), st=tx.objectStore('cards'), r=st.delete(id);
-    r.onsuccess=()=>resolve(); r.onerror=()=>reject(r.error);
-  });
-}
+async function getAll(){return await loadCards();}
+function fromDb(c){return {id:c.id,name:c.name,condition:c.condition,buy:+c.buy||0,ask:+c.ask||0,min:+c.minimum||0,status:c.status,photo:c.photo||'',quantity:+c.quantity||1,soldQuantity:+c.sold_quantity||0,soldPrice:+c.sold_price||0,payment:c.payment||'',soldDate:c.sold_date||''};}
+function toDb(c){return {name:c.name,condition:c.condition,buy:c.buy,ask:c.ask,minimum:c.min,status:c.status,photo:c.photo||null,quantity:c.quantity||1,sold_quantity:c.soldQuantity||0,sold_price:c.soldPrice||0,payment:c.payment||null,sold_date:c.soldDate||null};}
+function displayId(id){return 'PSY-'+String(id).padStart(4,'0');}
+async function del(id){const {error}=await cloud.from('cards').delete().eq('id',id);if(error)throw error;await loadCards();}
 function fileToDataURL(file){
-  return new Promise(res=>{ if(!file) return res(''); const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(file); });
+  return new Promise(res=>{
+    if(!file)return res('');
+    const img=new Image(), reader=new FileReader();
+    reader.onload=()=>{img.onload=()=>{const max=900,scale=Math.min(1,max/img.width,max/img.height),canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);res(canvas.toDataURL('image/jpeg',.78));};img.src=reader.result;};
+    reader.readAsDataURL(file);
+  });
 }
 async function saveCard(){
   const name=document.getElementById('name').value.trim();
   if(!name) return alert('Vul eerst de kaartnaam in.');
-  const cards=await getAll();
-  const next=cards.length?Math.max(...cards.map(c=>Number(c.id.replace('PSY-',''))||0))+1:1;
-  const id='PSY-'+String(next).padStart(4,'0');
   const photo=await fileToDataURL(document.getElementById('photo').files[0]);
-  const card={id,name,condition:condition.value,buy:+buy.value||0,ask:+ask.value||0,min:+min.value||0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''};
-  await put(card);
-  ['name','buy','ask','min','photo'].forEach(x=>document.getElementById(x).value='');
-  alert(id+' opgeslagen');
+  const card={name,condition:condition.value,buy:+buy.value||0,ask:+ask.value||0,min:+min.value||0,quantity:Math.max(1,parseInt(quantity.value)||1),soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''};
+  const {data,error}=await cloud.from('cards').insert(toDb(card)).select().single();
+  if(error)return alert('Opslaan is niet gelukt: '+error.message);
+  await loadCards();
+  ['name','buy','ask','min','photo'].forEach(x=>document.getElementById(x).value=''); quantity.value='1';
+  alert(displayId(data.id)+' opgeslagen');
   show('home');
 }
 async function refreshSellList(){
-  if(!db) return;
   const cards=(await getAll()).filter(c=>c.status==='Op voorraad');
-  sellCard.innerHTML=cards.map(c=>`<option value="${c.id}">${c.id} – ${c.name}</option>`).join('');
+  sellCard.innerHTML=cards.map(c=>`<option value="${c.id}">${displayId(c.id)} – ${escapeHtml(c.name)} (${c.quantity-c.soldQuantity}×)</option>`).join('');
 }
 async function sellCard(){
   const id=document.getElementById('sellCard').value;
   if(!id) return alert('Geen kaart geselecteerd.');
-  const cards=await getAll(), card=cards.find(c=>c.id===id);
-  card.status='Verkocht'; card.soldPrice=+soldPrice.value||0; card.payment=payment.value; card.soldDate=new Date().toISOString();
-  await put(card); soldPrice.value=''; alert('Verkoop opgeslagen. Winst: €'+(card.soldPrice-card.buy).toFixed(2)); show('home');
+  const cards=await getAll(), card=cards.find(c=>String(c.id)===String(id));
+  const amount=Math.max(1,parseInt(sellQuantity.value)||1), remaining=card.quantity-card.soldQuantity;
+  if(amount>remaining)return alert('Er zijn nog maar '+remaining+' exemplaren op voorraad.');
+  const unitPrice=+soldPrice.value||0;
+  card.soldQuantity+=amount; card.soldPrice+=unitPrice*amount; card.status=card.soldQuantity>=card.quantity?'Verkocht':'Op voorraad'; card.payment=payment.value; card.soldDate=new Date().toISOString();
+  const {error}=await cloud.from('cards').update(toDb(card)).eq('id',card.id);
+  if(error)return alert('Verkoop opslaan is niet gelukt: '+error.message);
+  await loadCards(); soldPrice.value=''; sellQuantity.value='1'; alert('Verkoop opgeslagen. Winst op deze verkoop: €'+((unitPrice-card.buy)*amount).toFixed(2)); show('home');
 }
 async function renderStock(){
   const cards=await getAll();
@@ -164,8 +214,9 @@ async function renderStock(){
     <div class="card item">
       ${c.photo?`<img class="thumb" src="${c.photo}">`:`<div class="thumb"></div>`}
       <div>
-        <b>${c.id} – ${escapeHtml(c.name)}</b>
+        <b>${displayId(c.id)} – ${escapeHtml(c.name)}</b>
         <div class="muted">${c.condition}</div>
+        <div><b>Aantal op voorraad: ${c.quantity-c.soldQuantity}</b></div>
         <div>Inkoop: €${c.buy.toFixed(2)} · Vraag: <span class="money">€${c.ask.toFixed(2)}</span></div>
         <div class="muted">Minimum: €${c.min.toFixed(2)}</div>
         <button class="danger" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="removeCard('${c.id}')">Verwijder</button>
@@ -173,16 +224,15 @@ async function renderStock(){
     </div>`).join(''):'<div class="card">Nog geen kaarten op voorraad.</div>';
 }
 async function removeCard(id){
-  if(confirm(id+' verwijderen?')){await del(id);renderStock();}
+  if(confirm(displayId(id)+' verwijderen?')){try{await del(id);renderStock();}catch(e){alert('Verwijderen is niet gelukt: '+e.message);}}
 }
 async function renderMoney(){
   const cards=await getAll();
-  const spent=cards.reduce((a,c)=>a+c.buy,0);
+  const spent=cards.reduce((a,c)=>a+c.buy*c.quantity,0);
   const open=cards.filter(c=>c.status==='Op voorraad');
-  const sold=cards.filter(c=>c.status==='Verkocht');
-  const revenue=sold.reduce((a,c)=>a+c.soldPrice,0);
-  const profit=sold.reduce((a,c)=>a+(c.soldPrice-c.buy),0);
-  const stockValue=open.reduce((a,c)=>a+c.ask,0);
+  const revenue=cards.reduce((a,c)=>a+c.soldPrice,0);
+  const profit=cards.reduce((a,c)=>a+(c.soldPrice-c.buy*c.soldQuantity),0);
+  const stockValue=open.reduce((a,c)=>a+c.ask*(c.quantity-c.soldQuantity),0);
   const data=[
     ['Startbudget',BUDGET],['Uitgegeven',spent],['Nog te besteden',BUDGET-spent],
     ['Voorraad verkoopwaarde',stockValue],['Omzet',revenue],['Winst',profit]
@@ -191,8 +241,8 @@ async function renderMoney(){
 }
 async function exportCSV(){
   const cards=await getAll();
-  const rows=[['ID','Kaart','Conditie','Inkoop','Vraagprijs','Minimum','Status','Verkoopprijs','Betaalwijze','Datum verkoop']];
-  cards.forEach(c=>rows.push([c.id,c.name,c.condition,c.buy,c.ask,c.min,c.status,c.soldPrice,c.payment,c.soldDate]));
+  const rows=[['ID','Kaart','Conditie','Aantal totaal','Aantal verkocht','Aantal op voorraad','Inkoop per kaart','Vraagprijs per kaart','Minimum per kaart','Status','Totale omzet','Betaalwijze','Datum laatste verkoop']];
+  cards.forEach(c=>rows.push([displayId(c.id),c.name,c.condition,c.quantity,c.soldQuantity,c.quantity-c.soldQuantity,c.buy,c.ask,c.min,c.status,c.soldPrice,c.payment,c.soldDate]));
   const csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(';')).join('\n');
   const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Psycards_export.csv'; a.click(); URL.revokeObjectURL(a.href);
