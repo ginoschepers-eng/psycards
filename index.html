@@ -165,7 +165,26 @@
     <nav><button class="light" onclick="show('home')">← Terug</button></nav>
     <div class="stats" id="stats"></div>
   </section>
+
+  <section id="edit" class="hidden">
+    <nav><button class="light" onclick="show('stock');renderStock()">← Terug naar voorraad</button></nav>
+    <div class="card">
+      <h2>Product bekijken/bewerken</h2>
+      <img id="editPreview" class="hidden" style="display:block;max-width:100%;max-height:520px;margin:0 auto 12px;border-radius:12px;object-fit:contain;cursor:zoom-in" onclick="openPhotoViewer(this.src)" alt="Opgeslagen foto">
+      <div class="muted" style="text-align:center">Tik op de foto om deze groot te openen.</div>
+      <label>Nieuwe foto kiezen (optioneel)</label><input id="editPhoto" type="file" accept="image/*">
+      <label>Kaartnaam / productnaam</label><input id="editName">
+      <div class="row"><div><label>Set</label><input id="editSet"></div><div><label>Kaartnummer</label><input id="editNumber" placeholder="Bijv. 039/191"></div></div>
+      <label>Conditie</label><select id="editCondition"><option>NM</option><option>EX</option><option>LP</option><option>PL</option><option>Doosje</option><option>Losse sleeve</option></select>
+      <label>Aantal totaal</label><input id="editQuantity" type="number" min="1" inputmode="numeric">
+      <div class="row"><div><label>Gekocht voor €</label><input id="editBuy" type="number" step="0.01" inputmode="decimal"></div><div><label>Verkopen voor €</label><input id="editAsk" type="number" step="0.01" inputmode="decimal"></div></div>
+      <label>Minimaal €</label><input id="editMin" type="number" step="0.01" inputmode="decimal">
+      <button class="primary" style="width:100%;margin-top:16px" onclick="saveEdit()">Wijzigingen opslaan</button>
+    </div>
+  </section>
 </main>
+
+<div id="photoViewer" class="camera-modal hidden" onclick="closePhotoViewer()"><div class="camera-top"><b>Opgeslagen foto</b><button class="light" type="button">Sluiten</button></div><div style="flex:1;min-height:0;display:grid;place-items:center;padding:12px"><img id="viewerImage" style="max-width:100%;max-height:100%;object-fit:contain" alt="Grote foto"></div></div>
 
 <section id="cameraModal" class="camera-modal hidden">
   <div class="camera-top"><b>Kaart goed in het kader plaatsen</b><button class="light" type="button" onclick="closeCardCamera()">Sluiten</button></div>
@@ -189,6 +208,7 @@ const cloud=window.supabase.createClient(PROJECT_URL,PUBLISHABLE_KEY);
 let cardsCache=[];
 let scanCandidates=[];
 let selectedPhotoFile=null;
+let editingCard=null;
 let cameraStream=null,cameraTimer=null,cameraReadyFrames=0;
 
 if(sessionStorage.getItem('psycards-login')==='yes') startApp();
@@ -445,9 +465,30 @@ async function renderStock(){
         <div><b>Aantal op voorraad: ${c.quantity-c.soldQuantity}</b></div>
         <div>Inkoop: €${c.buy.toFixed(2)} · Vraag: <span class="money">€${c.ask.toFixed(2)}</span></div>
         <div class="muted">Minimum: €${c.min.toFixed(2)}</div>
+        <button class="light" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="openEdit('${c.id}')">Bekijken/bewerken</button>
         <button class="danger" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="removeCard('${c.id}')">Verwijder</button>
       </div>
     </div>`).join(''):'<div class="card">Nog geen kaarten op voorraad.</div>';
+}
+function splitStoredName(value){const match=String(value||'').match(/^(.*?)\s+—\s+(.*?)\s+([^\s]+\/[^\s]+)$/);return match?{name:match[1],set:match[2],number:match[3]}:{name:value||'',set:'',number:''};}
+async function openEdit(id){
+  const cards=await getAll();editingCard=cards.find(c=>String(c.id)===String(id));if(!editingCard)return alert('Dit product kon niet worden geladen.');
+  const parts=splitStoredName(editingCard.name),preview=document.getElementById('editPreview');
+  editName.value=parts.name;editSet.value=parts.set;editNumber.value=parts.number;editCondition.value=editingCard.condition;editQuantity.value=editingCard.quantity;editBuy.value=editingCard.buy;editAsk.value=editingCard.ask;editMin.value=editingCard.min;editPhoto.value='';
+  if(editingCard.photo){preview.src=editingCard.photo;preview.classList.remove('hidden');}else{preview.removeAttribute('src');preview.classList.add('hidden');}
+  show('edit');
+}
+function openPhotoViewer(src){if(!src)return;document.getElementById('viewerImage').src=src;document.getElementById('photoViewer').classList.remove('hidden');}
+function closePhotoViewer(){document.getElementById('photoViewer').classList.add('hidden');document.getElementById('viewerImage').removeAttribute('src');}
+async function saveEdit(){
+  if(!editingCard)return;
+  const name=editName.value.trim(),setName=editSet.value.trim(),number=editNumber.value.trim(),quantityValue=Math.max(1,parseInt(editQuantity.value)||1);
+  if(!name)return alert('Vul een naam in.');
+  if(quantityValue<editingCard.soldQuantity)return alert('Het aantal totaal kan niet lager zijn dan het aantal dat al verkocht is ('+editingCard.soldQuantity+').');
+  const replacement=editPhoto.files[0];if(replacement)editingCard.photo=await fileToDataURL(replacement);
+  editingCard.name=setName&&number?name+' — '+setName+' '+number:name;editingCard.condition=editCondition.value;editingCard.productType=['Doosje','Losse sleeve'].includes(editingCard.condition)?editingCard.condition:'Pokémonkaart';editingCard.quantity=quantityValue;editingCard.buy=+editBuy.value||0;editingCard.ask=+editAsk.value||0;editingCard.min=+editMin.value||0;editingCard.status=editingCard.soldQuantity>=editingCard.quantity?'Verkocht':'Op voorraad';
+  const {error}=await cloud.from('cards').update(toDb(editingCard)).eq('id',editingCard.id);if(error)return alert('Wijzigen is niet gelukt: '+error.message);
+  await loadCards();alert('Wijzigingen opgeslagen.');show('stock');renderStock();
 }
 async function removeCard(id){
   if(confirm(displayId(id)+' verwijderen?')){try{await del(id);renderStock();}catch(e){alert('Verwijderen is niet gelukt: '+e.message);}}
