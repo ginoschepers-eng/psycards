@@ -449,6 +449,10 @@ function chooseScanMatch(){
   const card=scanCandidates[Number(document.getElementById('scanMatches').value)||0];
   if(card){document.getElementById('name').value=card.name;document.getElementById('detectedSet').value=card.set?.name||'';document.getElementById('detectedNumber').value=card.number+'/'+(card.set?.printedTotal||'?');}
 }
+function resetNewProductForm(){
+  ['name','buy','ask','min','photo','cameraPhoto','productPhoto','detectedSet','detectedNumber','manualSetCode','manualCardNumber'].forEach(x=>document.getElementById(x).value='');
+  quantity.value='1';scanCandidates=[];selectedPhotoFile=null;document.getElementById('scanResult').classList.add('hidden');setScanStatus('Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.');
+}
 async function saveCard(){
   const name=document.getElementById('name').value.trim();
   if(!name) return alert('Vul eerst de naam of omschrijving in.');
@@ -457,10 +461,20 @@ async function saveCard(){
   const setName=isCard?document.getElementById('detectedSet').value.trim():'',cardNumber=isCard?document.getElementById('detectedNumber').value.trim():'';
   const storedName=isCard&&setName&&cardNumber?name+' — '+setName+' '+cardNumber:name;
   const card={name:storedName,productType,condition:isCard?condition.value:productType,buy:+buy.value||0,ask:+ask.value||0,min:+min.value||0,quantity:Math.max(1,parseInt(quantity.value)||1),soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''};
+  const existing=(await getAll()).find(c=>c.name.trim().toLocaleLowerCase('nl')===storedName.trim().toLocaleLowerCase('nl')&&c.condition===card.condition&&c.productType===card.productType);
+  if(existing){
+    const oldQuantity=existing.quantity,newQuantity=card.quantity,totalQuantity=oldQuantity+newQuantity;
+    existing.buy=((existing.buy*oldQuantity)+(card.buy*newQuantity))/totalQuantity;
+    existing.quantity=totalQuantity;existing.status='Op voorraad';
+    if(card.ask>0)existing.ask=card.ask;if(card.min>0)existing.min=card.min;if(!existing.photo&&card.photo)existing.photo=card.photo;
+    const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);
+    if(error)return alert('Voorraad verhogen is niet gelukt: '+error.message);
+    await loadCards();resetNewProductForm();alert(displayId(existing.id)+' bestond al. '+newQuantity+' toegevoegd; totaal op voorraad: '+(existing.quantity-existing.soldQuantity)+'.');show('home');return;
+  }
   const {data,error}=await cloud.from('cards').insert(toDb(card)).select().single();
   if(error)return alert('Opslaan is niet gelukt: '+error.message);
   await loadCards();
-  ['name','buy','ask','min','photo','cameraPhoto','productPhoto','detectedSet','detectedNumber','manualSetCode','manualCardNumber'].forEach(x=>document.getElementById(x).value=''); quantity.value='1'; scanCandidates=[]; selectedPhotoFile=null; document.getElementById('scanResult').classList.add('hidden'); setScanStatus('Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.');
+  resetNewProductForm();
   alert(displayId(data.id)+' opgeslagen');
   show('home');
 }
