@@ -57,6 +57,7 @@
     .folder-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
     .folder{background:white;border:1px solid #d6deea;border-radius:16px;padding:16px;text-align:left;color:#14213d;min-height:108px}
     .folder-visual{height:54px;display:flex;align-items:center;margin-bottom:8px}.folder-logo{display:block;max-width:100%;max-height:50px;object-fit:contain;object-position:left center}.folder-icon{font-size:30px;display:block}.folder-name{font-size:17px;font-weight:800;display:block}.folder-count{font-size:13px;color:#667085;margin-top:4px;display:block}
+    .market-price{margin-top:7px;padding:8px 10px;border-radius:9px;background:#eef7ee;color:#285b2b;font-size:12px;line-height:1.4}.market-price.unavailable{background:#f3f4f6;color:#667085}
     .dot{width:8px;height:8px;border-radius:50%;background:#8bd38b}.dot.offline{background:#ffcc66}
     #login{max-width:420px;margin:42px auto}.login-button{width:100%;margin-top:16px}
     @media(max-width:520px){.grid,.row,.stats{grid-template-columns:1fr}.grid button{min-height:88px}.folder-grid{grid-template-columns:1fr 1fr}}
@@ -542,10 +543,11 @@ async function renderStock(){
   const logos=await loadSetLogos();
   stockList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Voorraadmappen</h2><div class="muted">Kies een set om de kaarten te bekijken.</div></div><div class="folder-grid">'+folders.map(name=>{const items=groups[name],amount=items.reduce((sum,c)=>sum+c.quantity-c.soldQuantity,0),isCard=items[0].productType==='Pokémonkaart',icon=isCard?'🗂️':items[0].productType==='Doosje'?'📦':'🛡️',logo=isCard?logos[normalizeSetName(name)]||'':'';const visual=logo?`<img class="folder-logo" src="${escapeHtml(logo)}" alt="Logo ${escapeHtml(name)}" onerror="this.outerHTML='<span class=&quot;folder-icon&quot;>🗂️</span>'">`:`<span class="folder-icon">${icon}</span>`;return `<button class="folder" onclick="renderSetFolder(decodeURIComponent('${encodeURIComponent(name)}'))"><span class="folder-visual">${visual}</span><span class="folder-name">${escapeHtml(name)}</span><span class="folder-count">${items.length} soorten · ${amount} stuks</span></button>`;}).join('')+'</div>';
 }
-let setLogoPromise;
+let setLogoPromise,setCatalogPromise;
 function normalizeSetName(value){return String(value||'').toLocaleLowerCase('en').replace(/[^a-z0-9]/g,'');}
+function loadSetCatalog(){if(!setCatalogPromise)setCatalogPromise=fetch('https://api.tcgdex.net/v2/en/sets').then(r=>{if(!r.ok)throw new Error('Sets niet beschikbaar');return r.json();}).catch(()=>[]);return setCatalogPromise;}
 function loadSetLogos(){
-  if(!setLogoPromise)setLogoPromise=fetch('https://api.tcgdex.net/v2/en/sets').then(r=>{if(!r.ok)throw new Error('Setlogo’s niet beschikbaar');return r.json();}).then(sets=>Object.fromEntries(sets.filter(s=>s.name&&s.logo).map(s=>[normalizeSetName(s.name),/\.(webp|png|jpe?g)$/i.test(s.logo)?s.logo:s.logo+'.webp']))).catch(()=>({}));
+  if(!setLogoPromise)setLogoPromise=loadSetCatalog().then(sets=>Object.fromEntries(sets.filter(s=>s.name&&s.logo).map(s=>[normalizeSetName(s.name),/\.(webp|png|jpe?g)$/i.test(s.logo)?s.logo:s.logo+'.webp']))).catch(()=>({}));
   return setLogoPromise;
 }
 function stockFolderName(c){if(c.productType!=='Pokémonkaart')return c.productType;return splitStoredName(c.name).set||'Kaarten zonder set';}
@@ -558,6 +560,7 @@ function stockCardHtml(c){return `
         <div><b>Aantal op voorraad: ${c.quantity-c.soldQuantity}</b></div>
         <div>Inkoop: €${c.buy.toFixed(2)} · Vraag: <span class="money">€${c.ask.toFixed(2)}</span></div>
         <div class="muted">Minimum: €${c.min.toFixed(2)}</div>
+        ${c.productType==='Pokémonkaart'?`<div id="market-${c.id}" class="market-price">Cardmarket-prijs laden…</div>`:''}
         <button class="green" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="startSale('${c.id}')">✅ Verkocht</button>
         <button class="light" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="openEdit('${c.id}')">Bekijken/bewerken</button>
         <button class="danger" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="removeCard('${c.id}')">Verwijder</button>
@@ -566,6 +569,25 @@ function stockCardHtml(c){return `
 async function renderSetFolder(folderName){
   const cards=(await getAll()).filter(c=>c.status==='Op voorraad'&&stockFolderName(c)===folderName);
   stockList.innerHTML=`<nav><button class="light" onclick="renderStock()">← Alle mappen</button></nav><div class="card"><h2 style="margin:0">${escapeHtml(folderName)}</h2><div class="muted">${cards.reduce((sum,c)=>sum+c.quantity-c.soldQuantity,0)} stuks op voorraad</div></div>`+cards.map(stockCardHtml).join('');
+  updateFolderPrices(cards);
+}
+async function getCardmarketPrice(c){
+  const parts=splitStoredName(c.name);if(!parts.set||!parts.number)return null;
+  const sets=await loadSetCatalog();
+  const set=(Array.isArray(sets)?sets:[]).find(s=>normalizeSetName(s.name)===normalizeSetName(parts.set));if(!set)return null;
+  const local=(parts.number.split('/')[0]||'').trim(),ids=[local,String(Number(local))].filter((v,i,a)=>v&&a.indexOf(v)===i);
+  for(const id of ids){const card=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id)+'/'+encodeURIComponent(id));if(card?.pricing?.cardmarket)return card.pricing.cardmarket;}
+  return null;
+}
+async function updateFolderPrices(cards){
+  const queue=cards.filter(c=>c.productType==='Pokémonkaart');
+  for(let i=0;i<queue.length;i+=4)await Promise.all(queue.slice(i,i+4).map(async c=>{
+    const box=document.getElementById('market-'+c.id);if(!box)return;
+    try{const p=await getCardmarketPrice(c);if(!p){box.classList.add('unavailable');box.textContent='Geen actuele Cardmarket-prijs beschikbaar';return;}
+      const parts=[];if(p.trend!=null&&Number.isFinite(+p.trend))parts.push('Trend €'+(+p.trend).toFixed(2));if(p.low!=null&&Number.isFinite(+p.low))parts.push('Laagste €'+(+p.low).toFixed(2));if(p['trend-holo']!=null&&Number.isFinite(+p['trend-holo']))parts.push('Holo-trend €'+(+p['trend-holo']).toFixed(2));
+      const date=p.updated?new Date(p.updated).toLocaleDateString('nl-NL'):'';box.innerHTML='<b>Cardmarket:</b> '+escapeHtml(parts.join(' · ')||'prijs onbekend')+(date?'<br>Bijgewerkt: '+escapeHtml(date):'');
+    }catch(e){box.classList.add('unavailable');box.textContent='Prijs kon niet worden geladen';}
+  }));
 }
 async function startSale(id){
   show('sell');
