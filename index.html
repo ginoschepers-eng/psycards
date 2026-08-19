@@ -338,7 +338,7 @@ async function openSetEntry(){
   setEntryStatus.textContent=sets.length?sets.length+' Engelse sets beschikbaar. Kies een set en laad de afbeeldingen.':'De setlijst kon niet worden geladen.';
 }
 function setEntryVariantHtml(cardId,variant,currentQuantity=0){
-  return `<label class="set-variant-option"><input class="set-variant-check" type="checkbox" data-card-id="${escapeHtml(cardId)}" data-variant="${escapeHtml(variant)}" onchange="toggleSetEntryVariant(this)"><span>${escapeHtml(variant)}${currentQuantity?`<small class="set-variant-stock">Voorraad: ${currentQuantity}</small>`:''}</span><input class="hidden" type="number" min="1" step="1" inputmode="numeric" value="1" aria-label="Extra aantal ${escapeHtml(variant)}" oninput="updateSetEntryCount()"></label>`;
+  return `<label class="set-variant-option${currentQuantity?' active':''}"><input class="set-variant-check" type="checkbox" data-card-id="${escapeHtml(cardId)}" data-variant="${escapeHtml(variant)}"${currentQuantity?' checked':''} onchange="toggleSetEntryVariant(this)"><span>${escapeHtml(variant)}</span><input class="${currentQuantity?'':'hidden'}" type="number" min="1" step="1" inputmode="numeric" value="${currentQuantity||1}" aria-label="Aantal ${escapeHtml(variant)}" oninput="updateSetEntryCount()"></label>`;
 }
 async function loadSetEntryCards(){
   const setId=setEntrySelect.value;if(!setId)return alert('Kies eerst een set.');
@@ -348,7 +348,7 @@ async function loadSetEntryCards(){
   setEntrySet=set;setEntryCardMap=new Map(set.cards.map(c=>[String(c.id),c]));
   const official=set.cardCount?.official||set.cardCount?.total||'?';
   setEntryCards.innerHTML='<div class="card">'+set.cards.map(card=>{
-    const image=card.image?card.image+'.webp':'';
+    const image=card.image?card.image+'/low.webp':'';
     const storedName=card.name+' — '+set.name+' '+card.localId+'/'+official;
     const quantityFor=variant=>current.filter(c=>c.name.trim().toLocaleLowerCase('nl')===storedName.trim().toLocaleLowerCase('nl')&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&(c.variant||'Normaal')===variant).reduce((sum,c)=>sum+availableQuantity(c),0);
     const common=SET_ENTRY_COMMON.map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
@@ -368,17 +368,17 @@ async function saveSetEntry(){
   if(!setEntrySet)return alert('Laad eerst een set.');
   const selected=[...document.querySelectorAll('.set-variant-check:checked')].map(box=>{const card=setEntryCardMap.get(String(box.dataset.cardId)),quantity=Math.max(1,parseInt(box.closest('.set-variant-option').querySelector('input[type=number]').value)||1);return {card,variant:box.dataset.variant,quantity};}).filter(x=>x.card);
   if(!selected.length)return alert('Vink minimaal één kaartsoort aan.');
-  if(!confirm(selected.reduce((sum,x)=>sum+x.quantity,0)+' kaarten uit '+setEntrySet.name+' aan de voorraad toevoegen?'))return;
+  if(!confirm('De getoonde aantallen voor '+setEntrySet.name+' opslaan?'))return;
   setEntrySaveButton.disabled=true;setEntryStatus.textContent='Aantallen opslaan…';
-  const current=await getAll(),official=setEntrySet.cardCount?.official||setEntrySet.cardCount?.total||'?',inserts=[];let updated=0;
+  const current=await getAll();await loadBundleData();const official=setEntrySet.cardCount?.official||setEntrySet.cardCount?.total||'?',inserts=[];let updated=0;
   for(const item of selected){
     const storedName=item.card.name+' — '+setEntrySet.name+' '+item.card.localId+'/'+official,photo=item.card.image?item.card.image+'/high.webp':'';
     const existing=current.find(c=>c.name.trim().toLocaleLowerCase('nl')===storedName.trim().toLocaleLowerCase('nl')&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&(c.variant||'Normaal')===item.variant);
-    if(existing){existing.quantity+=item.quantity;existing.status='Op voorraad';if(!existing.photo&&photo)existing.photo=photo;const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);if(error){setEntrySaveButton.disabled=false;return alert('Opslaan stopte bij '+item.card.name+': '+error.message);}updated++;}
+    if(existing){existing.quantity=existing.soldQuantity+allocatedQuantity(existing.id)+item.quantity;existing.status='Op voorraad';if(!existing.photo&&photo)existing.photo=photo;const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);if(error){setEntrySaveButton.disabled=false;return alert('Opslaan stopte bij '+item.card.name+': '+error.message);}updated++;}
     else inserts.push(toDb({name:storedName,productType:'Pokémonkaart',condition:'NM',variant:item.variant,buy:0,ask:0,min:0,quantity:item.quantity,soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''}));
   }
   if(inserts.length){const {error}=await cloud.from('cards').insert(inserts);if(error){setEntrySaveButton.disabled=false;return alert('Nieuwe kaarten opslaan is niet gelukt: '+error.message);}}
-  await loadCards();setEntrySaveButton.disabled=false;alert('Klaar: '+inserts.length+' nieuwe kaartsoorten toegevoegd en '+updated+' bestaande aantallen verhoogd.');await loadSetEntryCards();
+  await loadCards();setEntrySaveButton.disabled=false;alert('Klaar: '+inserts.length+' nieuwe kaartsoorten toegevoegd en '+updated+' bestaande aantallen bijgewerkt.');await loadSetEntryCards();
 }
 async function startAddFromSet(folderName){
   const sets=await loadSetCatalog(),set=(Array.isArray(sets)?sets:[]).find(s=>normalizeSetName(s.name)===normalizeSetName(folderName));
