@@ -83,6 +83,7 @@
       <button class="green" onclick="show('sell')">💰 Kaart verkocht</button>
       <button class="light" onclick="show('stock');renderStock()">📦 Mijn voorraad</button>
       <button class="gold" onclick="show('money');renderMoney()">📊 Mijn geld</button>
+      <button class="light" onclick="show('sold');renderSold()">✅ Verkochte items</button>
     </div>
     <div class="card">
       <b>Handelsbudget: €310</b>
@@ -147,6 +148,16 @@
     <nav><button class="light" onclick="show('home')">← Terug</button></nav>
     <div class="card">
       <h2>Kaart verkocht</h2>
+      <div class="scanbox">
+        <b>Zoek de kaart in je voorraad</b>
+        <div class="muted">Vul bijvoorbeeld SSP en 039 of 039/191 in.</div>
+        <div class="row">
+          <div><label>Setafkorting</label><input id="sellSetCode" placeholder="Bijv. SSP" autocapitalize="characters"></div>
+          <div><label>Kaartnummer</label><input id="sellCardNumber" placeholder="Bijv. 039/191" inputmode="text"></div>
+        </div>
+        <button class="primary" style="width:100%;padding:13px;font-size:16px;margin-top:12px" type="button" onclick="findSellCard()">🔎 Zoek in voorraad</button>
+        <div id="sellSearchStatus" class="scan-status"></div>
+      </div>
       <label>Kaart</label>
       <select id="sellCard"></select>
       <label>Verkocht voor €</label>
@@ -162,6 +173,11 @@
   <section id="stock" class="hidden">
     <nav><button class="light" onclick="show('home')">← Terug</button><button class="light" onclick="exportCSV()">⬇️ Export Excel/CSV</button></nav>
     <div id="stockList"></div>
+  </section>
+
+  <section id="sold" class="hidden">
+    <nav><button class="light" onclick="show('home')">← Terug</button></nav>
+    <div id="soldList"></div>
   </section>
 
   <section id="money" class="hidden">
@@ -236,6 +252,7 @@ async function startApp(){
     if(active==='stock')renderStock();
     if(active==='money')renderMoney();
     if(active==='sell')refreshSellList();
+    if(active==='sold')renderSold();
   }).subscribe();
 }
 
@@ -485,6 +502,19 @@ async function refreshSellList(){
   const cards=(await getAll()).filter(c=>c.status==='Op voorraad');
   sellCard.innerHTML=cards.map(c=>`<option value="${c.id}">${displayId(c.id)} – ${escapeHtml(c.productType)}: ${escapeHtml(c.name)} (${c.quantity-c.soldQuantity}×)</option>`).join('');
 }
+async function findSellCard(){
+  const setCode=document.getElementById('sellSetCode').value.trim().toUpperCase().replace(/\s*(EN|NL|DE|FR|IT|ES)$/,''),raw=document.getElementById('sellCardNumber').value.trim(),match=raw.match(/(\d{1,3})(?:\s*\/\s*(\d{2,3}))?/),status=document.getElementById('sellSearchStatus');
+  if(!setCode)return alert('Vul de setafkorting in, bijvoorbeeld SSP.');
+  if(!match)return alert('Vul het kaartnummer in, bijvoorbeeld 039 of 039/191.');
+  const number=match[1],total=match[2]||'';status.textContent='Kaart in voorraad zoeken…';
+  let candidates=await searchTcgdex({setCode,number,total});
+  if(!candidates.length)candidates=await searchPokemonTcgFallback({setCode,number,total});
+  const candidateSets=new Set(candidates.map(c=>normalizeSetName(c.set?.name))),cleanNumber=String(Number(number));
+  const cards=(await getAll()).filter(c=>c.status==='Op voorraad'&&c.productType==='Pokémonkaart');
+  const found=cards.filter(c=>{const p=splitStoredName(c.name),storedNumber=(p.number.split('/')[0]||'').replace(/^0+/,'')||'0';return storedNumber===cleanNumber&&candidateSets.has(normalizeSetName(p.set));});
+  if(!found.length){status.textContent='Deze kaart staat niet in de voorraad. Controleer de afkorting en het kaartnummer.';return;}
+  await refreshSellList();document.getElementById('sellCard').value=found[0].id;status.textContent=found.length===1?'✓ Gevonden: '+found[0].name:'✓ '+found.length+' varianten gevonden. Kies hieronder de juiste kaart.';
+}
 async function sellCard(){
   const id=document.getElementById('sellCard').value;
   if(!id) return alert('Geen kaart geselecteerd.');
@@ -495,7 +525,12 @@ async function sellCard(){
   card.soldQuantity+=amount; card.soldPrice+=unitPrice*amount; card.status=card.soldQuantity>=card.quantity?'Verkocht':'Op voorraad'; card.payment=payment.value; card.soldDate=new Date().toISOString();
   const {error}=await cloud.from('cards').update(toDb(card)).eq('id',card.id);
   if(error)return alert('Verkoop opslaan is niet gelukt: '+error.message);
-  await loadCards(); soldPrice.value=''; sellQuantity.value='1'; alert('Verkoop opgeslagen. Winst op deze verkoop: €'+((unitPrice-card.buy)*amount).toFixed(2)); show('home');
+  await loadCards(); soldPrice.value=''; sellQuantity.value='1';sellSetCode.value='';sellCardNumber.value='';sellSearchStatus.textContent=''; alert('Verkoop opgeslagen. Het verkochte aantal staat nu bij Verkochte items. Winst op deze verkoop: €'+((unitPrice-card.buy)*amount).toFixed(2)); show('sold');renderSold();
+}
+async function renderSold(){
+  const cards=(await getAll()).filter(c=>c.soldQuantity>0).sort((a,b)=>String(b.soldDate).localeCompare(String(a.soldDate)));
+  if(!cards.length){soldList.innerHTML='<div class="card">Nog geen verkochte items.</div>';return;}
+  soldList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Verkochte items</h2><div class="muted">Deze aantallen zijn niet meer opgenomen in je beschikbare voorraad.</div></div>'+cards.map(c=>`<div class="card item">${c.photo?`<img class="thumb" src="${c.photo}" onclick="openPhotoViewer(this.src)" style="cursor:zoom-in">`:'<div class="thumb"></div>'}<div><b>${escapeHtml(c.name)}</b><div class="muted">${escapeHtml(c.productType)}${c.productType==='Pokémonkaart'?' · '+escapeHtml(c.condition):''}</div><div><b>${c.soldQuantity}× verkocht</b></div><div>Totale verkoop: <span class="money">€${c.soldPrice.toFixed(2)}</span></div><div class="muted">${c.soldDate?'Laatste verkoop: '+new Date(c.soldDate).toLocaleDateString('nl-NL'):''}</div></div></div>`).join('');
 }
 async function renderStock(){
   const cards=await getAll();
