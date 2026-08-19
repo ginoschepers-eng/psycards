@@ -406,10 +406,15 @@ function extractLikelyCardName(text){
   const words=[];for(const line of lines.slice(0,10)){for(const word of line.split(' ')){const clean=word.trim();if(clean.length>=4&&!ignored.has(clean.toLowerCase()))words.push(clean);}}
   return words[0]||'';
 }
+function normalizeSetCode(value){
+  const code=String(value||'').trim().toUpperCase().replace(/\s*(EN|NL|DE|FR|IT|ES)$/,'');
+  // Veel camera's lezen de kleine TWM-setcode als TMW. Corrigeer die OCR-fout automatisch.
+  return code==='TMW'?'TWM':code;
+}
 function extractSetCode(text){
   const upper=String(text||'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ');
   const withLanguage=upper.match(/\b([A-Z0-9]{2,5})\s*(?:EN|NL|DE|FR|IT|ES)\b/);
-  if(withLanguage&&!['BASIC','STAGE','TRAINER'].includes(withLanguage[1]))return withLanguage[1];
+  if(withLanguage&&!['BASIC','STAGE','TRAINER'].includes(withLanguage[1]))return normalizeSetCode(withLanguage[1]);
   return '';
 }
 function scanScore(card,ocr,number,total){
@@ -429,6 +434,7 @@ function adaptTcgdexCard(card,setInfo){
 async function fetchTcgdex(url){const response=await fetch(url);if(!response.ok)return null;return await response.json();}
 async function searchTcgdex({setCode='',number='',total='',name=''}){
   try{
+    setCode=normalizeSetCode(setCode);
     const base='https://api.tcgdex.net/v2/en',results=[];
     if(setCode&&number){
       const sets=await fetchTcgdex(base+'/sets?tcgOnline='+encodeURIComponent(setCode));
@@ -447,6 +453,7 @@ async function searchTcgdex({setCode='',number='',total='',name=''}){
   }catch(e){return [];}
 }
 async function searchPokemonTcgFallback({setCode='',number='',total='',name=''}){
+  setCode=normalizeSetCode(setCode);
   const clean=number?String(Number(number)):'';
   const query=number?(number===clean?'number:'+clean:'(number:'+number+' OR number:'+clean+')'):'name:'+JSON.stringify(name);
   const response=await fetch('https://api.pokemontcg.io/v2/cards?q='+encodeURIComponent(query)+'&pageSize=250&select=id,name,number,set,images');
@@ -462,7 +469,7 @@ function showScanCandidates(message){
   document.getElementById('scanResult').classList.remove('hidden');chooseScanMatch();setScanStatus(message);
 }
 async function manualCardSearch(){
-  const setCode=document.getElementById('manualSetCode').value.trim().toUpperCase().replace(/\s*(EN|NL|DE|FR|IT|ES)$/,'');
+  const setCode=normalizeSetCode(document.getElementById('manualSetCode').value);
   const rawNumber=document.getElementById('manualCardNumber').value.trim(),found=extractCardNumber(rawNumber);
   if(!setCode)return alert('Vul de setafkorting in, bijvoorbeeld SSP.');
   if(!found)return alert('Vul het kaartnummer in als nummer/totaal, bijvoorbeeld 039/191.');
@@ -500,7 +507,7 @@ async function scanCard(){
     const foundNumber=extractCardNumber(ocr);
     const number=foundNumber?.number||'', total=foundNumber?.total||'';
     const likelyName=extractLikelyCardName(ocr);
-    const setCode=activeSetCode||extractSetCode(ocr);
+    const setCode=normalizeSetCode(activeSetCode||extractSetCode(ocr));
     if(!number&&!likelyName)throw new Error('De kaartnaam en het kaartnummer zijn niet duidelijk leesbaar. Probeer een foto zonder weerspiegeling.');
     setScanStatus((likelyName?'Naam '+likelyName+'. ':'')+(setCode?'Set '+setCode+'. ':'')+(number?'Nummer '+number+'/'+total+'. ':'')+'Kaart zoeken…');
     scanCandidates=await searchTcgdex({setCode,number,total,name:likelyName});
@@ -551,7 +558,7 @@ async function refreshSellList(){
   select.innerHTML=cards.length?cards.map(c=>`<option value="${c.id}">${displayId(c.id)} – ${escapeHtml(c.productType)}: ${escapeHtml(c.name)} (${availableQuantity(c)}×)</option>`).join(''):'<option value="">Geen producten op voorraad</option>';
 }
 async function findSellCard(){
-  const setCode=document.getElementById('sellSetCode').value.trim().toUpperCase().replace(/\s*(EN|NL|DE|FR|IT|ES)$/,''),raw=document.getElementById('sellCardNumber').value.trim(),match=raw.match(/(\d{1,3})(?:\s*\/\s*(\d{2,3}))?/),status=document.getElementById('sellSearchStatus');
+  const setCode=normalizeSetCode(document.getElementById('sellSetCode').value),raw=document.getElementById('sellCardNumber').value.trim(),match=raw.match(/(\d{1,3})(?:\s*\/\s*(\d{2,3}))?/),status=document.getElementById('sellSearchStatus');
   if(!setCode)return alert('Vul de setafkorting in, bijvoorbeeld SSP.');
   if(!match)return alert('Vul het kaartnummer in, bijvoorbeeld 039 of 039/191.');
   const number=match[1],total=match[2]||'';status.textContent='Kaart in voorraad zoeken…';
