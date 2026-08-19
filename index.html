@@ -133,6 +133,7 @@
       <label id="nameLabel">🃏 Kaartnaam</label>
       <input id="name" placeholder="Bijv. Pikachu">
       <div id="conditionFields"><label>Conditie</label><select id="condition"><option>NM</option><option>EX</option><option>LP</option><option>PL</option></select></div>
+      <div id="variantFields"><label>Kaartsoort</label><select id="cardVariant"><option>Normaal</option><option>Holo</option><option>Reverse holo</option><option>ex</option><option>V</option><option>VMAX</option><option>VSTAR</option><option>Illustration Rare</option><option>Special Illustration Rare</option><option>Ultra Rare</option><option>Hyper Rare</option><option>Promo</option><option>Anders</option></select></div>
       <label>Aantal</label>
       <input id="quantity" type="number" min="1" step="1" inputmode="numeric" value="1">
       <div class="row">
@@ -196,9 +197,11 @@
       <label>Kaartnaam / productnaam</label><input id="editName">
       <div class="row"><div><label>Set</label><input id="editSet"></div><div><label>Kaartnummer</label><input id="editNumber" placeholder="Bijv. 039/191"></div></div>
       <label>Conditie</label><select id="editCondition"><option>NM</option><option>EX</option><option>LP</option><option>PL</option><option>Doosje</option><option>Losse sleeve</option></select>
+      <div id="editVariantFields"><label>Kaartsoort</label><select id="editVariant"><option>Normaal</option><option>Holo</option><option>Reverse holo</option><option>ex</option><option>V</option><option>VMAX</option><option>VSTAR</option><option>Illustration Rare</option><option>Special Illustration Rare</option><option>Ultra Rare</option><option>Hyper Rare</option><option>Promo</option><option>Anders</option></select></div>
       <label>Aantal totaal</label><input id="editQuantity" type="number" min="1" inputmode="numeric">
       <div class="row"><div><label>Gekocht voor €</label><input id="editBuy" type="number" step="0.01" inputmode="decimal"></div><div><label>Verkopen voor €</label><input id="editAsk" type="number" step="0.01" inputmode="decimal"></div></div>
       <label>Minimaal €</label><input id="editMin" type="number" step="0.01" inputmode="decimal">
+      <div id="editMarketPrice" class="market-price">Cardmarket-prijs laden…</div>
       <button class="primary" style="width:100%;margin-top:16px" onclick="saveEdit()">Wijzigingen opslaan</button>
     </div>
   </section>
@@ -278,8 +281,8 @@ function show(id){
   if(id==='new') updateProductForm();
 }
 async function getAll(){return await loadCards();}
-function fromDb(c){const productType=['Doosje','Losse sleeve'].includes(c.condition)?c.condition:'Pokémonkaart';return {id:c.id,name:c.name,productType,condition:c.condition,buy:+c.buy||0,ask:+c.ask||0,min:+c.minimum||0,status:c.status,photo:c.photo||'',quantity:+c.quantity||1,soldQuantity:+c.sold_quantity||0,soldPrice:+c.sold_price||0,payment:c.payment||'',soldDate:c.sold_date||''};}
-function toDb(c){return {name:c.name,condition:c.condition,buy:c.buy,ask:c.ask,minimum:c.min,status:c.status,photo:c.photo||null,quantity:c.quantity||1,sold_quantity:c.soldQuantity||0,sold_price:c.soldPrice||0,payment:c.payment||null,sold_date:c.soldDate||null};}
+function fromDb(c){const rawCondition=String(c.condition||''),productType=['Doosje','Losse sleeve'].includes(rawCondition)?rawCondition:'Pokémonkaart',parts=productType==='Pokémonkaart'?rawCondition.split(' | '):[rawCondition];return {id:c.id,name:c.name,productType,condition:parts[0]||'NM',variant:parts[1]||'Normaal',buy:+c.buy||0,ask:+c.ask||0,min:+c.minimum||0,status:c.status,photo:c.photo||'',quantity:+c.quantity||1,soldQuantity:+c.sold_quantity||0,soldPrice:+c.sold_price||0,payment:c.payment||'',soldDate:c.sold_date||''};}
+function toDb(c){const storedCondition=c.productType==='Pokémonkaart'?c.condition+' | '+(c.variant||'Normaal'):c.condition;return {name:c.name,condition:storedCondition,buy:c.buy,ask:c.ask,minimum:c.min,status:c.status,photo:c.photo||null,quantity:c.quantity||1,sold_quantity:c.soldQuantity||0,sold_price:c.soldPrice||0,payment:c.payment||null,sold_date:c.soldDate||null};}
 function displayId(id){return 'PSY-'+String(id).padStart(4,'0');}
 async function del(id){const {error}=await cloud.from('cards').delete().eq('id',id);if(error)throw error;await loadCards();}
 function fileToDataURL(file){
@@ -295,6 +298,7 @@ function updateProductForm(){
   document.getElementById('scannerFields').classList.toggle('hidden',!isCard);
   document.getElementById('regularPhoto').classList.toggle('hidden',isCard);
   document.getElementById('conditionFields').classList.toggle('hidden',!isCard);
+  document.getElementById('variantFields').classList.toggle('hidden',!isCard);
   document.getElementById('nameLabel').textContent=isCard?'🃏 Kaartnaam':type==='Doosje'?'📦 Omschrijving doosje':'🛡️ Omschrijving sleeve';
   document.getElementById('name').placeholder=isCard?'Bijv. Pikachu':type==='Doosje'?'Bijv. Tin box Charizard':'Bijv. Pikachu sleeve rood';
 }
@@ -472,7 +476,7 @@ function chooseScanMatch(){
 }
 function resetNewProductForm(){
   ['name','buy','ask','min','photo','cameraPhoto','productPhoto','detectedSet','detectedNumber','manualSetCode','manualCardNumber'].forEach(x=>document.getElementById(x).value='');
-  quantity.value='1';scanCandidates=[];selectedPhotoFile=null;document.getElementById('scanResult').classList.add('hidden');setScanStatus('Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.');
+  quantity.value='1';cardVariant.value='Normaal';scanCandidates=[];selectedPhotoFile=null;document.getElementById('scanResult').classList.add('hidden');setScanStatus('Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.');
 }
 async function saveCard(){
   const name=document.getElementById('name').value.trim();
@@ -481,8 +485,8 @@ async function saveCard(){
   const photo=await fileToDataURL(isCard?(selectedPhotoFile||document.getElementById('photo').files[0]||document.getElementById('cameraPhoto').files[0]):document.getElementById('productPhoto').files[0]);
   const setName=isCard?document.getElementById('detectedSet').value.trim():'',cardNumber=isCard?document.getElementById('detectedNumber').value.trim():'';
   const storedName=isCard&&setName&&cardNumber?name+' — '+setName+' '+cardNumber:name;
-  const card={name:storedName,productType,condition:isCard?condition.value:productType,buy:+buy.value||0,ask:+ask.value||0,min:+min.value||0,quantity:Math.max(1,parseInt(quantity.value)||1),soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''};
-  const existing=(await getAll()).find(c=>c.name.trim().toLocaleLowerCase('nl')===storedName.trim().toLocaleLowerCase('nl')&&c.condition===card.condition&&c.productType===card.productType);
+  const card={name:storedName,productType,condition:isCard?condition.value:productType,variant:isCard?cardVariant.value:'',buy:+buy.value||0,ask:+ask.value||0,min:+min.value||0,quantity:Math.max(1,parseInt(quantity.value)||1),soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''};
+  const existing=(await getAll()).find(c=>c.name.trim().toLocaleLowerCase('nl')===storedName.trim().toLocaleLowerCase('nl')&&c.condition===card.condition&&c.productType===card.productType&&(c.variant||'Normaal')===(card.variant||'Normaal'));
   if(existing){
     const oldQuantity=existing.quantity,newQuantity=card.quantity,totalQuantity=oldQuantity+newQuantity;
     existing.buy=((existing.buy*oldQuantity)+(card.buy*newQuantity))/totalQuantity;
@@ -532,7 +536,7 @@ async function sellCard(){
 async function renderSold(){
   const cards=(await getAll()).filter(c=>c.soldQuantity>0).sort((a,b)=>String(b.soldDate).localeCompare(String(a.soldDate)));
   if(!cards.length){soldList.innerHTML='<div class="card">Nog geen verkochte items.</div>';return;}
-  soldList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Verkochte items</h2><div class="muted">Deze aantallen zijn niet meer opgenomen in je beschikbare voorraad.</div></div>'+cards.map(c=>`<div class="card item">${c.photo?`<img class="thumb" src="${c.photo}" onclick="openPhotoViewer(this.src)" style="cursor:zoom-in">`:'<div class="thumb"></div>'}<div><b>${escapeHtml(c.name)}</b><div class="muted">${escapeHtml(c.productType)}${c.productType==='Pokémonkaart'?' · '+escapeHtml(c.condition):''}</div><div><b>${c.soldQuantity}× verkocht</b></div><div>Totale verkoop: <span class="money">€${c.soldPrice.toFixed(2)}</span></div><div class="muted">${c.soldDate?'Laatste verkoop: '+new Date(c.soldDate).toLocaleDateString('nl-NL'):''}</div></div></div>`).join('');
+  soldList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Verkochte items</h2><div class="muted">Deze aantallen zijn niet meer opgenomen in je beschikbare voorraad.</div></div>'+cards.map(c=>`<div class="card item">${c.photo?`<img class="thumb" src="${c.photo}" onclick="openPhotoViewer(this.src)" style="cursor:zoom-in">`:'<div class="thumb"></div>'}<div><b>${escapeHtml(c.name)}</b><div class="muted">${escapeHtml(c.productType)}${c.productType==='Pokémonkaart'?' · '+escapeHtml(c.condition)+' · '+escapeHtml(c.variant||'Normaal'):''}</div><div><b>${c.soldQuantity}× verkocht</b></div><div>Totale verkoop: <span class="money">€${c.soldPrice.toFixed(2)}</span></div><div class="muted">${c.soldDate?'Laatste verkoop: '+new Date(c.soldDate).toLocaleDateString('nl-NL'):''}</div></div></div>`).join('');
 }
 async function renderStock(){
   const cards=await getAll();
@@ -556,14 +560,14 @@ function stockCardHtml(c){return `
       ${c.photo?`<img class="thumb" src="${c.photo}">`:`<div class="thumb"></div>`}
       <div>
         <b>${displayId(c.id)} – ${escapeHtml(c.name)}</b>
-        <div class="muted">${escapeHtml(c.productType)}${c.productType==='Pokémonkaart'?' · '+escapeHtml(c.condition):''}</div>
+        <div class="muted">${escapeHtml(c.productType)}${c.productType==='Pokémonkaart'?' · '+escapeHtml(c.condition)+' · '+escapeHtml(c.variant||'Normaal'):''}</div>
         <div><b>Aantal op voorraad: ${c.quantity-c.soldQuantity}</b></div>
         <div>Inkoop: €${c.buy.toFixed(2)} · Vraag: <span class="money">€${c.ask.toFixed(2)}</span></div>
         <div class="muted">Minimum: €${c.min.toFixed(2)}</div>
-        ${c.productType==='Pokémonkaart'?`<div id="market-${c.id}" class="market-price">Cardmarket-prijs laden…</div>`:''}
         <button class="green" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="startSale('${c.id}')">✅ Verkocht</button>
         <button class="light" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="openEdit('${c.id}')">Bekijken/bewerken</button>
         <button class="danger" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="removeCard('${c.id}')">Verwijder</button>
+        ${c.productType==='Pokémonkaart'?`<div id="market-${c.id}" class="market-price">Cardmarket-prijs laden…</div>`:''}
       </div>
     </div>`;}
 async function renderSetFolder(folderName){
@@ -601,9 +605,18 @@ function splitStoredName(value){const match=String(value||'').match(/^(.*?)\s+�
 async function openEdit(id){
   const cards=await getAll();editingCard=cards.find(c=>String(c.id)===String(id));if(!editingCard)return alert('Dit product kon niet worden geladen.');
   const parts=splitStoredName(editingCard.name),preview=document.getElementById('editPreview');
-  editName.value=parts.name;editSet.value=parts.set;editNumber.value=parts.number;editCondition.value=editingCard.condition;editQuantity.value=editingCard.quantity;editBuy.value=editingCard.buy;editAsk.value=editingCard.ask;editMin.value=editingCard.min;editPhoto.value='';
+  editName.value=parts.name;editSet.value=parts.set;editNumber.value=parts.number;editCondition.value=editingCard.condition;editVariant.value=editingCard.variant||'Normaal';document.getElementById('editVariantFields').classList.toggle('hidden',editingCard.productType!=='Pokémonkaart');editQuantity.value=editingCard.quantity;editBuy.value=editingCard.buy;editAsk.value=editingCard.ask;editMin.value=editingCard.min;editPhoto.value='';
   if(editingCard.photo){preview.src=editingCard.photo;preview.classList.remove('hidden');}else{preview.removeAttribute('src');preview.classList.add('hidden');}
   show('edit');
+  updateEditPrice(editingCard);
+}
+async function updateEditPrice(card){
+  const box=document.getElementById('editMarketPrice');box.className='market-price';box.textContent='Cardmarket-prijs laden…';
+  if(card.productType!=='Pokémonkaart'){box.classList.add('hidden');return;}box.classList.remove('hidden');
+  try{const p=await getCardmarketPrice(card);if(!p){box.classList.add('unavailable');box.textContent='Geen actuele Cardmarket-prijs beschikbaar';return;}
+    const parts=[];if(p.trend!=null&&Number.isFinite(+p.trend))parts.push('Trend €'+(+p.trend).toFixed(2));if(p.low!=null&&Number.isFinite(+p.low))parts.push('Laagste €'+(+p.low).toFixed(2));if(p['trend-holo']!=null&&Number.isFinite(+p['trend-holo']))parts.push('Holo-trend €'+(+p['trend-holo']).toFixed(2));
+    const date=p.updated?new Date(p.updated).toLocaleDateString('nl-NL'):'';box.innerHTML='<b>Actuele Cardmarket-prijs</b><br>'+escapeHtml(parts.join(' · ')||'Prijs onbekend')+(date?'<br>Bijgewerkt: '+escapeHtml(date):'');
+  }catch(e){box.classList.add('unavailable');box.textContent='Prijs kon niet worden geladen';}
 }
 function openPhotoViewer(src){if(!src)return;document.getElementById('viewerImage').src=src;document.getElementById('photoViewer').classList.remove('hidden');}
 function closePhotoViewer(){document.getElementById('photoViewer').classList.add('hidden');document.getElementById('viewerImage').removeAttribute('src');}
@@ -613,7 +626,7 @@ async function saveEdit(){
   if(!name)return alert('Vul een naam in.');
   if(quantityValue<editingCard.soldQuantity)return alert('Het aantal totaal kan niet lager zijn dan het aantal dat al verkocht is ('+editingCard.soldQuantity+').');
   const replacement=editPhoto.files[0];if(replacement)editingCard.photo=await fileToDataURL(replacement);
-  editingCard.name=setName&&number?name+' — '+setName+' '+number:name;editingCard.condition=editCondition.value;editingCard.productType=['Doosje','Losse sleeve'].includes(editingCard.condition)?editingCard.condition:'Pokémonkaart';editingCard.quantity=quantityValue;editingCard.buy=+editBuy.value||0;editingCard.ask=+editAsk.value||0;editingCard.min=+editMin.value||0;editingCard.status=editingCard.soldQuantity>=editingCard.quantity?'Verkocht':'Op voorraad';
+  editingCard.name=setName&&number?name+' — '+setName+' '+number:name;editingCard.condition=editCondition.value;editingCard.productType=['Doosje','Losse sleeve'].includes(editingCard.condition)?editingCard.condition:'Pokémonkaart';editingCard.variant=editingCard.productType==='Pokémonkaart'?editVariant.value:'';editingCard.quantity=quantityValue;editingCard.buy=+editBuy.value||0;editingCard.ask=+editAsk.value||0;editingCard.min=+editMin.value||0;editingCard.status=editingCard.soldQuantity>=editingCard.quantity?'Verkocht':'Op voorraad';
   const {error}=await cloud.from('cards').update(toDb(editingCard)).eq('id',editingCard.id);if(error)return alert('Wijzigen is niet gelukt: '+error.message);
   await loadCards();alert('Wijzigingen opgeslagen.');show('stock');renderStock();
 }
@@ -635,8 +648,8 @@ async function renderMoney(){
 }
 async function exportCSV(){
   const cards=await getAll();
-  const rows=[['ID','Productsoort','Naam/omschrijving','Conditie','Aantal totaal','Aantal verkocht','Aantal op voorraad','Inkoop per stuk','Vraagprijs per stuk','Minimum per stuk','Status','Totale omzet','Betaalwijze','Datum laatste verkoop']];
-  cards.forEach(c=>rows.push([displayId(c.id),c.productType,c.name,c.condition,c.quantity,c.soldQuantity,c.quantity-c.soldQuantity,c.buy,c.ask,c.min,c.status,c.soldPrice,c.payment,c.soldDate]));
+  const rows=[['ID','Productsoort','Naam/omschrijving','Conditie','Kaartsoort','Aantal totaal','Aantal verkocht','Aantal op voorraad','Inkoop per stuk','Vraagprijs per stuk','Minimum per stuk','Status','Totale omzet','Betaalwijze','Datum laatste verkoop']];
+  cards.forEach(c=>rows.push([displayId(c.id),c.productType,c.name,c.condition,c.variant||'',c.quantity,c.soldQuantity,c.quantity-c.soldQuantity,c.buy,c.ask,c.min,c.status,c.soldPrice,c.payment,c.soldDate]));
   const csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(';')).join('\n');
   const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Psycards_export.csv'; a.click(); URL.revokeObjectURL(a.href);
