@@ -61,7 +61,7 @@
     .folder-visual{height:54px;display:flex;align-items:center;margin-bottom:8px}.folder-logo{display:block;max-width:100%;max-height:50px;object-fit:contain;object-position:left center}.folder-icon{font-size:30px;display:block}.folder-name{font-size:17px;font-weight:800;display:block}.folder-count{font-size:13px;color:#667085;margin-top:4px;display:block}
     .market-price{margin-top:7px;padding:8px 10px;border-radius:9px;background:#eef7ee;color:#285b2b;font-size:12px;line-height:1.4}.market-price.unavailable{background:#f3f4f6;color:#667085}
     .bundle-line{display:grid;grid-template-columns:30px 58px 1fr;gap:9px;align-items:center;padding:9px 0;border-bottom:1px solid #edf0f4}.bundle-check{width:23px;height:23px;margin:0}.bundle-thumb{width:54px;height:72px;object-fit:cover;border-radius:6px;background:#edf1f6}.bundle-progress{position:sticky;top:108px;z-index:4;background:#fff0bf;border-radius:13px;padding:12px;font-weight:800;text-align:center}
-    .set-entry{display:grid;grid-template-columns:78px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid #edf0f4}.set-entry img{width:78px;height:109px;object-fit:contain;background:#edf1f6;border-radius:8px}.set-entry-options{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}.set-variant-option{display:grid;grid-template-columns:22px 1fr;gap:6px;align-items:center;margin:0;padding:7px;border:1px solid #d6deea;border-radius:9px;font-size:12px}.set-variant-option.active{grid-template-columns:22px 1fr 54px;background:#eef7ee;border-color:#8bd38b}.set-variant-option input[type=checkbox]{width:20px;height:20px;margin:0}.set-variant-option input[type=number]{width:54px;padding:7px 3px;text-align:center}.set-entry-more{margin-top:7px}.set-entry-more>summary{color:#1f4e78;font-size:12px;font-weight:800;cursor:pointer}.set-savebar{position:sticky;bottom:8px;z-index:4;background:white;border:1px solid #d6deea;border-radius:14px;padding:10px;box-shadow:0 3px 16px rgba(0,0,0,.14)}
+    .set-entry{display:grid;grid-template-columns:78px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid #edf0f4}.set-entry img{width:78px;height:109px;object-fit:contain;background:#edf1f6;border-radius:8px}.set-entry-options{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}.set-variant-option{display:grid;grid-template-columns:22px 1fr;gap:6px;align-items:center;margin:0;padding:7px;border:1px solid #d6deea;border-radius:9px;font-size:12px}.set-variant-option.active{grid-template-columns:22px 1fr 54px;background:#eef7ee;border-color:#8bd38b}.set-variant-option input[type=checkbox]{width:20px;height:20px;margin:0}.set-variant-option input[type=number]{width:54px;padding:7px 3px;text-align:center}.set-variant-stock{display:block;color:#28702e;font-size:10px;font-weight:800;margin-top:2px}.set-entry-more{margin-top:7px}.set-entry-more>summary{color:#1f4e78;font-size:12px;font-weight:800;cursor:pointer}.set-savebar{position:sticky;bottom:8px;z-index:4;background:white;border:1px solid #d6deea;border-radius:14px;padding:10px;box-shadow:0 3px 16px rgba(0,0,0,.14)}
     .dot{width:8px;height:8px;border-radius:50%;background:#8bd38b}.dot.offline{background:#ffcc66}
     #login{max-width:420px;margin:42px auto}.login-button{width:100%;margin-top:16px}
     @media(max-width:520px){.grid,.row,.stats{grid-template-columns:1fr}.grid button{min-height:88px}.folder-grid{grid-template-columns:1fr 1fr}}
@@ -337,20 +337,22 @@ async function openSetEntry(){
   setEntrySelect.innerHTML=sets.map(s=>`<option value="${escapeHtml(s.id)}"${s.id==='sv06'?' selected':''}>${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`).join('');
   setEntryStatus.textContent=sets.length?sets.length+' Engelse sets beschikbaar. Kies een set en laad de afbeeldingen.':'De setlijst kon niet worden geladen.';
 }
-function setEntryVariantHtml(cardId,variant){
-  return `<label class="set-variant-option"><input class="set-variant-check" type="checkbox" data-card-id="${escapeHtml(cardId)}" data-variant="${escapeHtml(variant)}" onchange="toggleSetEntryVariant(this)"><span>${escapeHtml(variant)}</span><input class="hidden" type="number" min="1" step="1" inputmode="numeric" value="1" aria-label="Aantal ${escapeHtml(variant)}" oninput="updateSetEntryCount()"></label>`;
+function setEntryVariantHtml(cardId,variant,currentQuantity=0){
+  return `<label class="set-variant-option"><input class="set-variant-check" type="checkbox" data-card-id="${escapeHtml(cardId)}" data-variant="${escapeHtml(variant)}" onchange="toggleSetEntryVariant(this)"><span>${escapeHtml(variant)}${currentQuantity?`<small class="set-variant-stock">Voorraad: ${currentQuantity}</small>`:''}</span><input class="hidden" type="number" min="1" step="1" inputmode="numeric" value="1" aria-label="Extra aantal ${escapeHtml(variant)}" oninput="updateSetEntryCount()"></label>`;
 }
 async function loadSetEntryCards(){
   const setId=setEntrySelect.value;if(!setId)return alert('Kies eerst een set.');
   setEntryStatus.textContent='Kaarten en afbeeldingen laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
-  const set=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(setId));
+  const [set,current]=await Promise.all([fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(setId)),getAll()]);
   if(!set?.cards?.length){setEntryStatus.textContent='De kaarten van deze set konden niet worden geladen.';return;}
   setEntrySet=set;setEntryCardMap=new Map(set.cards.map(c=>[String(c.id),c]));
   const official=set.cardCount?.official||set.cardCount?.total||'?';
   setEntryCards.innerHTML='<div class="card">'+set.cards.map(card=>{
     const image=card.image?card.image+'.webp':'';
-    const common=SET_ENTRY_COMMON.map(v=>setEntryVariantHtml(card.id,v)).join('');
-    const special=SET_ENTRY_SPECIAL.map(v=>setEntryVariantHtml(card.id,v)).join('');
+    const storedName=card.name+' — '+set.name+' '+card.localId+'/'+official;
+    const quantityFor=variant=>current.filter(c=>c.name.trim().toLocaleLowerCase('nl')===storedName.trim().toLocaleLowerCase('nl')&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&(c.variant||'Normaal')===variant).reduce((sum,c)=>sum+availableQuantity(c),0);
+    const common=SET_ENTRY_COMMON.map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
+    const special=SET_ENTRY_SPECIAL.map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
     return `<div class="set-entry">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(card.localId)} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(card.localId)}/${official}</div><div class="set-entry-options">${common}</div><details class="set-entry-more"><summary>Meer kaartsoorten</summary><div class="set-entry-options">${special}</div></details></div></div>`;
   }).join('')+'</div>';
   setEntryStatus.textContent=set.cards.length+' kaarten geladen uit '+set.name+'.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();
@@ -376,7 +378,7 @@ async function saveSetEntry(){
     else inserts.push(toDb({name:storedName,productType:'Pokémonkaart',condition:'NM',variant:item.variant,buy:0,ask:0,min:0,quantity:item.quantity,soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''}));
   }
   if(inserts.length){const {error}=await cloud.from('cards').insert(inserts);if(error){setEntrySaveButton.disabled=false;return alert('Nieuwe kaarten opslaan is niet gelukt: '+error.message);}}
-  await loadCards();document.querySelectorAll('.set-variant-check:checked').forEach(box=>{box.checked=false;toggleSetEntryVariant(box);});setEntrySaveButton.disabled=false;setEntryStatus.textContent=(inserts.length+updated)+' kaartsoorten opgeslagen in de voorraad.';alert('Klaar: '+inserts.length+' nieuwe kaartsoorten toegevoegd en '+updated+' bestaande aantallen verhoogd.');
+  await loadCards();setEntrySaveButton.disabled=false;alert('Klaar: '+inserts.length+' nieuwe kaartsoorten toegevoegd en '+updated+' bestaande aantallen verhoogd.');await loadSetEntryCards();
 }
 async function startAddFromSet(folderName){
   const sets=await loadSetCatalog(),set=(Array.isArray(sets)?sets:[]).find(s=>normalizeSetName(s.name)===normalizeSetName(folderName));
