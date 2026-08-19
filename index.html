@@ -83,7 +83,7 @@
 
   <section id="home" class="hidden">
     <div class="grid">
-      <button class="primary" onclick="show('new')">➕ Nieuw product</button>
+      <button class="primary" onclick="openNewProduct()">➕ Nieuw product</button>
       <button class="green" onclick="show('sell')">💰 Kaart verkocht</button>
       <button class="light" onclick="show('stock');renderStock()">📦 Mijn voorraad</button>
       <button class="gold" onclick="show('money');renderMoney()">📊 Mijn geld</button>
@@ -101,6 +101,7 @@
     <nav><button class="light" onclick="show('home')">← Terug</button></nav>
     <div class="card">
       <h2>Nieuw product</h2>
+      <div id="fixedSetBanner" class="scanbox hidden">📁 Toevoegen aan set: <b id="fixedSetLabel"></b><div class="muted">De kaartzoeker gebruikt alleen deze set.</div></div>
       <label>Soort product</label>
       <select id="productType" onchange="updateProductForm()"><option>Pokémonkaart</option><option>Doosje</option><option>Losse sleeve</option></select>
       <div id="scannerFields">
@@ -252,6 +253,7 @@ let scanCandidates=[];
 let selectedPhotoFile=null;
 let editingCard=null;
 let cameraStream=null,cameraTimer=null,cameraReadyFrames=0;
+let activeSetName='',activeSetCode='';
 
 if(sessionStorage.getItem('psycards-login')==='yes') startApp();
 window.addEventListener('online',updateConnection);
@@ -308,6 +310,15 @@ function show(id){
   if(id==='sell') refreshSellList();
   if(id==='new') updateProductForm();
   if(id==='bundles') renderBundles();
+}
+function openNewProduct(){activeSetName='';activeSetCode='';document.getElementById('productType').value='Pokémonkaart';document.getElementById('fixedSetBanner').classList.add('hidden');resetNewProductForm();show('new');}
+async function startAddFromSet(folderName){
+  const sets=await loadSetCatalog(),set=(Array.isArray(sets)?sets:[]).find(s=>normalizeSetName(s.name)===normalizeSetName(folderName));
+  activeSetName=folderName;activeSetCode=String(set?.tcgOnline||'').toUpperCase();
+  if(!activeSetCode)activeSetCode=folderName.split(/\s+/).map(x=>x[0]).join('').toUpperCase();
+  show('new');document.getElementById('productType').value='Pokémonkaart';updateProductForm();
+  document.getElementById('manualSetCode').value=activeSetCode;document.getElementById('manualSetCode').readOnly=true;document.getElementById('fixedSetLabel').textContent=folderName+' ('+activeSetCode+')';document.getElementById('fixedSetBanner').classList.remove('hidden');
+  setScanStatus('Maak of kies een foto. Er wordt alleen gezocht binnen '+folderName+' ('+activeSetCode+').');
 }
 async function getAll(){return await loadCards();}
 function fromDb(c){const rawCondition=String(c.condition||''),productType=['Doosje','Losse sleeve'].includes(rawCondition)?rawCondition:'Pokémonkaart',parts=productType==='Pokémonkaart'?rawCondition.split(' | '):[rawCondition];return {id:c.id,name:c.name,productType,condition:parts[0]||'NM',variant:parts[1]||'Normaal',buy:+c.buy||0,ask:+c.ask||0,min:+c.minimum||0,status:c.status,photo:c.photo||'',quantity:+c.quantity||1,soldQuantity:+c.sold_quantity||0,soldPrice:+c.sold_price||0,payment:c.payment||'',soldDate:c.sold_date||''};}
@@ -489,7 +500,7 @@ async function scanCard(){
     const foundNumber=extractCardNumber(ocr);
     const number=foundNumber?.number||'', total=foundNumber?.total||'';
     const likelyName=extractLikelyCardName(ocr);
-    const setCode=extractSetCode(ocr);
+    const setCode=activeSetCode||extractSetCode(ocr);
     if(!number&&!likelyName)throw new Error('De kaartnaam en het kaartnummer zijn niet duidelijk leesbaar. Probeer een foto zonder weerspiegeling.');
     setScanStatus((likelyName?'Naam '+likelyName+'. ':'')+(setCode?'Set '+setCode+'. ':'')+(number?'Nummer '+number+'/'+total+'. ':'')+'Kaart zoeken…');
     scanCandidates=await searchTcgdex({setCode,number,total,name:likelyName});
@@ -506,7 +517,8 @@ function chooseScanMatch(){
 }
 function resetNewProductForm(){
   ['name','buy','ask','min','photo','cameraPhoto','productPhoto','productGalleryPhoto','detectedSet','detectedNumber','manualSetCode','manualCardNumber'].forEach(x=>document.getElementById(x).value='');
-  quantity.value='1';cardVariant.value='Normaal';scanCandidates=[];selectedPhotoFile=null;document.getElementById('scanResult').classList.add('hidden');setScanStatus('Maak een scherpe foto van de volledige voorkant. Tik zo nodig eerst op de kaart om de camera scherp te stellen.');
+  quantity.value='1';cardVariant.value='Normaal';scanCandidates=[];selectedPhotoFile=null;document.getElementById('scanResult').classList.add('hidden');
+  if(activeSetCode){manualSetCode.value=activeSetCode;manualSetCode.readOnly=true;setScanStatus('Klaar voor de volgende kaart uit '+activeSetName+' ('+activeSetCode+').');}else{manualSetCode.readOnly=false;setScanStatus('Klaar voor de volgende kaart. Maak of kies een scherpe foto van de volledige voorkant.');}
 }
 async function saveCard(){
   const name=document.getElementById('name').value.trim();
@@ -524,14 +536,14 @@ async function saveCard(){
     if(card.ask>0)existing.ask=card.ask;if(card.min>0)existing.min=card.min;if(!existing.photo&&card.photo)existing.photo=card.photo;
     const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);
     if(error)return alert('Voorraad verhogen is niet gelukt: '+error.message);
-    await loadCards();resetNewProductForm();alert(displayId(existing.id)+' bestond al. '+newQuantity+' toegevoegd; totaal op voorraad: '+(existing.quantity-existing.soldQuantity)+'.');show('home');return;
+    await loadCards();resetNewProductForm();alert(displayId(existing.id)+' bestond al. '+newQuantity+' toegevoegd; totaal op voorraad: '+availableQuantity(existing)+'. Je kunt nu direct de volgende kaart scannen.');show('new');return;
   }
   const {data,error}=await cloud.from('cards').insert(toDb(card)).select().single();
   if(error)return alert('Opslaan is niet gelukt: '+error.message);
   await loadCards();
   resetNewProductForm();
-  alert(displayId(data.id)+' opgeslagen');
-  show('home');
+  alert(displayId(data.id)+' opgeslagen. Je kunt nu direct de volgende kaart scannen.');
+  show('new');
 }
 async function refreshSellList(){
   await loadBundleData();const cards=(await getAll()).filter(c=>c.status==='Op voorraad'&&availableQuantity(c)>0);
@@ -602,7 +614,8 @@ function stockCardHtml(c){return `
     </div>`;}
 async function renderSetFolder(folderName){
   await loadBundleData();const cards=(await getAll()).filter(c=>c.status==='Op voorraad'&&stockFolderName(c)===folderName&&availableQuantity(c)>0);
-  stockList.innerHTML=`<nav><button class="light" onclick="renderStock()">← Alle mappen</button></nav><div class="card"><h2 style="margin:0">${escapeHtml(folderName)}</h2><div class="muted">${cards.reduce((sum,c)=>sum+availableQuantity(c),0)} stuks op voorraad</div></div>`+cards.map(stockCardHtml).join('');
+  const isCardFolder=cards.length?cards[0].productType==='Pokémonkaart':!['Doosje','Losse sleeve'].includes(folderName);
+  stockList.innerHTML=`<nav><button class="light" onclick="renderStock()">← Alle mappen</button></nav><div class="card"><h2 style="margin:0">${escapeHtml(folderName)}</h2><div class="muted">${cards.reduce((sum,c)=>sum+availableQuantity(c),0)} stuks op voorraad</div>${isCardFolder?`<button class="primary" style="width:100%;margin-top:12px;padding:13px;font-size:16px" onclick="startAddFromSet(decodeURIComponent('${encodeURIComponent(folderName)}'))">📷 Kaart aan deze set toevoegen</button>`:''}</div>`+cards.map(stockCardHtml).join('');
   updateFolderPrices(cards);
 }
 async function getCardmarketPrice(c){
