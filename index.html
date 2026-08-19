@@ -56,7 +56,7 @@
     .file-button.light-file{background:white;color:#1f4e78;border:1px solid #cfd8e3}
     .folder-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
     .folder{background:white;border:1px solid #d6deea;border-radius:16px;padding:16px;text-align:left;color:#14213d;min-height:108px}
-    .folder-icon{font-size:30px;display:block;margin-bottom:7px}.folder-name{font-size:17px;font-weight:800;display:block}.folder-count{font-size:13px;color:#667085;margin-top:4px;display:block}
+    .folder-visual{height:54px;display:flex;align-items:center;margin-bottom:8px}.folder-logo{display:block;max-width:100%;max-height:50px;object-fit:contain;object-position:left center}.folder-icon{font-size:30px;display:block}.folder-name{font-size:17px;font-weight:800;display:block}.folder-count{font-size:13px;color:#667085;margin-top:4px;display:block}
     .dot{width:8px;height:8px;border-radius:50%;background:#8bd38b}.dot.offline{background:#ffcc66}
     #login{max-width:420px;margin:42px auto}.login-button{width:100%;margin-top:16px}
     @media(max-width:520px){.grid,.row,.stats{grid-template-columns:1fr}.grid button{min-height:88px}.folder-grid{grid-template-columns:1fr 1fr}}
@@ -503,7 +503,14 @@ async function renderStock(){
   if(!open.length){stockList.innerHTML='<div class="card">Nog geen producten op voorraad.</div>';return;}
   const groups={};open.forEach(c=>{const key=stockFolderName(c);(groups[key]??=[]).push(c);});
   const folders=Object.keys(groups).sort((a,b)=>a.localeCompare(b,'nl'));
-  stockList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Voorraadmappen</h2><div class="muted">Kies een set om de kaarten te bekijken.</div></div><div class="folder-grid">'+folders.map(name=>{const items=groups[name],amount=items.reduce((sum,c)=>sum+c.quantity-c.soldQuantity,0),icon=items[0].productType==='Pokémonkaart'?'🗂️':items[0].productType==='Doosje'?'📦':'🛡️';return `<button class="folder" onclick="renderSetFolder(decodeURIComponent('${encodeURIComponent(name)}'))"><span class="folder-icon">${icon}</span><span class="folder-name">${escapeHtml(name)}</span><span class="folder-count">${items.length} soorten · ${amount} stuks</span></button>`;}).join('')+'</div>';
+  const logos=await loadSetLogos();
+  stockList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Voorraadmappen</h2><div class="muted">Kies een set om de kaarten te bekijken.</div></div><div class="folder-grid">'+folders.map(name=>{const items=groups[name],amount=items.reduce((sum,c)=>sum+c.quantity-c.soldQuantity,0),isCard=items[0].productType==='Pokémonkaart',icon=isCard?'🗂️':items[0].productType==='Doosje'?'📦':'🛡️',logo=isCard?logos[normalizeSetName(name)]||'':'';const visual=logo?`<img class="folder-logo" src="${escapeHtml(logo)}" alt="Logo ${escapeHtml(name)}" onerror="this.outerHTML='<span class=&quot;folder-icon&quot;>🗂️</span>'">`:`<span class="folder-icon">${icon}</span>`;return `<button class="folder" onclick="renderSetFolder(decodeURIComponent('${encodeURIComponent(name)}'))"><span class="folder-visual">${visual}</span><span class="folder-name">${escapeHtml(name)}</span><span class="folder-count">${items.length} soorten · ${amount} stuks</span></button>`;}).join('')+'</div>';
+}
+let setLogoPromise;
+function normalizeSetName(value){return String(value||'').toLocaleLowerCase('en').replace(/[^a-z0-9]/g,'');}
+function loadSetLogos(){
+  if(!setLogoPromise)setLogoPromise=fetch('https://api.tcgdex.net/v2/en/sets').then(r=>{if(!r.ok)throw new Error('Setlogo’s niet beschikbaar');return r.json();}).then(sets=>Object.fromEntries(sets.filter(s=>s.name&&s.logo).map(s=>[normalizeSetName(s.name),/\.(webp|png|jpe?g)$/i.test(s.logo)?s.logo:s.logo+'.webp']))).catch(()=>({}));
+  return setLogoPromise;
 }
 function stockFolderName(c){if(c.productType!=='Pokémonkaart')return c.productType;return splitStoredName(c.name).set||'Kaarten zonder set';}
 function stockCardHtml(c){return `
