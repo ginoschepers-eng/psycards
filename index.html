@@ -558,6 +558,7 @@ function stockCardHtml(c){return `
         <div><b>Aantal op voorraad: ${c.quantity-c.soldQuantity}</b></div>
         <div>Inkoop: €${c.buy.toFixed(2)} · Vraag: <span class="money">€${c.ask.toFixed(2)}</span></div>
         <div class="muted">Minimum: €${c.min.toFixed(2)}</div>
+        <button class="green" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="startSale('${c.id}')">✅ Verkocht</button>
         <button class="light" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="openEdit('${c.id}')">Bekijken/bewerken</button>
         <button class="danger" style="padding:7px 10px;font-size:12px;margin-top:8px" onclick="removeCard('${c.id}')">Verwijder</button>
       </div>
@@ -565,6 +566,14 @@ function stockCardHtml(c){return `
 async function renderSetFolder(folderName){
   const cards=(await getAll()).filter(c=>c.status==='Op voorraad'&&stockFolderName(c)===folderName);
   stockList.innerHTML=`<nav><button class="light" onclick="renderStock()">← Alle mappen</button></nav><div class="card"><h2 style="margin:0">${escapeHtml(folderName)}</h2><div class="muted">${cards.reduce((sum,c)=>sum+c.quantity-c.soldQuantity,0)} stuks op voorraad</div></div>`+cards.map(stockCardHtml).join('');
+}
+async function startSale(id){
+  show('sell');
+  await refreshSellList();
+  const select=document.getElementById('sellCard');select.value=String(id);
+  const option=select.options[select.selectedIndex];
+  document.getElementById('sellSearchStatus').textContent=option?'✓ Geselecteerd: '+option.textContent:'De kaart kon niet worden geselecteerd.';
+  document.getElementById('soldPrice').focus();
 }
 function splitStoredName(value){const match=String(value||'').match(/^(.*?)\s+—\s+(.*?)\s+([^\s]+\/[^\s]+)$/);return match?{name:match[1],set:match[2],number:match[3]}:{name:value||'',set:'',number:''};}
 async function openEdit(id){
