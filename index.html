@@ -63,6 +63,7 @@
     .bundle-line{display:grid;grid-template-columns:30px 58px 1fr;gap:9px;align-items:center;padding:9px 0;border-bottom:1px solid #edf0f4}.bundle-check{width:23px;height:23px;margin:0}.bundle-thumb{width:54px;height:72px;object-fit:cover;border-radius:6px;background:#edf1f6}.bundle-progress{position:sticky;top:108px;z-index:4;background:#fff0bf;border-radius:13px;padding:12px;font-weight:800;text-align:center}
     .set-entry{display:grid;grid-template-columns:78px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid #edf0f4}.set-entry img{width:78px;height:109px;object-fit:contain;background:#edf1f6;border-radius:8px}.set-entry-options{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}.set-variant-option{display:grid;grid-template-columns:22px 1fr;gap:6px;align-items:center;margin:0;padding:7px;border:1px solid #d6deea;border-radius:9px;font-size:12px}.set-variant-option.active{grid-template-columns:22px 1fr 54px;background:#eef7ee;border-color:#8bd38b}.set-variant-option input[type=checkbox]{width:20px;height:20px;margin:0}.set-variant-option input[type=number]{width:54px;padding:7px 3px;text-align:center}.set-variant-stock{display:block;color:#28702e;font-size:10px;font-weight:800;margin-top:2px}.set-entry-more{margin-top:7px}.set-entry-more>summary{color:#1f4e78;font-size:12px;font-weight:800;cursor:pointer}.set-savebar{position:sticky;bottom:8px;z-index:4;background:white;border:1px solid #d6deea;border-radius:14px;padding:10px;box-shadow:0 3px 16px rgba(0,0,0,.14)}
     .dashboard-hero{background:linear-gradient(135deg,#173d60,#2873a8);color:white;border-radius:18px;padding:18px;margin-bottom:14px}.dashboard-hero h2{margin:0 0 5px}.dashboard-hero button{width:100%;margin-top:14px;background:#fff;color:#1f4e78}.region-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:10px}.region-button{background:white;border:1px solid #d6deea;color:#14213d;padding:12px 8px;border-radius:13px;font-size:14px}.region-button span{display:block;font-size:22px;margin-bottom:3px}.dashboard-set{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;width:100%;background:white;color:#14213d;border:1px solid #d6deea;border-radius:13px;padding:12px;text-align:left;margin-top:8px}.dashboard-set-count{font-size:12px;color:#28702e;font-weight:800}.manage-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.manage-grid button{font-size:14px;padding:13px 8px;min-height:58px}
+    .set-tile-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}.set-tile{min-height:120px;background:white;color:#14213d;border:1px solid #d6deea;border-radius:14px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.set-tile img{width:100%;height:64px;object-fit:contain;margin-bottom:7px}.set-tile b{font-size:13px}.set-tile small{display:block;font-size:11px;color:#667085;margin-top:3px}
     .dot{width:8px;height:8px;border-radius:50%;background:#8bd38b}.dot.offline{background:#ffcc66}
     #login{max-width:420px;margin:42px auto}.login-button{width:100%;margin-top:16px}
     @media(max-width:520px){.grid,.row,.stats{grid-template-columns:1fr}.grid button{min-height:88px}.folder-grid{grid-template-columns:1fr 1fr}}
@@ -164,10 +165,10 @@
     <nav><button class="light" onclick="show('home')">← Terug</button></nav>
     <div class="card">
       <h2 style="margin:0 0 5px">Hele set invoeren</h2>
-      <div class="muted">Kies een set uit Mijn sets. Vink per kaart de juiste soort aan en vul het aantal in.</div>
-      <label>Mijn sets</label>
-      <select id="setEntrySelect"></select>
-      <div class="row" style="margin-top:12px"><button class="primary" style="padding:13px;font-size:16px" onclick="loadSetEntryCards()">Afbeeldingen laden</button><button class="light" style="padding:13px;font-size:16px" onclick="toggleAddSet(true)">➕ Set toevoegen</button></div>
+      <div class="muted">Tik op een setafbeelding. Daarna verschijnen alle kaarten van die set.</div>
+      <select id="setEntrySelect" class="hidden"></select>
+      <div id="setEntrySetGrid" class="set-tile-grid"></div>
+      <button class="light" style="width:100%;padding:13px;font-size:16px;margin-top:12px" onclick="toggleAddSet(true)">➕ Set toevoegen</button>
       <button class="danger" style="width:100%;padding:10px;font-size:13px;margin-top:8px" onclick="removeSavedSet()">Set uit Mijn sets verwijderen</button>
       <div id="setEntryStatus" class="scan-status"></div>
     </div>
@@ -361,10 +362,17 @@ let setEntrySet=null,setEntryCardMap=new Map(),savedSetsCache=[],setSearchResult
 async function openSetEntry(){
   show('setEntry');setEntryStatus.textContent='Mijn sets laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');toggleAddSet(false);
   const {data,error}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
-  if(error){savedSetsCache=[];setEntrySelect.innerHTML='<option value="">Database-uitbreiding nodig</option>';setEntryStatus.textContent='Voer eerst het bestand psycards-mijn-sets.sql uit in Supabase.';return;}
+  if(error){savedSetsCache=[];setEntrySetGrid.innerHTML='';setEntrySelect.innerHTML='<option value="">Database-uitbreiding nodig</option>';setEntryStatus.textContent='Voer eerst het bestand psycards-mijn-sets.sql uit in Supabase.';return;}
   savedSetsCache=data||[];setEntrySelect.innerHTML=savedSetsCache.length?savedSetsCache.map(s=>`<option value="${s.id}">${escapeHtml(s.name)} · ${escapeHtml(SET_LANGUAGES[s.language]||s.language)}${s.set_code?' ('+escapeHtml(s.set_code)+')':''}</option>`).join(''):'<option value="">Nog geen sets toegevoegd</option>';
+  await renderSetEntryTiles();
   setEntryStatus.textContent=savedSetsCache.length?savedSetsCache.length+' sets in Mijn sets.':'Voeg eerst een set toe met de knop Set toevoegen.';
 }
+async function renderSetEntryTiles(){
+  if(!savedSetsCache.length){setEntrySetGrid.innerHTML='<div class="muted">Nog geen sets toegevoegd.</div>';return;}
+  const details=await Promise.all(savedSetsCache.map(s=>fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(s.language)+'/sets/'+encodeURIComponent(s.tcgdex_id))));
+  setEntrySetGrid.innerHTML=savedSetsCache.map((saved,i)=>{const set=details[i]||{},logo=set.logo?set.logo+( /\.(webp|png|jpe?g)$/i.test(set.logo)?'':'.webp'):'';return `<button class="set-tile" onclick="selectSetEntryTile('${saved.id}')">${logo?`<img src="${escapeHtml(logo)}" alt="${escapeHtml(saved.name)}" onerror="this.style.display='none'">`:'<span class="folder-icon">🗂️</span>'}<b>${escapeHtml(saved.name)}</b><small>${escapeHtml(saved.set_code||SET_LANGUAGES[saved.language]||saved.language)}</small></button>`;}).join('');
+}
+async function selectSetEntryTile(id){setEntrySelect.value=String(id);await loadSetEntryCards();}
 function toggleAddSet(open){addSetPanel.classList.toggle('hidden',!open);if(open){addSetQuery.value='';addSetStatus.textContent='Alle sets laden…';addSetResults.classList.add('hidden');searchSetsToAdd();}}
 async function searchSetsToAdd(){
   const language=addSetLanguage.value,query=addSetQuery.value.trim();
@@ -384,6 +392,14 @@ async function removeSavedSet(){
 function setEntryVariantHtml(cardId,variant,currentQuantity=0){
   return `<label class="set-variant-option${currentQuantity?' active':''}"><input class="set-variant-check" type="checkbox" data-card-id="${escapeHtml(cardId)}" data-variant="${escapeHtml(variant)}"${currentQuantity?' checked':''} onchange="toggleSetEntryVariant(this)"><span>${escapeHtml(variant)}</span><input class="${currentQuantity?'':'hidden'}" type="number" min="1" step="1" inputmode="numeric" value="${currentQuantity||1}" aria-label="Aantal ${escapeHtml(variant)}" oninput="updateSetEntryCount()"></label>`;
 }
+function fixedSpecialVariant(card){
+  const name=String(card?.name||'');
+  if(/\bVMAX\b/i.test(name))return 'VMAX';
+  if(/\bVSTAR\b/i.test(name))return 'VSTAR';
+  if(/\bex\b/i.test(name))return 'ex';
+  if(/\bV\b/i.test(name))return 'V';
+  return '';
+}
 async function loadSetEntryCards(){
   const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return alert('Kies of voeg eerst een set toe.');
   setEntryStatus.textContent='Kaarten en afbeeldingen laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
@@ -395,9 +411,9 @@ async function loadSetEntryCards(){
     const image=card.image?card.image+'/low.webp':'';
     const storedName=card.name+' — '+set.name+' '+card.localId+'/'+official;
     const quantityFor=variant=>current.filter(c=>c.name.trim().toLocaleLowerCase('nl')===storedName.trim().toLocaleLowerCase('nl')&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&(c.variant||'Normaal')===variant).reduce((sum,c)=>sum+availableQuantity(c),0);
-    const common=SET_ENTRY_COMMON.map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
-    const special=SET_ENTRY_SPECIAL.map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
-    return `<div class="set-entry">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(card.localId)} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(card.localId)}/${official}</div><div class="set-entry-options">${common}</div><details class="set-entry-more"><summary>Meer kaartsoorten</summary><div class="set-entry-options">${special}</div></details></div></div>`;
+    const fixed=fixedSpecialVariant(card),common=(fixed?[fixed]:SET_ENTRY_COMMON).map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
+    const special=fixed?'':SET_ENTRY_SPECIAL.map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
+    return `<div class="set-entry">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(card.localId)} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(card.localId)}/${official}</div><div class="set-entry-options">${common}</div>${special?`<details class="set-entry-more"><summary>Overige kaartsoorten</summary><div class="set-entry-options">${special}</div></details>`:''}</div></div>`;
   }).join('')+'</div>';
   setEntryStatus.textContent=set.cards.length+' kaarten geladen uit '+set.name+'.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();
 }
