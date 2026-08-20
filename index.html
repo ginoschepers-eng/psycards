@@ -183,6 +183,11 @@
       <button class="light" style="width:100%;padding:10px;font-size:13px;margin-top:8px" onclick="toggleAddSet(false)">Annuleren</button>
       <div id="addSetStatus" class="scan-status"></div>
     </div>
+  </section>
+
+  <section id="setCards" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug naar sets</button></nav>
+    <div class="card"><h2 id="setCardsTitle" style="margin:0 0 5px">Kaarten invoeren</h2><div class="muted">Vink per kaart één of meerdere kaartsoorten aan. Iedere soort wordt apart in de voorraad opgeslagen.</div><div id="setCardsStatus" class="scan-status"></div></div>
     <div id="setEntryCards"></div>
     <div id="setEntrySavebar" class="set-savebar hidden"><div id="setEntryCount" class="muted" style="text-align:center;margin-bottom:7px">Nog geen aantallen ingevuld</div><button id="setEntrySaveButton" class="green" style="width:100%;padding:13px;font-size:16px" onclick="saveSetEntry()">Aantallen opslaan</button></div>
   </section>
@@ -417,9 +422,9 @@ function fixedSpecialVariant(card){
 }
 async function loadSetEntryCards(){
   const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return alert('Kies of voeg eerst een set toe.');
-  setEntryStatus.textContent='Kaarten en afbeeldingen laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
+  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaarten en afbeeldingen laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
   const [set,current]=await Promise.all([fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/sets/'+encodeURIComponent(saved.tcgdex_id)),getAll()]);
-  if(!set?.cards?.length){setEntryStatus.textContent='De kaarten van deze set konden niet worden geladen.';return;}
+  if(!set?.cards?.length){setCardsStatus.textContent='De kaarten van deze set konden niet worden geladen.';return;}
   setEntrySet=set;setEntryCardMap=new Map(set.cards.map(c=>[String(c.id),c]));
   const official=set.cardCount?.official||set.cardCount?.total||'?';
   setEntryCards.innerHTML='<div class="card">'+set.cards.map(card=>{
@@ -430,7 +435,7 @@ async function loadSetEntryCards(){
     const special=fixed?'':SET_ENTRY_SPECIAL.map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
     return `<div class="set-entry">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(card.localId)} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(card.localId)}/${official}</div><div class="set-entry-options">${common}</div>${special?`<details class="set-entry-more"><summary>Overige kaartsoorten</summary><div class="set-entry-options">${special}</div></details>`:''}</div></div>`;
   }).join('')+'</div>';
-  setEntryStatus.textContent=set.cards.length+' kaarten geladen uit '+set.name+'.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();
+  setCardsStatus.textContent=set.cards.length+' kaarten geladen uit '+set.name+'.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();
 }
 function toggleSetEntryVariant(box){
   const label=box.closest('.set-variant-option'),amount=label.querySelector('input[type=number]');label.classList.toggle('active',box.checked);amount.classList.toggle('hidden',!box.checked);if(box.checked){amount.value=Math.max(1,parseInt(amount.value)||1);amount.focus();}updateSetEntryCount();
@@ -444,7 +449,7 @@ async function saveSetEntry(){
   const selected=[...document.querySelectorAll('.set-variant-check:checked')].map(box=>{const card=setEntryCardMap.get(String(box.dataset.cardId)),quantity=Math.max(1,parseInt(box.closest('.set-variant-option').querySelector('input[type=number]').value)||1);return {card,variant:box.dataset.variant,quantity};}).filter(x=>x.card);
   if(!selected.length)return alert('Vink minimaal één kaartsoort aan.');
   if(!confirm('De getoonde aantallen voor '+setEntrySet.name+' opslaan?'))return;
-  setEntrySaveButton.disabled=true;setEntryStatus.textContent='Aantallen opslaan…';
+  setEntrySaveButton.disabled=true;setCardsStatus.textContent='Aantallen opslaan…';
   const current=await getAll();await loadBundleData();const official=setEntrySet.cardCount?.official||setEntrySet.cardCount?.total||'?',inserts=[];let updated=0;
   for(const item of selected){
     const storedName=item.card.name+' — '+setEntrySet.name+' '+item.card.localId+'/'+official,photo=item.card.image?item.card.image+'/high.webp':'';
