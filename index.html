@@ -175,9 +175,9 @@
       <h3 style="margin:0">Set toevoegen</h3>
       <label>Taal</label>
       <select id="addSetLanguage"><option value="en">Engels</option><option value="ja">Japans</option><option value="ko">Koreaans</option><option value="zh-tw">Chinees (traditioneel)</option><option value="zh-cn">Chinees (vereenvoudigd)</option></select>
-      <label>Zoek op setnaam of databasecode</label>
-      <input id="addSetQuery" placeholder="Bijv. Black Bolt of sv10.5b">
-      <button class="primary" style="width:100%;padding:12px;font-size:15px;margin-top:10px" onclick="searchSetsToAdd()">🔎 Sets zoeken</button>
+      <label>Zoek op setnaam of databasecode (optioneel)</label>
+      <input id="addSetQuery" placeholder="Leeg laten om alle sets te zien">
+      <button class="primary" style="width:100%;padding:12px;font-size:15px;margin-top:10px" onclick="searchSetsToAdd()">🔎 Sets laden/zoeken</button>
       <div id="addSetResults" class="hidden"><label>Gevonden set</label><select id="addSetResultSelect"></select><label>Setcode op de kaart (optioneel)</label><input id="addSetCode" placeholder="Bijv. BLK" autocapitalize="characters"><button class="green" style="width:100%;padding:12px;font-size:15px;margin-top:10px" onclick="saveSelectedSet()">Set aan Mijn sets toevoegen</button></div>
       <button class="light" style="width:100%;padding:10px;font-size:13px;margin-top:8px" onclick="toggleAddSet(false)">Annuleren</button>
       <div id="addSetStatus" class="scan-status"></div>
@@ -353,9 +353,9 @@ async function openSetEntry(){
 }
 function toggleAddSet(open){addSetPanel.classList.toggle('hidden',!open);if(open){addSetStatus.textContent='';addSetResults.classList.add('hidden');addSetQuery.focus();}}
 async function searchSetsToAdd(){
-  const language=addSetLanguage.value,query=addSetQuery.value.trim();if(query.length<2)return alert('Vul minimaal twee letters van de setnaam of code in.');
+  const language=addSetLanguage.value,query=addSetQuery.value.trim();
   addSetStatus.textContent='Sets zoeken…';addSetResults.classList.add('hidden');
-  try{const sets=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(language)+'/sets');if(!Array.isArray(sets))throw new Error('Setlijst niet beschikbaar');const wanted=normalizeSetName(query);setSearchResults=sets.filter(s=>normalizeSetName(s.name).includes(wanted)||String(s.id).toLocaleLowerCase('en').includes(query.toLocaleLowerCase('en'))).slice(0,50);if(!setSearchResults.length)throw new Error('Geen set gevonden. Probeer een deel van de naam of de databasecode.');addSetResultSelect.innerHTML=setSearchResults.map((s,i)=>`<option value="${i}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`).join('');addSetResults.classList.remove('hidden');addSetStatus.textContent=setSearchResults.length+' sets gevonden.';}catch(e){addSetStatus.textContent=e.message||'Zoeken is niet gelukt.';}
+  try{const sets=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(language)+'/sets');if(!Array.isArray(sets))throw new Error('Setlijst niet beschikbaar');const wanted=normalizeSetName(query);setSearchResults=(query?sets.filter(s=>normalizeSetName(s.name).includes(wanted)||String(s.id).toLocaleLowerCase('en').includes(query.toLocaleLowerCase('en'))):sets).slice().sort((a,b)=>a.name.localeCompare(b.name)).slice(0,500);if(!setSearchResults.length)throw new Error('Geen set gevonden. Probeer een deel van de naam of de databasecode.');addSetResultSelect.innerHTML=setSearchResults.map((s,i)=>`<option value="${i}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`).join('');addSetResults.classList.remove('hidden');addSetStatus.textContent=query?setSearchResults.length+' sets gevonden.':setSearchResults.length+' sets beschikbaar in deze taal.';}catch(e){addSetStatus.textContent=e.message||'Zoeken is niet gelukt.';}
 }
 async function saveSelectedSet(){
   const selected=setSearchResults[Number(addSetResultSelect.value)||0];if(!selected)return alert('Kies eerst een gevonden set.');
@@ -697,14 +697,16 @@ async function renderSold(){
   soldList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Verkochte items</h2><div class="muted">Deze aantallen zijn niet meer opgenomen in je beschikbare voorraad.</div></div>'+soldBundles.map(b=>`<div class="card"><b>🎁 ${escapeHtml(b.name)}</b><div>25 kaarten als bundel verkocht</div><div>Totale verkoop: <span class="money">€${(+b.sold_price||0).toFixed(2)}</span></div><div class="muted">${b.sold_date?new Date(b.sold_date).toLocaleDateString('nl-NL'):''} · ${escapeHtml(b.payment||'')}</div></div>`).join('')+cards.map(c=>`<div class="card item">${c.photo?`<img class="thumb" src="${c.photo}" onclick="openPhotoViewer(this.src)" style="cursor:zoom-in">`:'<div class="thumb"></div>'}<div><b>${escapeHtml(c.name)}</b><div class="muted">${escapeHtml(c.productType)}${c.productType==='Pokémonkaart'?' · '+escapeHtml(c.condition)+' · '+escapeHtml(c.variant||'Normaal'):''}</div><div><b>${c.soldQuantity}× verkocht</b></div><div>Totale verkoop: <span class="money">€${c.soldPrice.toFixed(2)}</span></div><div class="muted">${c.soldDate?'Laatste verkoop: '+new Date(c.soldDate).toLocaleDateString('nl-NL'):''}</div></div></div>`).join('');
 }
 async function renderStock(){
-  const cards=await getAll();await loadBundleData();
+  const cards=await getAll();await loadBundleData();const savedResult=await cloud.from('psycard_sets').select('*').order('name',{ascending:true}),savedSets=savedResult.data||[];
   const open=cards.filter(c=>c.status==='Op voorraad'&&availableQuantity(c)>0);
-  if(!open.length){stockList.innerHTML='<div class="card">Nog geen producten op voorraad.</div>';return;}
   const groups={};open.forEach(c=>{const key=stockFolderName(c);(groups[key]??=[]).push(c);});
+  savedSets.forEach(s=>{if(!Object.keys(groups).some(name=>normalizeSetName(name)===normalizeSetName(s.name)))groups[s.name]=[];});
   const folders=Object.keys(groups).sort((a,b)=>a.localeCompare(b,'nl'));
+  if(!folders.length){stockList.innerHTML='<div class="card">Nog geen producten of sets toegevoegd.</div>';return;}
   const logos=await loadSetLogos();
-  stockList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Voorraadmappen</h2><div class="muted">Kies een set om de kaarten te bekijken.</div></div><div class="folder-grid">'+folders.map(name=>{const items=groups[name],amount=items.reduce((sum,c)=>sum+availableQuantity(c),0),isCard=items[0].productType==='Pokémonkaart',icon=isCard?'🗂️':items[0].productType==='Doosje'?'📦':'🛡️',logo=isCard?logos[normalizeSetName(name)]||'':'';const visual=logo?`<img class="folder-logo" src="${escapeHtml(logo)}" alt="Logo ${escapeHtml(name)}" onerror="this.outerHTML='<span class=&quot;folder-icon&quot;>🗂️</span>'">`:`<span class="folder-icon">${icon}</span>`;return `<button class="folder" onclick="renderSetFolder(decodeURIComponent('${encodeURIComponent(name)}'))"><span class="folder-visual">${visual}</span><span class="folder-name">${escapeHtml(name)}</span><span class="folder-count">${items.length} soorten · ${amount} stuks</span></button>`;}).join('')+'</div>';
+  stockList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Voorraadmappen</h2><div class="muted">Toegevoegde sets blijven zichtbaar, ook als ze nog leeg zijn.</div></div><div class="folder-grid">'+folders.map(name=>{const items=groups[name],amount=items.reduce((sum,c)=>sum+availableQuantity(c),0),saved=savedSets.find(s=>normalizeSetName(s.name)===normalizeSetName(name)),isCard=items.length?items[0].productType==='Pokémonkaart':!!saved,icon=isCard?'🗂️':items[0]?.productType==='Doosje'?'📦':'🛡️',logo=isCard?logos[normalizeSetName(name)]||'':'';const visual=logo?`<img class="folder-logo" src="${escapeHtml(logo)}" alt="Logo ${escapeHtml(name)}" onerror="this.outerHTML='<span class=&quot;folder-icon&quot;>🗂️</span>'">`:`<span class="folder-icon">${icon}</span>`,action=items.length?`renderSetFolder(decodeURIComponent('${encodeURIComponent(name)}'))`:`openSetEntryForSavedSet('${saved?.id||''}')`;return `<button class="folder" onclick="${action}"><span class="folder-visual">${visual}</span><span class="folder-name">${escapeHtml(name)}</span><span class="folder-count">${items.length} soorten · ${amount} stuks</span></button>`;}).join('')+'</div>';
 }
+async function openSetEntryForSavedSet(id){await openSetEntry();setEntrySelect.value=String(id);await loadSetEntryCards();}
 let setLogoPromise,setCatalogPromise;
 function normalizeSetName(value){return String(value||'').toLocaleLowerCase('en').replace(/[^a-z0-9]/g,'');}
 function loadSetCatalog(){if(!setCatalogPromise)setCatalogPromise=fetch('https://api.tcgdex.net/v2/en/sets').then(r=>{if(!r.ok)throw new Error('Sets niet beschikbaar');return r.json();}).catch(()=>[]);return setCatalogPromise;}
