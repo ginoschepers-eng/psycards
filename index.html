@@ -131,7 +131,7 @@
         <div class="muted">Vul de setafkorting en het kaartnummer zelf in.</div>
         <div class="row">
           <div><label>Setafkorting</label><input id="manualSetCode" placeholder="Bijv. SSP" autocapitalize="characters"></div>
-          <div><label>Kaartnummer</label><input id="manualCardNumber" placeholder="Bijv. 039/191" inputmode="text"></div>
+          <div><label>Kaartnummer</label><input id="manualCardNumber" placeholder="Bijv. 039 of 039/191" inputmode="text"></div>
         </div>
         <button class="primary" style="width:100%;padding:13px;font-size:16px;margin-top:12px" type="button" onclick="manualCardSearch()">🔎 Zoek kaart</button>
       </div>
@@ -513,6 +513,10 @@ function extractCardNumber(text){
   for(const match of matches){const number=fix(match[1]),total=fix(match[2]);if(+number>0&&+number<=999&&+total>0&&+total<=999)return {number,total};}
   return null;
 }
+function parseEnteredCardNumber(value){
+  const match=String(value||'').trim().match(/^\s*(\d{1,3})(?:\s*\/\s*(\d{1,3}))?\s*$/);
+  return match?{number:match[1],total:match[2]||''}:null;
+}
 function extractLikelyCardName(text){
   const ignored=new Set(['basic','stage','trainer','energy','pokemon','ability','weakness','resistance','retreat','illus','switch','active','bench','damage']);
   const lines=String(text||'').split(/\r?\n/).map(x=>x.replace(/[^A-Za-zÀ-ÿ' -]/g,' ').replace(/\s+/g,' ').trim()).filter(x=>x.length>=3&&x.length<=24);
@@ -593,10 +597,10 @@ function showScanCandidates(message){
 }
 async function manualCardSearch(){
   const setCode=normalizeSetCode(document.getElementById('manualSetCode').value);
-  const rawNumber=document.getElementById('manualCardNumber').value.trim(),found=extractCardNumber(rawNumber);
+  const rawNumber=document.getElementById('manualCardNumber').value.trim(),found=parseEnteredCardNumber(rawNumber);
   if(!setCode)return alert('Vul de setafkorting in, bijvoorbeeld SSP.');
-  if(!found)return alert('Vul het kaartnummer in als nummer/totaal, bijvoorbeeld 039/191.');
-  setScanStatus('Set '+setCode+' en nummer '+found.number+'/'+found.total+' zoeken…');
+  if(!found)return alert('Vul het kaartnummer in, bijvoorbeeld 001 of 001/160.');
+  setScanStatus('Set '+setCode+' en nummer '+found.number+(found.total?'/'+found.total:'')+' zoeken…');
   try{
     scanCandidates=await searchTcgdex({setCode,number:found.number,total:found.total});
     if(!scanCandidates.length){setScanStatus('Niet gevonden in TCGdex. Reservedatabase doorzoeken…');scanCandidates=await searchPokemonTcgFallback({setCode,number:found.number,total:found.total});}
