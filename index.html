@@ -130,7 +130,7 @@
         <b>Kaart niet herkend?</b>
         <div class="muted">Vul de setafkorting en het kaartnummer zelf in.</div>
         <div class="row">
-          <div><label>Setafkorting</label><input id="manualSetCode" placeholder="Bijv. SSP" autocapitalize="characters"></div>
+          <div><label>Setafkorting</label><input id="manualSetCode" placeholder="Bijv. SSP of SVP" autocapitalize="characters"></div>
           <div><label>Kaartnummer</label><input id="manualCardNumber" placeholder="Bijv. 039 of 039/191" inputmode="text"></div>
         </div>
         <button class="primary" style="width:100%;padding:13px;font-size:16px;margin-top:12px" type="button" onclick="manualCardSearch()">🔎 Zoek kaart</button>
@@ -174,7 +174,7 @@
     <div id="addSetPanel" class="card hidden">
       <h3 style="margin:0">Set toevoegen</h3>
       <label>Taal</label>
-      <select id="addSetLanguage"><option value="en">Engels</option><option value="ja">Japans</option><option value="ko">Koreaans</option><option value="zh-tw">Chinees (traditioneel)</option><option value="zh-cn">Chinees (vereenvoudigd)</option></select>
+      <select id="addSetLanguage" onchange="searchSetsToAdd()"><option value="en">Engels</option><option value="ja">Japans</option><option value="ko">Koreaans</option><option value="zh-tw">Chinees (traditioneel)</option><option value="zh-cn">Chinees (vereenvoudigd)</option></select>
       <label>Zoek op setnaam of databasecode (optioneel)</label>
       <input id="addSetQuery" placeholder="Leeg laten om alle sets te zien">
       <button class="primary" style="width:100%;padding:12px;font-size:15px;margin-top:10px" onclick="searchSetsToAdd()">🔎 Sets laden/zoeken</button>
@@ -328,7 +328,7 @@ async function renderHomeDashboard(){
 }
 async function openSetEntryByLanguage(language){
   await openSetEntry();const found=savedSetsCache.find(s=>language==='zh'?String(s.language).startsWith('zh'):s.language===language);if(found){setEntrySelect.value=String(found.id);return loadSetEntryCards();}
-  toggleAddSet(true);addSetLanguage.value=language==='zh'?'zh-tw':language;addSetStatus.textContent='Er staat nog geen set uit deze regio in Mijn sets. Kies hieronder een set.';
+  addSetLanguage.value=language==='zh'?'zh-tw':language;toggleAddSet(true);addSetStatus.textContent='Er staat nog geen set uit deze regio in Mijn sets. Kies hieronder een set.';
 }
 
 async function loadCards(){
@@ -365,11 +365,11 @@ async function openSetEntry(){
   savedSetsCache=data||[];setEntrySelect.innerHTML=savedSetsCache.length?savedSetsCache.map(s=>`<option value="${s.id}">${escapeHtml(s.name)} · ${escapeHtml(SET_LANGUAGES[s.language]||s.language)}${s.set_code?' ('+escapeHtml(s.set_code)+')':''}</option>`).join(''):'<option value="">Nog geen sets toegevoegd</option>';
   setEntryStatus.textContent=savedSetsCache.length?savedSetsCache.length+' sets in Mijn sets.':'Voeg eerst een set toe met de knop Set toevoegen.';
 }
-function toggleAddSet(open){addSetPanel.classList.toggle('hidden',!open);if(open){addSetStatus.textContent='';addSetResults.classList.add('hidden');addSetQuery.focus();}}
+function toggleAddSet(open){addSetPanel.classList.toggle('hidden',!open);if(open){addSetQuery.value='';addSetStatus.textContent='Alle sets laden…';addSetResults.classList.add('hidden');searchSetsToAdd();}}
 async function searchSetsToAdd(){
   const language=addSetLanguage.value,query=addSetQuery.value.trim();
   addSetStatus.textContent='Sets zoeken…';addSetResults.classList.add('hidden');
-  try{const sets=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(language)+'/sets');if(!Array.isArray(sets))throw new Error('Setlijst niet beschikbaar');const wanted=normalizeSetName(query);setSearchResults=(query?sets.filter(s=>normalizeSetName(s.name).includes(wanted)||String(s.id).toLocaleLowerCase('en').includes(query.toLocaleLowerCase('en'))):sets).slice().sort((a,b)=>a.name.localeCompare(b.name)).slice(0,500);if(!setSearchResults.length)throw new Error('Geen set gevonden. Probeer een deel van de naam of de databasecode.');addSetResultSelect.innerHTML=setSearchResults.map((s,i)=>`<option value="${i}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`).join('');addSetResults.classList.remove('hidden');addSetStatus.textContent=query?setSearchResults.length+' sets gevonden.':setSearchResults.length+' sets beschikbaar in deze taal.';}catch(e){addSetStatus.textContent=e.message||'Zoeken is niet gelukt.';}
+  try{const sets=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(language)+'/sets');if(!Array.isArray(sets))throw new Error('Setlijst niet beschikbaar');const wanted=normalizeSetName(query);setSearchResults=(query?sets.filter(s=>normalizeSetName(s.name).includes(wanted)||String(s.id).toLocaleLowerCase('en').includes(query.toLocaleLowerCase('en'))):sets).slice().sort((a,b)=>a.name.localeCompare(b.name));if(!setSearchResults.length)throw new Error('Geen set gevonden. Probeer een deel van de naam of de databasecode.');addSetResultSelect.innerHTML=setSearchResults.map((s,i)=>`<option value="${i}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`).join('');addSetResults.classList.remove('hidden');addSetStatus.textContent=query?setSearchResults.length+' sets gevonden.':setSearchResults.length+' sets beschikbaar in deze taal.';}catch(e){addSetStatus.textContent=e.message||'Zoeken is niet gelukt.';}
 }
 async function saveSelectedSet(){
   const selected=setSearchResults[Number(addSetResultSelect.value)||0];if(!selected)return alert('Kies eerst een gevonden set.');
@@ -528,7 +528,7 @@ function normalizeSetCode(value){
   // Veel camera's lezen de kleine TWM-setcode als TMW. Corrigeer die OCR-fout automatisch.
   return code==='TMW'?'TWM':code;
 }
-const TCGDEX_SET_BY_CODE={TWM:'sv06',BLK:'sv10.5b',WHT:'sv10.5w'};
+const TCGDEX_SET_BY_CODE={TWM:'sv06',BLK:'sv10.5b',WHT:'sv10.5w',SVP:'svp'};
 const tcgdexSetCodeCache=new Map(Object.entries(TCGDEX_SET_BY_CODE));
 async function resolveTcgdexSetId(setCode){
   const code=normalizeSetCode(setCode);if(!code)return '';
