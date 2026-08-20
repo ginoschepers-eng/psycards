@@ -62,6 +62,7 @@
     .market-price{margin-top:7px;padding:8px 10px;border-radius:9px;background:#eef7ee;color:#285b2b;font-size:12px;line-height:1.4}.market-price.unavailable{background:#f3f4f6;color:#667085}
     .bundle-line{display:grid;grid-template-columns:30px 58px 1fr;gap:9px;align-items:center;padding:9px 0;border-bottom:1px solid #edf0f4}.bundle-check{width:23px;height:23px;margin:0}.bundle-thumb{width:54px;height:72px;object-fit:cover;border-radius:6px;background:#edf1f6}.bundle-progress{position:sticky;top:108px;z-index:4;background:#fff0bf;border-radius:13px;padding:12px;font-weight:800;text-align:center}
     .set-entry{display:grid;grid-template-columns:78px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid #edf0f4}.set-entry img{width:78px;height:109px;object-fit:contain;background:#edf1f6;border-radius:8px}.set-entry-options{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}.set-variant-option{display:grid;grid-template-columns:22px 1fr;gap:6px;align-items:center;margin:0;padding:7px;border:1px solid #d6deea;border-radius:9px;font-size:12px}.set-variant-option.active{grid-template-columns:22px 1fr 54px;background:#eef7ee;border-color:#8bd38b}.set-variant-option input[type=checkbox]{width:20px;height:20px;margin:0}.set-variant-option input[type=number]{width:54px;padding:7px 3px;text-align:center}.set-variant-stock{display:block;color:#28702e;font-size:10px;font-weight:800;margin-top:2px}.set-entry-more{margin-top:7px}.set-entry-more>summary{color:#1f4e78;font-size:12px;font-weight:800;cursor:pointer}.set-savebar{position:sticky;bottom:8px;z-index:4;background:white;border:1px solid #d6deea;border-radius:14px;padding:10px;box-shadow:0 3px 16px rgba(0,0,0,.14)}
+    .dashboard-hero{background:linear-gradient(135deg,#173d60,#2873a8);color:white;border-radius:18px;padding:18px;margin-bottom:14px}.dashboard-hero h2{margin:0 0 5px}.dashboard-hero button{width:100%;margin-top:14px;background:#fff;color:#1f4e78}.region-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:10px}.region-button{background:white;border:1px solid #d6deea;color:#14213d;padding:12px 8px;border-radius:13px;font-size:14px}.region-button span{display:block;font-size:22px;margin-bottom:3px}.dashboard-set{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;width:100%;background:white;color:#14213d;border:1px solid #d6deea;border-radius:13px;padding:12px;text-align:left;margin-top:8px}.dashboard-set-count{font-size:12px;color:#28702e;font-weight:800}.manage-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.manage-grid button{font-size:14px;padding:13px 8px;min-height:58px}
     .dot{width:8px;height:8px;border-radius:50%;background:#8bd38b}.dot.offline{background:#ffcc66}
     #login{max-width:420px;margin:42px auto}.login-button{width:100%;margin-top:16px}
     @media(max-width:520px){.grid,.row,.stats{grid-template-columns:1fr}.grid button{min-height:88px}.folder-grid{grid-template-columns:1fr 1fr}}
@@ -83,18 +84,17 @@
   </section>
 
   <section id="home" class="hidden">
-    <div class="grid">
-      <button class="primary" onclick="openNewProduct()">➕ Nieuw product</button>
-      <button class="primary" onclick="openSetEntry()">🗂️ Hele set invoeren</button>
-      <button class="green" onclick="show('sell')">💰 Kaart verkocht</button>
-      <button class="light" onclick="show('stock');renderStock()">📦 Mijn voorraad</button>
-      <button class="gold" onclick="show('money');renderMoney()">📊 Mijn geld</button>
-      <button class="light" onclick="show('sold');renderSold()">✅ Verkochte items</button>
-      <button class="green" onclick="show('bundles');renderBundles()">🎁 Kaartenbundels</button>
+    <div class="dashboard-hero">
+      <h2>Kaarten invoeren</h2>
+      <div>Open een set, vink kaartsoorten aan en werk de aantallen bij.</div>
+      <button onclick="openSetEntry()">🗂️ Kaarten en aantallen invoeren</button>
     </div>
+    <div class="card"><h3 style="margin:0">Regio</h3><div id="dashboardRegions" class="region-grid"></div></div>
+    <div class="stats" id="homeStats"></div>
+    <div class="card"><h3 style="margin:0">Mijn sets</h3><div class="muted">Tik op een set om direct aantallen in te voeren.</div><div id="dashboardSets"></div></div>
     <div class="card">
-      <b>Handelsbudget: €310</b>
-      <div class="muted">Gezamenlijke voorraad voor alle ingelogde telefoons.</div>
+      <h3 style="margin:0 0 10px">Overig beheer</h3>
+      <div class="manage-grid"><button class="light" onclick="openNewProduct()">📷 Eén product</button><button class="green" onclick="show('sell')">💰 Verkocht</button><button class="light" onclick="show('stock');renderStock()">📦 Voorraad</button><button class="gold" onclick="show('money');renderMoney()">📊 Geld</button><button class="light" onclick="show('sold');renderSold()">✅ Verkopen</button><button class="green" onclick="show('bundles');renderBundles()">🎁 Bundels</button></div>
       <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
     </div>
   </section>
@@ -300,6 +300,7 @@ async function startApp(){
   updateConnection();
   await loadCards();
   await loadBundleData();
+  await renderHomeDashboard();
   cloud.channel('psycards-live').on('postgres_changes',{event:'*',schema:'public',table:'cards'},async()=>{
     await loadCards();
     const active=document.querySelector('main>section:not(.hidden)')?.id;
@@ -316,6 +317,18 @@ function updateConnection(){
   const dot=document.getElementById('syncDot'), text=document.getElementById('syncText');
   if(dot)dot.classList.toggle('offline',!online);
   if(text)text.textContent=online?'Verbonden':'Geen internetverbinding';
+}
+async function renderHomeDashboard(){
+  const cards=await getAll(),open=cards.filter(c=>c.status==='Op voorraad'&&availableQuantity(c)>0),{data:sets}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true}),saved=sets||[];
+  const regions=[['en','🌍','Internationaal'],['ja','🇯🇵','Japan'],['ko','🇰🇷','Korea'],['zh','🇨🇳','China']];
+  dashboardRegions.innerHTML=regions.map(([code,icon,label])=>{const count=saved.filter(s=>code==='zh'?String(s.language).startsWith('zh'):s.language===code).length;return `<button class="region-button" onclick="openSetEntryByLanguage('${code}')"><span>${icon}</span>${label}<small class="muted">${count} sets</small></button>`;}).join('');
+  const stockAmount=open.reduce((sum,c)=>sum+availableQuantity(c),0),uniqueCards=new Set(open.filter(c=>c.productType==='Pokémonkaart').map(c=>c.name)).size;
+  homeStats.innerHTML=[['Kaarten op voorraad',stockAmount],['Unieke kaarten',uniqueCards],['Kaartvarianten',open.filter(c=>c.productType==='Pokémonkaart').length],['Mijn sets',saved.length]].map(([label,value])=>`<div class="stat">${label}<b>${value}</b></div>`).join('');
+  dashboardSets.innerHTML=saved.length?saved.map(set=>{const matching=open.filter(c=>c.productType==='Pokémonkaart'&&normalizeSetName(stockFolderName(c))===normalizeSetName(set.name)),amount=matching.reduce((sum,c)=>sum+availableQuantity(c),0);return `<button class="dashboard-set" onclick="openSetEntryForSavedSet('${set.id}')"><span><b>${escapeHtml(set.name)}</b><small class="muted" style="display:block">${escapeHtml(SET_LANGUAGES[set.language]||set.language)}${set.set_code?' · '+escapeHtml(set.set_code):''}</small></span><span class="dashboard-set-count">${amount} kaarten</span></button>`;}).join(''):'<div class="muted" style="margin-top:10px">Nog geen sets toegevoegd.</div>';
+}
+async function openSetEntryByLanguage(language){
+  await openSetEntry();const found=savedSetsCache.find(s=>language==='zh'?String(s.language).startsWith('zh'):s.language===language);if(found){setEntrySelect.value=String(found.id);return loadSetEntryCards();}
+  toggleAddSet(true);addSetLanguage.value=language==='zh'?'zh-tw':language;addSetStatus.textContent='Er staat nog geen set uit deze regio in Mijn sets. Kies hieronder een set.';
 }
 
 async function loadCards(){
@@ -338,6 +351,7 @@ function show(id){
   if(id==='sell') refreshSellList();
   if(id==='new') updateProductForm();
   if(id==='bundles') renderBundles();
+  if(id==='home') renderHomeDashboard();
 }
 function openNewProduct(){activeSetName='';activeSetCode='';document.getElementById('productType').value='Pokémonkaart';document.getElementById('fixedSetBanner').classList.add('hidden');resetNewProductForm();show('new');}
 const SET_ENTRY_COMMON=['Normaal','Holo','Reverse holo'];
