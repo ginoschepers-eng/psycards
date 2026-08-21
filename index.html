@@ -854,9 +854,9 @@ async function startBundleBuilder(){
 }
 function buildBalancedBundlePlan(entries,count){
   if(!count)return [];
-  const bins=Array.from({length:count},()=>({items:[],value:0,keys:new Set()})),groups={};
-  entries.forEach(entry=>{const key=normalizeSetName(entry.card.name);groups[key]??=[];for(let i=0;i<entry.quantity;i++)groups[key].push(entry.card);});
-  Object.entries(groups).sort((a,b)=>b[1].length-a[1].length).forEach(([key,units])=>{units.sort((a,b)=>(+b.ask||0)-(+a.ask||0));for(const card of units.slice(0,count)){let choices=bins.filter(bin=>bin.items.length<25&&!bin.keys.has(key));if(!choices.length)break;choices.sort((a,b)=>a.items.length-b.items.length||a.value-b.value);const bin=choices[0];bin.items.push(card);bin.keys.add(key);bin.value+=+card.ask||0;}});
+  const bins=Array.from({length:count},()=>({items:[],value:0,keys:new Set(),variants:{}})),groups={},cycle=['Normaal','Reverse holo','Holo'];
+  entries.forEach(entry=>{const key=normalizeSetName(entry.card.name),variant=entry.card.variant||'Normaal';groups[key]??={'Normaal':[],'Reverse holo':[],'Holo':[]};for(let i=0;i<entry.quantity;i++)groups[key][variant].push(entry.card);});
+  Object.entries(groups).sort((a,b)=>Object.values(b[1]).flat().length-Object.values(a[1]).flat().length).forEach(([key,pools],groupIndex)=>{const units=[],order=cycle.map((_,i)=>cycle[(i+groupIndex)%cycle.length]);while(Object.values(pools).some(pool=>pool.length)){for(const variant of order){if(pools[variant]?.length)units.push(pools[variant].shift());}}for(const card of units.slice(0,count)){let choices=bins.filter(bin=>bin.items.length<25&&!bin.keys.has(key));if(!choices.length)break;const variant=card.variant||'Normaal';choices.sort((a,b)=>a.items.length-b.items.length||(a.variants[variant]||0)-(b.variants[variant]||0)||a.value-b.value);const bin=choices[0];bin.items.push(card);bin.keys.add(key);bin.variants[variant]=(bin.variants[variant]||0)+1;bin.value+=+card.ask||0;}});
   return bins;
 }
 function maxDistinctBundleCount(entries){
