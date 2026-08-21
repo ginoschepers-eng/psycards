@@ -420,6 +420,8 @@ function fixedSpecialVariant(card){
   if(/\bV\b/i.test(name))return 'V';
   return '';
 }
+function formatSetCardNumber(localId,official){const local=String(localId??''),total=String(official??'?'),width=Math.max(3,/^\d+$/.test(total)?total.length:3),left=/^\d+$/.test(local)?local.padStart(width,'0'):local,right=/^\d+$/.test(total)?total.padStart(width,'0'):total;return left+'/'+right;}
+function setEntryStoredName(card,set,official){return card.name+' — '+set.name+' '+formatSetCardNumber(card.localId,official);}
 async function loadSetEntryCards(){
   const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return alert('Kies of voeg eerst een set toe.');
   show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaarten en afbeeldingen laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
@@ -429,11 +431,11 @@ async function loadSetEntryCards(){
   const official=set.cardCount?.official||set.cardCount?.total||'?';
   setEntryCards.innerHTML='<div class="card">'+set.cards.map(card=>{
     const image=card.image?card.image+'/low.webp':'';
-    const storedName=card.name+' — '+set.name+' '+card.localId+'/'+official;
-    const quantityFor=variant=>current.filter(c=>c.name.trim().toLocaleLowerCase('nl')===storedName.trim().toLocaleLowerCase('nl')&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&(c.variant||'Normaal')===variant).reduce((sum,c)=>sum+availableQuantity(c),0);
+    const number=formatSetCardNumber(card.localId,official),storedName=setEntryStoredName(card,set,official),identity=bundleCardIdentity({name:storedName});
+    const quantityFor=variant=>current.filter(c=>bundleCardIdentity(c)===identity&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&canonicalBundleVariant(c.variant)===canonicalBundleVariant(variant)).reduce((sum,c)=>sum+availableQuantity(c),0);
     const fixed=fixedSpecialVariant(card),common=(fixed?[fixed]:SET_ENTRY_COMMON).map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
     const special=fixed?'':SET_ENTRY_SPECIAL.map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
-    return `<div class="set-entry">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(card.localId)} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(card.localId)}/${official}</div><div class="set-entry-options">${common}</div>${special?`<details class="set-entry-more"><summary>Overige kaartsoorten</summary><div class="set-entry-options">${special}</div></details>`:''}</div></div>`;
+    return `<div class="set-entry">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(number.split('/')[0])} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(number)}</div><div class="set-entry-options">${common}</div>${special?`<details class="set-entry-more"><summary>Overige kaartsoorten</summary><div class="set-entry-options">${special}</div></details>`:''}</div></div>`;
   }).join('')+'</div>';
   setCardsStatus.textContent=set.cards.length+' kaarten geladen uit '+set.name+'.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();
 }
@@ -452,9 +454,9 @@ async function saveSetEntry(){
   setEntrySaveButton.disabled=true;setCardsStatus.textContent='Aantallen opslaan…';
   const current=await getAll();await loadBundleData();const official=setEntrySet.cardCount?.official||setEntrySet.cardCount?.total||'?',inserts=[];let updated=0;
   for(const item of selected){
-    const storedName=item.card.name+' — '+setEntrySet.name+' '+item.card.localId+'/'+official,photo=item.card.image?item.card.image+'/high.webp':'';
-    const existing=current.find(c=>c.name.trim().toLocaleLowerCase('nl')===storedName.trim().toLocaleLowerCase('nl')&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&(c.variant||'Normaal')===item.variant);
-    if(existing){existing.quantity=existing.soldQuantity+allocatedQuantity(existing.id)+item.quantity;existing.status='Op voorraad';if(!existing.photo&&photo)existing.photo=photo;const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);if(error){setEntrySaveButton.disabled=false;return alert('Opslaan stopte bij '+item.card.name+': '+error.message);}updated++;}
+    const storedName=setEntryStoredName(item.card,setEntrySet,official),photo=item.card.image?item.card.image+'/high.webp':'',identity=bundleCardIdentity({name:storedName});
+    const matches=current.filter(c=>bundleCardIdentity(c)===identity&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&canonicalBundleVariant(c.variant)===canonicalBundleVariant(item.variant)).sort((a,b)=>(b.soldQuantity+allocatedQuantity(b.id))-(a.soldQuantity+allocatedQuantity(a.id))),existing=matches[0];
+    if(existing){const removable=matches.slice(1).filter(c=>c.soldQuantity===0&&allocatedQuantity(c.id)===0);if(removable.length){const {error:deleteError}=await cloud.from('cards').delete().in('id',removable.map(c=>c.id));if(deleteError){setEntrySaveButton.disabled=false;return alert('Dubbele regel samenvoegen is niet gelukt: '+deleteError.message);}}existing.name=storedName;existing.variant=canonicalBundleVariant(item.variant);existing.quantity=existing.soldQuantity+allocatedQuantity(existing.id)+item.quantity;existing.status='Op voorraad';if(!existing.photo&&photo)existing.photo=photo;const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);if(error){setEntrySaveButton.disabled=false;return alert('Opslaan stopte bij '+item.card.name+': '+error.message);}updated++;}
     else inserts.push(toDb({name:storedName,productType:'Pokémonkaart',condition:'NM',variant:item.variant,buy:0,ask:0,min:0,quantity:item.quantity,soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''}));
   }
   if(inserts.length){const {error}=await cloud.from('cards').insert(inserts);if(error){setEntrySaveButton.disabled=false;return alert('Nieuwe kaarten opslaan is niet gelukt: '+error.message);}}
@@ -848,22 +850,24 @@ async function startBundleBuilder(){
   await Promise.all([loadCards(),loadBundleData()]);if(!bundleTablesReady)return alert('Voer eerst het nieuwe bestand supabase-setup.sql uit in Supabase.');
   bundlePlanMaxPrice=Math.max(0,+document.getElementById('bundleMaxCardPrice').value||0);const allowed=new Set(['Normaal','Holo','Reverse holo']),groups={};
   cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad').forEach(card=>{const set=stockFolderName(card);if(set!=='Kaarten zonder set')(groups[set]??=[]).push(card);});
-  bundlePlans=Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0],'nl')).map(([set,cards])=>{const eligible=cards.filter(c=>allowed.has(c.variant||'Normaal')&&(+c.ask||0)<=bundlePlanMaxPrice).map(card=>({card,quantity:Math.max(0,availableQuantity(card)-1)})).filter(x=>x.quantity>0),available=eligible.reduce((sum,x)=>sum+x.quantity,0),count=maxDistinctBundleCount(eligible);return {set,available,count,bundles:buildBalancedBundlePlan(eligible,count)};});
+  bundlePlans=Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0],'nl')).map(([set,cards])=>{const eligible=cards.filter(c=>allowed.has(canonicalBundleVariant(c.variant))&&(+c.ask||0)<=bundlePlanMaxPrice).map(card=>({card,quantity:Math.max(0,availableQuantity(card)-1)})).filter(x=>x.quantity>0),available=eligible.reduce((sum,x)=>sum+x.quantity,0),count=maxDistinctBundleCount(eligible);return {set,available,count,bundles:buildBalancedBundlePlan(eligible,count)};});
   if(!bundlePlans.length)return alert('Er staan nog geen kaarten per set in de voorraad.');
   document.getElementById('bundleExisting').innerHTML='';document.getElementById('bundleBuilder').classList.remove('hidden');renderBundlePlanOverview();
 }
 function buildBalancedBundlePlan(entries,count){
   if(!count)return [];
   const bins=Array.from({length:count},()=>({items:[],value:0,keys:new Set(),variants:{}})),groups={},cycle=['Normaal','Reverse holo','Holo'];
-  entries.forEach(entry=>{const key=bundleUniqueKey(entry.card),variant=entry.card.variant||'Normaal';groups[key]??={'Normaal':[],'Reverse holo':[],'Holo':[]};for(let i=0;i<entry.quantity;i++)groups[key][variant].push(entry.card);});
+  entries.forEach(entry=>{const key=bundleUniqueKey(entry.card),variant=canonicalBundleVariant(entry.card.variant);groups[key]??={'Normaal':[],'Reverse holo':[],'Holo':[]};for(let i=0;i<entry.quantity;i++)groups[key][variant].push(entry.card);});
   const allGroups=Object.entries(groups),queues=Object.fromEntries(cycle.map(variant=>[variant,allGroups.filter(([,pools])=>pools[variant]?.length).sort((a,b)=>b[1][variant].length-a[1][variant].length)])),ordered=[];
   while(cycle.some(variant=>queues[variant].length)){for(const variant of cycle){if(queues[variant].length)ordered.push(queues[variant].shift());}}
   ordered.forEach(([key,pools])=>{const variant=cycle.find(v=>pools[v]?.length)||'Normaal',units=pools[variant];for(const card of units.slice(0,count)){let choices=bins.filter(bin=>bin.items.length<25&&!bin.keys.has(key));if(!choices.length)break;choices.sort((a,b)=>a.items.length-b.items.length||(a.variants[variant]||0)-(b.variants[variant]||0)||a.value-b.value);const bin=choices[0];bin.items.push(card);bin.keys.add(key);bin.variants[variant]=(bin.variants[variant]||0)+1;bin.value+=+card.ask||0;}});
   return bins;
 }
-function bundleUniqueKey(card){return normalizeSetName(card.name)+'|'+normalizeSetName(card.variant||'Normaal');}
+function canonicalBundleVariant(value){const variant=normalizeSetName(value||'Normaal');if(variant==='reverseholo'||variant==='reverse')return 'Reverse holo';if(variant==='holo')return 'Holo';if(variant==='normal'||variant==='normaal')return 'Normaal';return String(value||'Normaal');}
+function bundleCardIdentity(card){const parts=splitStoredName(card.name),raw=String(parts.number||'').split('/')[0],number=/^\d+$/.test(raw)?String(Number(raw)):normalizeSetName(raw);return parts.set&&number?normalizeSetName(parts.set)+'|'+number:normalizeSetName(card.name);}
+function bundleUniqueKey(card){return bundleCardIdentity(card)+'|'+normalizeSetName(canonicalBundleVariant(card.variant));}
 function bundleCardNumber(card){return parseInt(splitStoredName(card.name).number,10)||99999;}
-function bundleCardLabel(card){const parts=splitStoredName(card.name);return (parts.number?escapeHtml(parts.number)+' – ':'')+escapeHtml(parts.name)+' – '+escapeHtml(card.variant||'Normaal');}
+function bundleCardLabel(card){const parts=splitStoredName(card.name);return (parts.number?escapeHtml(parts.number)+' – ':'')+escapeHtml(parts.name)+' – '+escapeHtml(canonicalBundleVariant(card.variant));}
 function maxDistinctBundleCount(entries){
   const capacities={};entries.forEach(entry=>{const key=bundleUniqueKey(entry.card);capacities[key]=(capacities[key]||0)+entry.quantity;});const total=Object.values(capacities).reduce((sum,n)=>sum+n,0);
   for(let count=Math.floor(total/25);count>=1;count--){const usable=Object.values(capacities).reduce((sum,n)=>sum+Math.min(n,count),0);if(usable>=count*25)return count;}return 0;
