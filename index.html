@@ -230,9 +230,9 @@
 
   <section id="bundles" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
-    <div class="card"><h2 style="margin:0 0 5px">Kaartenbundels</h2><div class="muted">Kies 25 kaarten die al in de voorraad staan. De gekozen kaarten worden gereserveerd en kunnen niet meer los worden verkocht.</div><label>Vraagprijs nieuwe bundel €</label><input id="newBundleAsk" type="number" step="0.01" inputmode="decimal" value="0"><button class="primary" style="width:100%;margin-top:12px" onclick="startBundleBuilder()">➕ Nieuwe bundel samenstellen</button></div>
+    <div class="card"><h2 style="margin:0 0 5px">Kaartenbundels per set</h2><div class="muted">Per set worden dubbele kaarten verdeeld over gelijkwaardige bundels van precies 25 kaarten. Normaal, Holo en Reverse holo mogen mee; speciale kaarten niet.</div><label>Maximale vraagprijs per kaart €</label><input id="bundleMaxCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="2.00"><label>Vraagprijs per nieuwe bundel €</label><input id="newBundleAsk" type="number" step="0.01" inputmode="decimal" value="0"><button class="primary" style="width:100%;margin-top:12px" onclick="startBundleBuilder()">🧮 Bereken mogelijke bundels</button></div>
     <div id="bundleExisting"></div>
-    <div id="bundleBuilder" class="hidden"><div id="bundleProgress" class="bundle-progress">0 van 25 kaarten gekozen</div><div id="bundleCardList"></div><button class="green" style="width:100%;margin:12px 0" onclick="createBundle()">Bundel opslaan</button><button class="light" style="width:100%;margin-bottom:18px" onclick="cancelBundleBuilder()">Annuleren</button></div>
+    <div id="bundleBuilder" class="hidden"><div id="bundleProgress" class="bundle-progress">Mogelijke bundels per set</div><div id="bundleCardList"></div><button class="light" style="width:100%;margin:12px 0 18px" onclick="cancelBundleBuilder()">Terug naar bundels</button></div>
   </section>
 
   <section id="money" class="hidden">
@@ -282,7 +282,7 @@ const PUBLISHABLE_KEY='sb_publishable_gtf_x3dYPhaNr9SLRzpS5g_7wIlzm2J';
 const SHARED_PIN='6129';
 const cloud=window.supabase.createClient(PROJECT_URL,PUBLISHABLE_KEY);
 let cardsCache=[];
-let bundlesCache=[],bundleItemsCache=[],bundleTablesReady=true;
+let bundlesCache=[],bundleItemsCache=[],bundleTablesReady=true,bundlePlans=[],bundlePlanMaxPrice=2;
 let scanCandidates=[];
 let selectedPhotoFile=null;
 let editingCard=null;
@@ -846,10 +846,34 @@ async function renderBundles(){
 }
 async function startBundleBuilder(){
   await Promise.all([loadCards(),loadBundleData()]);if(!bundleTablesReady)return alert('Voer eerst het nieuwe bestand supabase-setup.sql uit in Supabase.');
-  const units=[];cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad').sort((a,b)=>a.ask-b.ask||a.name.localeCompare(b.name,'nl')).forEach(c=>{for(let i=1;i<=availableQuantity(c);i++)units.push({card:c,unit:i});});
-  if(units.length<25)return alert('Er zijn maar '+units.length+' losse kaarten beschikbaar. Voor een bundel zijn 25 kaarten nodig.');
-  document.getElementById('bundleCardList').innerHTML='<div class="card">'+units.map(({card,unit})=>`<label class="bundle-line"><input class="bundle-check" type="checkbox" data-card-id="${card.id}" onchange="updateBundleProgress(this)">${card.photo?`<img class="bundle-thumb" src="${card.photo}">`:'<span class="bundle-thumb"></span>'}<span><b>${escapeHtml(splitStoredName(card.name).name)}</b><br><span class="muted">${escapeHtml(stockFolderName(card))} · ${escapeHtml(card.variant||'Normaal')} · Vraag €${card.ask.toFixed(2)}${availableQuantity(card)>1?' · exemplaar '+unit:''}</span></span></label>`).join('')+'</div>';
-  document.getElementById('bundleExisting').innerHTML='';document.getElementById('bundleBuilder').classList.remove('hidden');updateBundleProgress();
+  bundlePlanMaxPrice=Math.max(0,+document.getElementById('bundleMaxCardPrice').value||0);const allowed=new Set(['Normaal','Holo','Reverse holo']),groups={};
+  cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad').forEach(card=>{const set=stockFolderName(card);if(set!=='Kaarten zonder set')(groups[set]??=[]).push(card);});
+  bundlePlans=Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0],'nl')).map(([set,cards])=>{const eligible=cards.filter(c=>allowed.has(c.variant||'Normaal')&&(+c.ask||0)<=bundlePlanMaxPrice).map(card=>({card,quantity:Math.max(0,availableQuantity(card)-1)})).filter(x=>x.quantity>0),available=eligible.reduce((sum,x)=>sum+x.quantity,0),count=Math.floor(available/25);return {set,available,count,bundles:buildBalancedBundlePlan(eligible,count)};});
+  if(!bundlePlans.length)return alert('Er staan nog geen kaarten per set in de voorraad.');
+  document.getElementById('bundleExisting').innerHTML='';document.getElementById('bundleBuilder').classList.remove('hidden');renderBundlePlanOverview();
+}
+function buildBalancedBundlePlan(entries,count){
+  if(!count)return [];
+  const bins=Array.from({length:count},()=>({items:[],value:0,ids:new Set()})),units=[];
+  entries.slice().sort((a,b)=>(+b.card.ask||0)-(+a.card.ask||0)||a.card.name.localeCompare(b.card.name,'nl')).forEach(entry=>{for(let i=0;i<entry.quantity;i++)units.push(entry.card);});
+  for(const card of units){if(bins.every(bin=>bin.items.length>=25))break;let choices=bins.filter(bin=>bin.items.length<25&&!bin.ids.has(String(card.id)));if(!choices.length)choices=bins.filter(bin=>bin.items.length<25);choices.sort((a,b)=>a.value-b.value||a.items.length-b.items.length);const bin=choices[0];bin.items.push(card);bin.ids.add(String(card.id));bin.value+=+card.ask||0;}
+  return bins;
+}
+function renderBundlePlanOverview(){
+  document.getElementById('bundleProgress').textContent='Mogelijke bundels per set';
+  document.getElementById('bundleCardList').innerHTML='<div class="card"><h3 style="margin:0">Kies een set</h3><div class="muted">Tik op een set om de voorgestelde bundels te bekijken.</div>'+bundlePlans.map((plan,index)=>`<button class="dashboard-set" onclick="showBundlePlan(${index})"><span><b>${escapeHtml(plan.set)}</b><small class="muted" style="display:block">${plan.available} geschikte dubbele kaarten</small></span><span class="dashboard-set-count">${plan.count} bundel${plan.count===1?'':'s'} ›</span></button>`).join('')+'</div>';
+}
+function showBundlePlan(index){
+  const plan=bundlePlans[index];if(!plan)return;document.getElementById('bundleProgress').textContent=plan.set+' · '+plan.count+' bundel'+(plan.count===1?'':'s')+' mogelijk';
+  const details=plan.bundles.map((bundle,bundleIndex)=>{const grouped={};bundle.items.forEach(card=>{grouped[card.id]??={card,quantity:0};grouped[card.id].quantity++;});const rows=Object.values(grouped).sort((a,b)=>splitStoredName(a.card.name).name.localeCompare(splitStoredName(b.card.name).name,'nl')).map(x=>`${escapeHtml(splitStoredName(x.card.name).name)} · ${escapeHtml(x.card.variant||'Normaal')}${x.quantity>1?' ×'+x.quantity:''}`).join('<br>');return `<details class="card" style="margin-top:10px"><summary><b>Voorgestelde bundel ${bundleIndex+1}</b><br><span class="muted">25 kaarten · geschatte waarde €${bundle.value.toFixed(2)}</span></summary><div class="muted" style="margin-top:10px">${rows}</div></details>`;}).join('');
+  document.getElementById('bundleCardList').innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderBundlePlanOverview()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(plan.set)}</h3><div><b>${plan.count} bundel${plan.count===1?'':'s'} van 25 kaarten mogelijk</b></div><div class="muted">De geschatte waardes zijn zo gelijk mogelijk verdeeld. Alleen kaarten tot €${bundlePlanMaxPrice.toFixed(2)} worden gebruikt.</div></div>${details}${plan.count?`<button class="green" style="width:100%;margin:12px 0" onclick="createPlannedBundles(${index})">Maak ${plan.count} voorgestelde bundel${plan.count===1?'':'s'}</button>`:'<div class="card muted">Voor deze set zijn nog geen 25 geschikte dubbele kaarten beschikbaar.</div>'}`;
+}
+async function createPlannedBundles(planIndex){
+  const plan=bundlePlans[planIndex];if(!plan?.bundles?.length)return alert('Voor deze set kan nog geen bundel worden gemaakt.');if(!confirm(plan.count+' bundel'+(plan.count===1?'':'s')+' van '+plan.set+' samenstellen?'))return;
+  await Promise.all([loadCards(),loadBundleData()]);const needed={};plan.bundles.forEach(bundle=>bundle.items.forEach(card=>needed[card.id]=(needed[card.id]||0)+1));for(const [id,quantity] of Object.entries(needed)){const card=cardsCache.find(c=>String(c.id)===String(id));if(!card||Math.max(0,availableQuantity(card)-1)<quantity)return alert('De voorraad is gewijzigd. Bereken de bundels opnieuw.');}
+  const ask=+document.getElementById('newBundleAsk').value||0;let made=0;
+  for(const bundlePlan of plan.bundles){const sameSet=bundlesCache.filter(b=>String(b.name).startsWith(plan.set+' Bundel ')),next=Math.max(0,...sameSet.map(b=>Number(String(b.name).match(/Bundel\s+(\d+)/)?.[1])||0))+1,name=plan.set+' Bundel '+next,{data:bundle,error}=await cloud.from('bundles').insert({name,status:'Samengesteld',ask}).select().single();if(error)return alert(made+' bundels gemaakt. Daarna stopte het opslaan: '+error.message);const counts={};bundlePlan.items.forEach(card=>counts[card.id]=(counts[card.id]||0)+1);const rows=Object.entries(counts).map(([card_id,quantity])=>({bundle_id:bundle.id,card_id:+card_id,quantity})),{error:itemError}=await cloud.from('bundle_items').insert(rows);if(itemError){await cloud.from('bundles').delete().eq('id',bundle.id);return alert(made+' bundels gemaakt. De volgende bundel kon niet worden gevuld: '+itemError.message);}bundlesCache.push(bundle);made++;}
+  await renderBundles();alert(made+' bundel'+(made===1?'':'s')+' van '+plan.set+' samengesteld. Iedere bundel bevat 25 kaarten.');
 }
 function updateBundleProgress(changed){const checked=[...document.querySelectorAll('.bundle-check:checked')];if(checked.length>25&&changed){changed.checked=false;return alert('Een bundel bestaat uit precies 25 kaarten.');}document.getElementById('bundleProgress').textContent=Math.min(checked.length,25)+' van 25 kaarten gekozen';}
 function cancelBundleBuilder(){document.getElementById('bundleBuilder').classList.add('hidden');renderBundles();}
