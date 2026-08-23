@@ -863,12 +863,19 @@ async function startBundleBuilder(){
 }
 function buildBalancedBundlePlan(entries,count){
   if(!count)return [];
-  const bins=Array.from({length:count},()=>({items:[],value:0,keys:new Set(),variants:{}})),groups={},cycle=['Normaal','Reverse holo','Holo'];
-  entries.forEach(entry=>{const key=bundleUniqueKey(entry.card),variant=canonicalBundleVariant(entry.card.variant);groups[key]??={'Normaal':[],'Reverse holo':[],'Holo':[]};for(let i=0;i<entry.quantity;i++)groups[key][variant].push(entry.card);});
-  const allGroups=Object.entries(groups),queues=Object.fromEntries(cycle.map(variant=>[variant,allGroups.filter(([,pools])=>pools[variant]?.length).sort((a,b)=>b[1][variant].length-a[1][variant].length)])),ordered=[];
-  while(cycle.some(variant=>queues[variant].length)){for(const variant of cycle){if(queues[variant].length)ordered.push(queues[variant].shift());}}
-  ordered.forEach(([key,pools])=>{const variant=cycle.find(v=>pools[v]?.length)||'Normaal',units=pools[variant];for(const card of units.slice(0,count)){let choices=bins.filter(bin=>bin.items.length<25&&!bin.keys.has(key));if(!choices.length)break;choices.sort((a,b)=>a.items.length-b.items.length||(a.variants[variant]||0)-(b.variants[variant]||0)||a.value-b.value);const bin=choices[0];bin.items.push(card);bin.keys.add(key);bin.variants[variant]=(bin.variants[variant]||0)+1;bin.value+=+card.ask||0;}});
-  return bins;
+  const bins=Array.from({length:count},()=>({items:[],value:0,keys:new Set(),variants:{'Normaal':0,'Reverse holo':0,'Holo':0}}));
+  const grouped={};entries.forEach(entry=>{const key=bundleUniqueKey(entry.card);grouped[key]??={key,variant:canonicalBundleVariant(entry.card.variant),cards:[]};for(let i=0;i<entry.quantity;i++)grouped[key].cards.push(entry.card);});
+  const variantOrder={'Reverse holo':0,'Holo':1,'Normaal':2},ordered=Object.values(grouped).sort((a,b)=>(variantOrder[a.variant]??3)-(variantOrder[b.variant]??3)||Math.max(...b.cards.map(c=>+c.ask||0))-Math.max(...a.cards.map(c=>+c.ask||0))||a.cards.length-b.cards.length);
+  ordered.forEach(group=>{
+    const key=group.key,variant=group.variant,cards=group.cards.slice().sort((a,b)=>(+b.ask||0)-(+a.ask||0)),amount=Math.min(cards.length,count);
+    for(let i=0;i<amount;i++){
+      const choices=bins.filter(bin=>bin.items.length<25&&!bin.keys.has(key));
+      if(!choices.length)break;
+      choices.sort((a,b)=>a.items.length-b.items.length||(a.variants[variant]||0)-(b.variants[variant]||0)||a.value-b.value);
+      const card=cards[i],bin=choices[0];bin.items.push(card);bin.keys.add(key);bin.variants[variant]=(bin.variants[variant]||0)+1;bin.value+=+card.ask||0;
+    }
+  });
+  return bins.filter(bin=>bin.items.length===25);
 }
 function canonicalBundleVariant(value){const variant=normalizeSetName(value||'Normaal');if(variant==='reverseholo'||variant==='reverse')return 'Reverse holo';if(variant==='holo')return 'Holo';if(variant==='normal'||variant==='normaal')return 'Normaal';return String(value||'Normaal');}
 function bundleCardIdentity(card){const parts=splitStoredName(card.name),raw=String(parts.number||'').split('/')[0],number=/^\d+$/.test(raw)?String(Number(raw)):normalizeSetName(raw);return parts.set&&number?normalizeSetName(parts.set)+'|'+number:normalizeSetName(card.name);}
@@ -881,10 +888,10 @@ function maxDistinctBundleCount(entries){
 }
 function renderBundlePlanOverview(){
   document.getElementById('bundleProgress').textContent='Mogelijke bundels per set';
-  document.getElementById('bundleCardList').innerHTML='<div class="card"><h3 style="margin:0">Kies een set</h3><div class="muted">Tik op een set om de voorgestelde bundels te bekijken.</div>'+bundlePlans.map((plan,index)=>`<button class="dashboard-set" onclick="showBundlePlan(${index})"><span><b>${escapeHtml(plan.set)}</b><small class="muted" style="display:block">${plan.available} geschikte dubbele kaarten</small></span><span class="dashboard-set-count">${plan.count} bundel${plan.count===1?'':'s'} ›</span></button>`).join('')+'</div>';
+  document.getElementById('bundleCardList').innerHTML='<div class="card"><h3 style="margin:0">Kies een set</h3><div class="muted">Tik op een set om de voorgestelde bundels te bekijken.</div>'+bundlePlans.map((plan,index)=>{const made=plan.bundles.length,left=Math.max(0,plan.available-made*25);return `<button class="dashboard-set" onclick="showBundlePlan(${index})"><span><b>${escapeHtml(plan.set)}</b><small class="muted" style="display:block">${plan.available} kaarten beschikbaar · ${left} blijven los</small></span><span class="dashboard-set-count">${made} bundel${made===1?'':'s'} ›</span></button>`;}).join('')+'</div>';
 }
 function showBundlePlan(index){
-  const plan=bundlePlans[index];if(!plan)return;document.getElementById('bundleProgress').textContent=plan.set+' · '+plan.count+' bundel'+(plan.count===1?'':'s')+' mogelijk';
+  const plan=bundlePlans[index];if(!plan)return;plan.count=plan.bundles.length;document.getElementById('bundleProgress').textContent=plan.set+' · '+plan.count+' bundel'+(plan.count===1?'':'s')+' mogelijk';
   const details=plan.bundles.map((bundle,bundleIndex)=>{const rows=bundle.items.slice().sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||(a.variant||'').localeCompare(b.variant||'','nl')).map(bundleCardLabel).join('<br>');return `<div class="card" style="margin-top:10px"><label style="display:flex;gap:10px;align-items:center;margin:0"><input class="planned-bundle-check" type="checkbox" data-plan-index="${index}" data-bundle-index="${bundleIndex}" onchange="updatePlannedBundleSelection(${index})" style="width:24px;height:24px;margin:0"><span><b>Voorgestelde bundel ${bundleIndex+1}</b><br><span class="muted">25 kaarten zonder dubbele kaartsoort · geschatte waarde €${bundle.value.toFixed(2)}</span></span></label><details style="margin-top:9px"><summary>Bekijk de 25 kaarten op nummervolgorde</summary><div class="muted" style="margin-top:10px">${rows}</div></details></div>`;}).join('');
   document.getElementById('bundleCardList').innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderBundlePlanOverview()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(plan.set)}</h3><div><b>${plan.count} bundel${plan.count===1?'':'s'} van 25 kaarten mogelijk</b></div><div class="muted">Hetzelfde nummer mag als Normaal, Holo en Reverse holo voorkomen, maar nooit tweemaal in dezelfde kaartsoort.</div></div>${details}${plan.count?`<button id="createPlannedButton-${index}" class="green" style="width:100%;margin:12px 0" onclick="createPlannedBundles(${index})">Maak aangevinkte bundels</button>`:'<div class="card muted">Voor deze set zijn nog geen 25 geschikte dubbele kaartsoorten beschikbaar.</div>'}`;
 }
