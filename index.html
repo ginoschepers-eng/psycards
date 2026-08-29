@@ -985,46 +985,68 @@ async function suggestValueSets(){
 function chooseValueSet(name){
  valueSet.value=decodeURIComponent(name);valueSetSuggestions.innerHTML='';valueSetSuggestions.classList.add('hidden');valueNumber.focus();
 }
+function valueCardOptionHtml(card,setName,shownNumber){
+ const pricing=card?.pricing?.cardmarket,market=pricing?cardmarketAdvicePrice(pricing,'Normaal'):0;
+ const price=market?`<b>${valueMoney(market)}</b>`:'<span class="muted">geen prijs</span>';
+ return `<button type="button" class="light" style="width:100%;text-align:left;margin:5px 0;padding:12px" onclick="showChosenCardValue('${encodeURIComponent(card.id||'')}','${encodeURIComponent(setName)}','${encodeURIComponent(shownNumber)}')"><b>${escapeHtml(card.name||'Kaart')}</b><br><span class="muted">${escapeHtml(setName)} · ${escapeHtml(shownNumber)}</span><br>Cardmarket: ${price}</button>`;
+}
+async function showChosenCardValue(cardId,setName,shownNumber){
+ valueResult.textContent='Prijs laden…';
+ try{
+  const card=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(decodeURIComponent(cardId)));
+  if(!card){valueResult.textContent='Kaart kon niet worden geladen.';return;}
+  const pricing=card?.pricing?.cardmarket,market=pricing?cardmarketAdvicePrice(pricing,'Normaal'):0;
+  if(!market){valueResult.innerHTML=`<b>${escapeHtml(card.name||'Kaart')}</b><br><span class="muted">${escapeHtml(decodeURIComponent(setName))} · ${escapeHtml(decodeURIComponent(shownNumber))}</span><br>Geen bruikbare Cardmarket-prijs gevonden.`;return;}
+  const trade=market*.80,cash=market*.70;
+  valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(decodeURIComponent(setName))} · ${escapeHtml(decodeURIComponent(shownNumber))}</div><div style="margin-top:10px"><b>Cardmarket waarde: ${valueMoney(market)}</b></div><div style="margin-top:7px">🔄 Inruilwaarde 80%: <b>${valueMoney(trade)}</b></div><div>💵 Inkoop contant 70%: <b>${valueMoney(cash)}</b></div>`;
+ }catch(e){valueResult.textContent='Prijs kon niet worden opgehaald. Probeer het opnieuw.';}
+}
 async function checkCardValue(){
  const setInput=String(valueSet.value||'').trim(),numberInput=String(valueNumber.value||'').trim();
  if(!setInput||!numberInput){valueResult.textContent='Vul een set en kaartnummer in.';return;}
- valueResult.textContent='Kaart en Cardmarket-prijs zoeken…';
+ valueResult.textContent='Kaarten zoeken…';
  try{
   const sets=await loadSetCatalog(),norm=normalizeSetName(setInput);
   let set=(Array.isArray(sets)?sets:[]).find(x=>normalizeSetName(x.id)===norm||normalizeSetName(x.name)===norm||normalizeSetName(x.abbreviation||'')===norm||normalizeSetName(x.serie?.name||'')===norm);
   const isClassic=norm===normalizeSetName('Celebrations: Classic Collection');
   if(isClassic)set=(Array.isArray(sets)?sets:[]).find(x=>normalizeSetName(x.name)==='celebrations'||normalizeSetName(x.id)==='cel25');
   if(!set){valueResult.textContent='Set niet gevonden. Probeer de volledige setnaam.';return;}
-  const local=(numberInput.split('/')[0]||'').replace(/^0+/,'')||'0';
-  const ids=[numberInput.split('/')[0],local].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i);
-  let card=null;
+  const raw=(numberInput.split('/')[0]||'').trim(),local=raw.replace(/^0+/,'')||'0';
+  let candidates=[];
   if(isClassic){
-    const classicIds=[local+'a',String(numberInput.split('/')[0]||'').trim()+'a'];
-    for(const cid of [...new Set(classicIds)]){
-      card=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent('cel25-'+cid));
-      if(card)break;
+    // Classic Collection uses suffixed IDs in TCGdex. Show every plausible match
+    // so the user can tap the correct artwork/card instead of silently choosing one.
+    const tryIds=[`cel25-${local}a`,`cel25-${raw}a`,`cel25-${local}`,...['A','a'].map(x=>`cel25-${local}${x}`)];
+    for(const id of [...new Set(tryIds)]){
+      const c=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(id));
+      if(c&&!candidates.some(x=>x.id===c.id))candidates.push(c);
     }
-    if(!card){
-      const all=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards');
-      const candidates=(Array.isArray(all)?all:[]).filter(x=>{
-        const lid=String(x.localId||'').toLowerCase().replace(/^0+/,'');
-        return (lid===local.toLowerCase()+'a'||lid===local.toLowerCase())&&String(x.id||'').toLowerCase().startsWith('cel25-');
-      });
-      for(const c of candidates){
-        const full=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id));
-        if(full){card=full;break;}
-      }
+    const all=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards');
+    const briefs=(Array.isArray(all)?all:[]).filter(x=>{
+      const id=String(x.id||'').toLowerCase(),lid=String(x.localId||'').toLowerCase().replace(/^0+/,'');
+      return id.startsWith('cel25-')&&(lid===local.toLowerCase()||lid===local.toLowerCase()+'a'||id===`cel25-${local}a`);
+    });
+    for(const b of briefs.slice(0,8)){
+      const c=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(b.id));
+      if(c&&!candidates.some(x=>x.id===c.id))candidates.push(c);
     }
   }else{
-    for(const id of ids){card=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id)+'/'+encodeURIComponent(id));if(card)break;}
+    const ids=[raw,local].filter((x,i,a)=>x&&a.indexOf(x)===i);
+    for(const id of ids){
+      const c=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id)+'/'+encodeURIComponent(id));
+      if(c&&!candidates.some(x=>x.id===c.id))candidates.push(c);
+    }
   }
-  if(!card){valueResult.textContent='Kaartnummer niet gevonden in '+(isClassic?'Celebrations: Classic Collection':set.name)+'.';return;}
-  const pricing=card?.pricing?.cardmarket;
-  if(!pricing){valueResult.innerHTML='<b>'+escapeHtml(card.name||'Kaart')+'</b><br>'+escapeHtml(set.name)+' · '+escapeHtml(String(card.localId||numberInput))+'<br>Geen Cardmarket-prijs beschikbaar.';return;}
-  const market=cardmarketAdvicePrice(pricing,'Normaal');
-  if(!market){valueResult.textContent='Geen bruikbare Cardmarket-prijs gevonden.';return;}
+  if(!candidates.length){valueResult.textContent='Kaartnummer niet gevonden in '+(isClassic?'Celebrations: Classic Collection':set.name)+'.';return;}
+  const displaySet=isClassic?'Celebrations: Classic Collection':set.name;
+  if(candidates.length>1){
+    valueResult.innerHTML=`<b>Meerdere kaarten gevonden</b><div class="muted" style="margin:4px 0 8px">Tik op de juiste kaart:</div>`+candidates.map(c=>valueCardOptionHtml(c,displaySet,numberInput)).join('');
+    return;
+  }
+  const card=candidates[0],pricing=card?.pricing?.cardmarket,market=pricing?cardmarketAdvicePrice(pricing,'Normaal'):0;
+  if(!market){valueResult.innerHTML='<b>'+escapeHtml(card.name||'Kaart')+'</b><br>'+escapeHtml(displaySet)+' · '+escapeHtml(numberInput)+'<br>Geen Cardmarket-prijs beschikbaar.';return;}
   const trade=market*.80,cash=market*.70;
-  valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(isClassic?'Celebrations: Classic Collection':set.name)} · ${escapeHtml(isClassic?numberInput:String(card.localId||numberInput))}</div><div style="margin-top:10px"><b>Cardmarket waarde: ${valueMoney(market)}</b></div><div style="margin-top:7px">🔄 Inruilwaarde 80%: <b>${valueMoney(trade)}</b></div><div>💵 Inkoop contant 70%: <b>${valueMoney(cash)}</b></div>`;
+  valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(displaySet)} · ${escapeHtml(numberInput)}</div><div style="margin-top:10px"><b>Cardmarket waarde: ${valueMoney(market)}</b></div><div style="margin-top:7px">🔄 Inruilwaarde 80%: <b>${valueMoney(trade)}</b></div><div>💵 Inkoop contant 70%: <b>${valueMoney(cash)}</b></div>`;
  }catch(e){valueResult.textContent='Prijs kon niet worden opgehaald. Probeer het opnieuw.';}
 }
 
