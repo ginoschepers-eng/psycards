@@ -188,7 +188,7 @@
 
   <section id="setCards" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug naar sets</button></nav>
-    <div class="card"><h2 id="setCardsTitle" style="margin:0 0 5px">Kaarten invoeren</h2><div class="muted">Vink per kaart één of meerdere kaartsoorten aan. Iedere soort wordt apart in de voorraad opgeslagen.</div><div id="setCardsStatus" class="scan-status"></div><div class="set-jumpbar"><div><label>🔎 Ga naar kaartnummer</label><input id="setCardJump" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')jumpToSetCard()"></div><button class="light" onclick="jumpToSetCard()">Ga</button></div><div class="muted" style="margin:4px 0 7px">Tik op een type om die kaarten te bekijken.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button id="setShowAllButton" class="primary" style="flex:1;min-width:95px" onclick="filterSetCards('all')">Alle kaarten</button><button id="setShowExButton" class="light" style="flex:1;min-width:65px" onclick="filterSetCards('ex')">EX</button><button id="setShowIrButton" class="light" style="flex:1;min-width:65px" onclick="filterSetCards('ir')">IR</button><button id="setShowSirButton" class="light" style="flex:1;min-width:65px" onclick="filterSetCards('sir')">SIR</button><button id="setShowSrButton" class="light" style="flex:1;min-width:65px" onclick="filterSetCards('sr')">SR</button><button id="setShowUrButton" class="light" style="flex:1;min-width:65px" onclick="filterSetCards('ur')">UR</button><button id="setShowRaresButton" class="light" style="flex:1;min-width:100px" onclick="filterSetCards('rares')">Alle rares</button></div><button id="setCollectButton" class="light set-star" style="width:100%;margin-bottom:10px" onclick="toggleCurrentSetCollected()">☆ Wordt gespaard</button></div>
+    <div class="card"><h2 id="setCardsTitle" style="margin:0 0 5px">Kaarten invoeren</h2><div class="muted">Vink per kaart één of meerdere kaartsoorten aan. Iedere soort wordt apart in de voorraad opgeslagen.</div><div id="setCardsStatus" class="scan-status"></div><div class="set-jumpbar"><div><label>🔎 Ga naar kaartnummer</label><input id="setCardJump" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')jumpToSetCard()"></div><button class="light" onclick="jumpToSetCard()">Ga</button></div><button id="setCollectButton" class="light set-star" style="width:100%;margin-bottom:10px" onclick="toggleCurrentSetCollected()">☆ Wordt gespaard</button></div>
     <div id="setEntryCards"></div>
     <div id="setEntrySavebar" class="set-savebar hidden"><div id="setEntryCount" class="muted" style="text-align:center;margin-bottom:7px">Nog geen aantallen ingevuld</div><button id="setEntrySaveButton" class="green" style="width:100%;padding:13px;font-size:16px" onclick="saveSetEntry()">Aantallen opslaan</button></div>
   </section>
@@ -990,11 +990,33 @@ function stockCardHtml(c){const style=stockVariantStyle(c),variant=canonicalBund
         ${c.productType==='Pokémonkaart'?`<div id="market-${c.id}" class="market-price">Cardmarket-prijs laden…</div>`:''}
       </div>
     </div>`;}
-async function renderSetFolder(folderName){
+async let currentStockRareFilter='all';
+function stockRareFlags(c){
+ const v=String(c.variant||''),parts=splitStoredName(c.name),name=String(parts.name||c.name||'');
+ const ex=/\bex\b/i.test(name)||/^ex$/i.test(v);
+ const sir=/special illustration rare|\bSIR\b|\bSRI\b/i.test(v);
+ const ir=!sir&&/illustration rare|\bIR\b/i.test(v);
+ const ur=/ultra rare|\bUR\b/i.test(v);
+ const sr=/secret rare|\bSR\b/i.test(v);
+ const rare=ex||ir||sir||ur||sr||/rare/i.test(v);
+ return {ex,ir,sir,sr,ur,rare};
+}
+function setStockRareFilter(mode,folderName){
+ currentStockRareFilter=['ex','ir','sir','sr','ur','rares'].includes(mode)?mode:'all';
+ renderSetFolder(folderName);
+}
+function stockRareFilterBar(folderName,cards){
+ const counts={ex:0,ir:0,sir:0,sr:0,ur:0,rares:0};
+ cards.forEach(c=>{const f=stockRareFlags(c);Object.keys(counts).forEach(k=>{if(k==='rares'?f.rare:f[k])counts[k]++;});});
+ const enc=encodeURIComponent(folderName),b=(mode,label)=>`<button class="${currentStockRareFilter===mode?'primary':'light'}" style="flex:1;min-width:65px" onclick="setStockRareFilter('${mode}',decodeURIComponent('${enc}'))">${label}${mode==='all'?'':' ('+counts[mode]+')'}</button>`;
+ return `<div class="card"><div class="muted" style="margin-bottom:7px">Bekijk speciale kaarten in deze voorraadmap</div><div style="display:flex;gap:8px;flex-wrap:wrap">${b('all','Alle kaarten')}${b('ex','EX')}${b('ir','IR')}${b('sir','SIR')}${b('sr','SR')}${b('ur','UR')}${b('rares','Alle rares')}</div></div>`;
+}
+function renderSetFolder(folderName){
   await loadBundleData();const cards=(await getAll()).filter(c=>c.status==='Op voorraad'&&stockFolderName(c)===folderName&&availableQuantity(c)>0);
   const isCardFolder=cards.length?cards[0].productType==='Pokémonkaart':!['Doosje','Losse sleeve'].includes(folderName);
-  stockList.innerHTML=`<nav><button class="light" onclick="renderStock()">← Alle mappen</button></nav><div class="card"><h2 style="margin:0">${escapeHtml(folderName)}</h2><div class="muted">${cards.reduce((sum,c)=>sum+availableQuantity(c),0)} stuks op voorraad</div>${isCardFolder?`<button class="primary" style="width:100%;margin-top:12px;padding:13px;font-size:16px" onclick="startAddFromSet(decodeURIComponent('${encodeURIComponent(folderName)}'))">📷 Kaart aan deze set toevoegen</button>`:''}</div>`+cards.map(stockCardHtml).join('');
-  updateFolderPrices(cards);
+  const shown=currentStockRareFilter==='all'?cards:cards.filter(c=>{const f=stockRareFlags(c);return currentStockRareFilter==='rares'?f.rare:!!f[currentStockRareFilter];});
+  stockList.innerHTML=`<nav><button class="light" onclick="currentStockRareFilter='all';renderStock()">← Alle mappen</button></nav><div class="card"><h2 style="margin:0">${escapeHtml(folderName)}</h2><div class="muted">${cards.reduce((sum,c)=>sum+availableQuantity(c),0)} stuks op voorraad</div>${isCardFolder?`<button class="primary" style="width:100%;margin-top:12px;padding:13px;font-size:16px" onclick="startAddFromSet(decodeURIComponent('${encodeURIComponent(folderName)}'))">📷 Kaart aan deze set toevoegen</button>`:''}</div>${isCardFolder?stockRareFilterBar(folderName,cards):''}${shown.length?shown.map(stockCardHtml).join(''):'<div class="card">Geen kaarten in dit filter.</div>'}`;
+  updateFolderPrices(shown);
 }
 async function getCardmarketPrice(c){
   const parts=splitStoredName(c.name);if(!parts.set||!parts.number)return null;
