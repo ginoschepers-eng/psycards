@@ -96,7 +96,7 @@
     <div class="card"><h3 style="margin:0">Mijn sets</h3><div class="muted">Tik op een set om direct aantallen in te voeren.</div><div id="dashboardSets"></div></div>
     <div class="card">
       <h3 style="margin:0 0 10px">Overig beheer</h3>
-      <div class="manage-grid"><button class="light" onclick="openNewProduct()">📷 Eén product</button><button class="green" onclick="show('sell')">💰 Verkocht</button><button class="light" onclick="show('stock');renderStock()">📦 Voorraad</button><button class="gold" onclick="show('money');renderMoney()">📊 Geld</button><button class="light" onclick="show('sold');renderSold()">✅ Verkopen</button><button class="green" onclick="show('bundles');renderBundles()">🎁 Bundels</button></div>
+      <div class="manage-grid"><button class="light" onclick="openNewProduct()">📷 Eén product</button><button class="gold" onclick="openValueCheck()">💶 Kaartwaarde</button><button class="green" onclick="show('sell')">💰 Verkocht</button><button class="light" onclick="show('stock');renderStock()">📦 Voorraad</button><button class="gold" onclick="show('money');renderMoney()">📊 Geld</button><button class="light" onclick="show('sold');renderSold()">✅ Verkopen</button><button class="green" onclick="show('bundles');renderBundles()">🎁 Bundels</button></div>
       <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
     </div>
   </section>
@@ -219,6 +219,18 @@
     </div>
   </section>
 
+  <section id="valuecheck" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">💶 Kaartwaarde controleren</h2>
+      <div class="muted">Vul de set (afkorting of volledige naam) en het kaartnummer in.</div>
+      <label>Set</label><input id="valueSet" placeholder="Bijv. DRI of Destined Rivals">
+      <label>Kaartnummer</label><input id="valueNumber" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')checkCardValue()">
+      <button class="primary" style="width:100%;margin-top:12px" onclick="checkCardValue()">Zoek kaart en prijs</button>
+      <div id="valueResult" class="scan-status" style="margin-top:12px"></div>
+    </div>
+  </section>
+
   <section id="stock" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug</button><button class="light" onclick="exportCSV()">⬇️ Export Excel/CSV</button></nav>
     <div id="stockList"></div>
@@ -257,7 +269,7 @@
       <div class="row"><div><label>Gekocht voor €</label><input id="editBuy" type="number" step="0.01" inputmode="decimal"></div><div><label>Verkopen voor €</label><input id="editAsk" type="number" step="0.01" inputmode="decimal"></div></div>
       <label>Minimaal €</label><input id="editMin" type="number" step="0.01" inputmode="decimal">
       <div id="editMarketPrice" class="market-price">Cardmarket-prijs laden…</div>
-      <button id="applyAdvicePrice" class="green hidden" style="width:100%;margin-top:10px" type="button" onclick="applyEditAdvicePrice()">Adviesvraagprijs overnemen</button>
+      <button id="applyAdvicePrice" class="green hidden" style="width:100%;margin-top:10px" type="button" onclick="applyEditAdvicePrice()">Cardmarket als minimumprijs</button>
       <button class="primary" style="width:100%;margin-top:16px" onclick="saveEdit()">Wijzigingen opslaan</button>
     </div>
   </section>
@@ -955,6 +967,32 @@ async function renderSold(){
   if(!cards.length&&!soldBundles.length){soldList.innerHTML='<div class="card">Nog geen verkochte items.</div>';return;}
   soldList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Verkochte items</h2><div class="muted">Deze aantallen zijn niet meer opgenomen in je beschikbare voorraad.</div></div>'+soldBundles.map(b=>`<div class="card"><b>🎁 ${escapeHtml(b.name)}</b><div>25 kaarten als bundel verkocht</div><div>Totale verkoop: <span class="money">€${(+b.sold_price||0).toFixed(2)}</span></div><div class="muted">${b.sold_date?new Date(b.sold_date).toLocaleDateString('nl-NL'):''} · ${escapeHtml(b.payment||'')}</div></div>`).join('')+cards.map(c=>`<div class="card item">${c.photo?`<img class="thumb" src="${c.photo}" onclick="openPhotoViewer(this.src)" style="cursor:zoom-in">`:'<div class="thumb"></div>'}<div><b>${escapeHtml(c.name)}</b><div class="muted">${escapeHtml(c.productType)}${c.productType==='Pokémonkaart'?' · '+escapeHtml(c.condition)+' · '+escapeHtml(c.variant||'Normaal'):''}</div><div><b>${c.soldQuantity}× verkocht</b></div><div>Totale verkoop: <span class="money">€${c.soldPrice.toFixed(2)}</span></div><div class="muted">${c.soldDate?'Laatste verkoop: '+new Date(c.soldDate).toLocaleDateString('nl-NL'):''}</div></div></div>`).join('');
 }
+function openValueCheck(){
+ show('valuecheck');valueSet.value='';valueNumber.value='';valueResult.innerHTML='';setTimeout(()=>valueSet.focus(),50);
+}
+function valueMoney(n){return '€'+Number(n||0).toFixed(2).replace('.',',');}
+async function checkCardValue(){
+ const setInput=String(valueSet.value||'').trim(),numberInput=String(valueNumber.value||'').trim();
+ if(!setInput||!numberInput){valueResult.textContent='Vul een set en kaartnummer in.';return;}
+ valueResult.textContent='Kaart en Cardmarket-prijs zoeken…';
+ try{
+  const sets=await loadSetCatalog(),norm=normalizeSetName(setInput);
+  const set=(Array.isArray(sets)?sets:[]).find(x=>normalizeSetName(x.id)===norm||normalizeSetName(x.name)===norm||normalizeSetName(x.abbreviation||'')===norm||normalizeSetName(x.serie?.name||'')===norm);
+  if(!set){valueResult.textContent='Set niet gevonden. Probeer de volledige setnaam.';return;}
+  const local=(numberInput.split('/')[0]||'').replace(/^0+/,'')||'0';
+  const ids=[numberInput.split('/')[0],local].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i);
+  let card=null;
+  for(const id of ids){card=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id)+'/'+encodeURIComponent(id));if(card)break;}
+  if(!card){valueResult.textContent='Kaartnummer niet gevonden in '+set.name+'.';return;}
+  const pricing=card?.pricing?.cardmarket;
+  if(!pricing){valueResult.innerHTML='<b>'+escapeHtml(card.name||'Kaart')+'</b><br>'+escapeHtml(set.name)+' · '+escapeHtml(String(card.localId||numberInput))+'<br>Geen Cardmarket-prijs beschikbaar.';return;}
+  const market=cardmarketAdvicePrice(pricing,'Normaal');
+  if(!market){valueResult.textContent='Geen bruikbare Cardmarket-prijs gevonden.';return;}
+  const trade=market*.80,cash=market*.70;
+  valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(String(card.localId||numberInput))}</div><div style="margin-top:10px"><b>Cardmarket waarde: ${valueMoney(market)}</b></div><div style="margin-top:7px">🔄 Inruilwaarde 80%: <b>${valueMoney(trade)}</b></div><div>💵 Inkoop contant 70%: <b>${valueMoney(cash)}</b></div>`;
+ }catch(e){valueResult.textContent='Prijs kon niet worden opgehaald. Probeer het opnieuw.';}
+}
+
 async function renderStock(){
   const cards=await getAll();await loadBundleData();const savedResult=await cloud.from('psycard_sets').select('*').order('name',{ascending:true}),savedSets=savedResult.data||[];
   const open=cards.filter(c=>c.status==='Op voorraad'&&availableQuantity(c)>0);
@@ -1033,7 +1071,7 @@ async function updateFolderPrices(cards){
     const box=document.getElementById('market-'+c.id);if(!box)return;
     try{const p=await getCardmarketPrice(c);if(!p){box.classList.add('unavailable');box.textContent='Geen actuele Cardmarket-prijs beschikbaar';return;}
       const parts=[];if(p.trend!=null&&Number.isFinite(+p.trend))parts.push('Trend €'+(+p.trend).toFixed(2));if(p.low!=null&&Number.isFinite(+p.low))parts.push('Laagste €'+(+p.low).toFixed(2));if(p['trend-holo']!=null&&Number.isFinite(+p['trend-holo']))parts.push('Holo-trend €'+(+p['trend-holo']).toFixed(2));const advice=cardmarketAdvicePrice(p,c.variant);
-      const date=p.updated?new Date(p.updated).toLocaleDateString('nl-NL'):'';box.innerHTML='<b>Cardmarket Europa:</b> '+escapeHtml(parts.join(' · ')||'prijs onbekend')+(advice?'<br><b>Adviesvraagprijs Psycards: €'+advice.toFixed(2)+'</b>':'')+(date?'<br>Bijgewerkt: '+escapeHtml(date):'');
+      const date=p.updated?new Date(p.updated).toLocaleDateString('nl-NL'):'';box.innerHTML='<b>Cardmarket Europa:</b> '+escapeHtml(parts.join(' · ')||'prijs onbekend')+(advice?'<br><b>Minimumprijs: €'+advice.toFixed(2)+'</b>':'')+(date?'<br>Bijgewerkt: '+escapeHtml(date):'');
     }catch(e){box.classList.add('unavailable');box.textContent='Prijs kon niet worden geladen';}
   }));
 }
