@@ -1013,10 +1013,35 @@ async function checkCardValue(){
   const raw=(numberInput.split('/')[0]||'').trim(),local=raw.replace(/^0+/,'')||'0';
   let candidates=[];
   if(isClassic){
-    const ids=[raw,local].filter((x,i,a)=>x&&a.indexOf(x)===i);
-    for(const id of ids){
-      const c=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id)+'/'+encodeURIComponent(id));
+    // Classic Collection keeps the ORIGINAL card numbers (e.g. Umbreon 17/17).
+    // Do not assume the API localId. Load the real set card list and match the
+    // printed number/name metadata, then fetch the exact card IDs returned there.
+    const fullSet=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id));
+    const briefs=Array.isArray(fullSet?.cards)?fullSet.cards:[];
+    const wanted=local.toLowerCase();
+    let matches=briefs.filter(b=>{
+      const lid=String(b.localId||'').toLowerCase().replace(/^0+/,'');
+      const id=String(b.id||'').toLowerCase();
+      return lid===wanted||lid===wanted+'a'||id.includes('-'+wanted+'_')||id.includes('-'+wanted+'a')||id.endsWith('-'+wanted);
+    });
+    // Known API/database representations may expose the original printed number
+    // inside an alphanumeric localId; keep all matching possibilities clickable.
+    if(!matches.length){
+      matches=briefs.filter(b=>{
+        const lid=String(b.localId||'').toLowerCase();
+        return lid.replace(/[^0-9]/g,'').replace(/^0+/,'')===wanted;
+      });
+    }
+    for(const b of matches.slice(0,12)){
+      const c=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(b.id));
       if(c&&!candidates.some(x=>x.id===c.id))candidates.push(c);
+    }
+    // TCGdex currently also exposes Classic Collection under Celebrations with
+    // alphanumeric IDs such as cel25-17a (Umbreon Star). Use this only as a
+    // fallback after inspecting the set's own card list.
+    if(!candidates.length){
+      const fallback=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent('cel25-'+local+'a'));
+      if(fallback&&String(fallback.rarity||'').toLowerCase().includes('classic'))candidates.push(fallback);
     }
   }else{
     const ids=[raw,local].filter((x,i,a)=>x&&a.indexOf(x)===i);
