@@ -437,6 +437,31 @@ function fixedSpecialVariant(card){
   if(/\bV\b/i.test(name))return 'V';
   return '';
 }
+function realVariantsForCard(card){
+  const fixed=fixedSpecialVariant(card);if(fixed)return [fixed];
+  const v=card?.variants||{};const out=[];
+  if(v.normal===true)out.push('Normaal');
+  if(v.holo===true)out.push('Holo');
+  if(v.reverse===true)out.push('Reverse holo');
+  if(v.wPromo===true)out.push('Promo');
+  return out.length?out:['Normaal'];
+}
+async function enrichSetCardVariants(saved,set){
+  if(!set?.cards?.length)return set;
+  const missing=set.cards.filter(c=>!c.variants);
+  if(!missing.length)return set;
+  setCardsStatus.textContent='Werkelijke kaartuitvoeringen laden…';
+  let cursor=0;
+  async function worker(){
+    while(cursor<missing.length){
+      const card=missing[cursor++];
+      try{const full=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/cards/'+encodeURIComponent(card.id));if(full?.variants)Object.assign(card,{variants:full.variants,rarity:full.rarity||card.rarity});}catch(e){console.warn('Uitvoeringen niet geladen voor',card.id,e);}
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(8,missing.length)},()=>worker()));
+  writeSetLocalCache(saved,set);
+  return set;
+}
 function formatSetCardNumber(localId,official){const local=String(localId??''),total=String(official??'?'),width=Math.max(3,/^\d+$/.test(total)?total.length:3),left=/^\d+$/.test(local)?local.padStart(width,'0'):local,right=/^\d+$/.test(total)?total.padStart(width,'0'):total;return left+'/'+right;}
 function setEntryStoredName(card,set,official){return card.name+' — '+set.name+' '+formatSetCardNumber(card.localId,official);}
 
@@ -492,6 +517,7 @@ async function loadSetEntryCards(){
       getAll()
     ]);
     if(!cachedSet&&set?.cards?.length)writeSetLocalCache(saved,set);
+    set=await enrichSetCardVariants(saved,set);
     await loadPhotosForOpenedSet(saved,current);
   }catch(e){
     console.error('Set laden mislukt:',saved,e);
@@ -509,10 +535,9 @@ async function loadSetEntryCards(){
     const image=card.image?card.image+'/low.webp':'';
     const number=formatSetCardNumber(card.localId,official),storedName=setEntryStoredName(card,set,official),identity=bundleCardIdentity({name:storedName});
     const quantityFor=variant=>current.filter(c=>bundleCardIdentity(c)===identity&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&canonicalBundleVariant(c.variant)===canonicalBundleVariant(variant)).reduce((sum,c)=>sum+availableQuantity(c),0);
-    const fixed=fixedSpecialVariant(card),common=(fixed?[fixed]:SET_ENTRY_COMMON).map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
-    const special=fixed?'':SET_ENTRY_SPECIAL.map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
-    const hasStock=(fixed?[fixed]:SET_ENTRY_COMMON.concat(SET_ENTRY_SPECIAL)).some(v=>quantityFor(v)>0);
-    return `<div class="set-entry ${hasStock?'':'no-stock'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(number.split('/')[0])} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(number)}</div><div class="set-entry-options">${common}</div>${special?`<details class="set-entry-more"><summary>Overige kaartsoorten</summary><div class="set-entry-options">${special}</div></details>`:''}</div></div>`;
+    const variants=realVariantsForCard(card),common=variants.map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
+    const hasStock=variants.some(v=>quantityFor(v)>0);
+    return `<div class="set-entry ${hasStock?'':'no-stock'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(number.split('/')[0])} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(number)}</div><div class="set-entry-options">${common}</div></div></div>`;
   }).join('')+'</div>';
   setCardsStatus.textContent=set.cards.length+' kaarten geladen uit '+set.name+'.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();
 }
