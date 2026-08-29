@@ -431,7 +431,7 @@ function formatSetCardNumber(localId,official){const local=String(localId??''),t
 function setEntryStoredName(card,set,official){return card.name+' — '+set.name+' '+formatSetCardNumber(card.localId,official);}
 async function loadSetEntryCards(){
   const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return alert('Kies of voeg eerst een set toe.');
-  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaarten laden… eerste keer kan iets langer duren; daarna lokaal opgeslagen.';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
+  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaarten en afbeeldingen laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
   let set=null,current=[];
   try{
     [set,current]=await Promise.all([
@@ -629,31 +629,48 @@ function adaptTcgdexCard(card,setInfo){
   const set=card.set||setInfo||{},counts=set.cardCount||setInfo?.cardCount||{};
   return {id:card.id,name:card.name,number:String(card.localId??card.number??''),set:{id:set.id||setInfo?.id,name:set.name||setInfo?.name||'Onbekende set',printedTotal:counts.official||counts.total||'',ptcgoCode:set.tcgOnline||setInfo?.tcgOnline||''},images:{small:card.image?card.image+'.webp':'',large:card.image?card.image+'/high.webp':''},_source:'TCGdex'};
 }
-const TCGDEX_CACHE_PREFIX='psycards_tcgdex_v1:';
+const TCGDEX_CACHE_NAME='psycards-tcgdex-v1';
+const TCGDEX_CACHE_DAYS=60;
+
 async function fetchTcgdex(url,forceRefresh=false){
-  const key=TCGDEX_CACHE_PREFIX+url;
-  if(!forceRefresh){
+  // Cache is alleen een versneller. Als Cache API niet werkt, blijft Psycards
+  // exact zoals voorheen rechtstreeks via TCGdex laden.
+  if(!forceRefresh && 'caches' in window){
     try{
-      const raw=localStorage.getItem(key);
-      if(raw){
-        const cached=JSON.parse(raw);
-        // Set- en kaartgegevens veranderen zelden: 60 dagen lokaal bewaren.
-        if(cached&&cached.savedAt&&Date.now()-cached.savedAt<60*24*60*60*1000)return cached.data;
+      const cache=await caches.open(TCGDEX_CACHE_NAME);
+      const cached=await cache.match(url);
+      if(cached){
+        const savedAt=Number(cached.headers.get('x-psycards-saved-at')||0);
+        if(savedAt && Date.now()-savedAt < TCGDEX_CACHE_DAYS*24*60*60*1000){
+          return await cached.clone().json();
+        }
+        try{ await cache.delete(url); }catch(e){}
       }
-    }catch(e){console.warn('Lokale TCGdex-cache lezen mislukt',e);}
-  }
-  const response=await fetch(url,{cache:'force-cache'});
-  if(!response.ok)return null;
-  const data=await response.json();
-  try{
-    const payload=JSON.stringify({savedAt:Date.now(),data});
-    // localStorage kan vol raken; verwijder dan alleen oude Psycards TCGdex-cache.
-    try{localStorage.setItem(key,payload);}
-    catch(e){
-      Object.keys(localStorage).filter(k=>k.startsWith(TCGDEX_CACHE_PREFIX)).forEach(k=>localStorage.removeItem(k));
-      localStorage.setItem(key,payload);
+    }catch(e){
+      console.warn('TCGdex cache niet beschikbaar; normaal laden.',e);
     }
-  }catch(e){console.warn('Lokale TCGdex-cache opslaan mislukt',e);}
+  }
+
+  const response=await fetch(url);
+  if(!response.ok)return null;
+  const data=await response.clone().json();
+
+  // Opslaan gebeurt los van de werking van Mijn sets.
+  if('caches' in window){
+    try{
+      const cache=await caches.open(TCGDEX_CACHE_NAME);
+      const headers=new Headers(response.headers);
+      headers.set('x-psycards-saved-at',String(Date.now()));
+      const body=await response.clone().blob();
+      await cache.put(url,new Response(body,{
+        status:response.status,
+        statusText:response.statusText,
+        headers
+      }));
+    }catch(e){
+      console.warn('TCGdex cache opslaan mislukt; Psycards blijft normaal werken.',e);
+    }
+  }
   return data;
 }
 async function searchTcgdex({setCode='',number='',total='',name=''}){
