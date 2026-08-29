@@ -629,50 +629,7 @@ function adaptTcgdexCard(card,setInfo){
   const set=card.set||setInfo||{},counts=set.cardCount||setInfo?.cardCount||{};
   return {id:card.id,name:card.name,number:String(card.localId??card.number??''),set:{id:set.id||setInfo?.id,name:set.name||setInfo?.name||'Onbekende set',printedTotal:counts.official||counts.total||'',ptcgoCode:set.tcgOnline||setInfo?.tcgOnline||''},images:{small:card.image?card.image+'.webp':'',large:card.image?card.image+'/high.webp':''},_source:'TCGdex'};
 }
-const TCGDEX_CACHE_NAME='psycards-tcgdex-v1';
-const TCGDEX_CACHE_DAYS=60;
-
-async function fetchTcgdex(url,forceRefresh=false){
-  // Cache is alleen een versneller. Als Cache API niet werkt, blijft Psycards
-  // exact zoals voorheen rechtstreeks via TCGdex laden.
-  if(!forceRefresh && 'caches' in window){
-    try{
-      const cache=await caches.open(TCGDEX_CACHE_NAME);
-      const cached=await cache.match(url);
-      if(cached){
-        const savedAt=Number(cached.headers.get('x-psycards-saved-at')||0);
-        if(savedAt && Date.now()-savedAt < TCGDEX_CACHE_DAYS*24*60*60*1000){
-          return await cached.clone().json();
-        }
-        try{ await cache.delete(url); }catch(e){}
-      }
-    }catch(e){
-      console.warn('TCGdex cache niet beschikbaar; normaal laden.',e);
-    }
-  }
-
-  const response=await fetch(url);
-  if(!response.ok)return null;
-  const data=await response.clone().json();
-
-  // Opslaan gebeurt los van de werking van Mijn sets.
-  if('caches' in window){
-    try{
-      const cache=await caches.open(TCGDEX_CACHE_NAME);
-      const headers=new Headers(response.headers);
-      headers.set('x-psycards-saved-at',String(Date.now()));
-      const body=await response.clone().blob();
-      await cache.put(url,new Response(body,{
-        status:response.status,
-        statusText:response.statusText,
-        headers
-      }));
-    }catch(e){
-      console.warn('TCGdex cache opslaan mislukt; Psycards blijft normaal werken.',e);
-    }
-  }
-  return data;
-}
+async function fetchTcgdex(url){const response=await fetch(url);if(!response.ok)return null;return await response.json();}
 async function searchTcgdex({setCode='',number='',total='',name=''}){
   try{
     setCode=normalizeSetCode(setCode);
