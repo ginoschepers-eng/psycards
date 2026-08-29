@@ -976,8 +976,7 @@ async function suggestValueSets(){
  if(!q){box.innerHTML='';box.classList.add('hidden');return;}
  const sets=await loadSetCatalog();
  let matches=(Array.isArray(sets)?sets:[]).filter(x=>normalizeSetName(x.name).includes(q)||normalizeSetName(x.id).includes(q)||normalizeSetName(x.abbreviation||'').includes(q)).slice(0,12);
- const classicWanted='celebrationsclassiccollection'.includes(q)||'classiccollection'.includes(q)||'celebrations'.includes(q)||'classic'.includes(q);
- if(classicWanted&&!matches.some(x=>x.virtualClassic))matches=[{name:'Celebrations: Classic Collection',id:'celebrations-classic',virtualClassic:true},...matches].slice(0,12);
+
  if(!matches.length){box.innerHTML='<div class="muted">Geen sets gevonden.</div>';box.classList.remove('hidden');return;}
  box.innerHTML=matches.map(x=>`<button type="button" class="light" style="width:100%;text-align:left;margin:2px 0" onclick="chooseValueSet('${encodeURIComponent(x.name)}')"><b>${escapeHtml(x.name)}</b>${x.id?' <span class="muted">('+escapeHtml(x.id)+')</span>':''}</button>`).join('');
  box.classList.remove('hidden');
@@ -1008,36 +1007,32 @@ async function checkCardValue(){
  try{
   const sets=await loadSetCatalog(),norm=normalizeSetName(setInput);
   let set=(Array.isArray(sets)?sets:[]).find(x=>normalizeSetName(x.id)===norm||normalizeSetName(x.name)===norm||normalizeSetName(x.abbreviation||'')===norm||normalizeSetName(x.serie?.name||'')===norm);
-  const isClassic=norm===normalizeSetName('Celebrations: Classic Collection');
-  if(isClassic)set=(Array.isArray(sets)?sets:[]).find(x=>normalizeSetName(x.name)==='celebrations'||normalizeSetName(x.id)==='cel25');
+  const isClassic=norm===normalizeSetName('Celebrations: Classic Collection')||norm===normalizeSetName('Celebrations Classic Collection')||norm==='cel25cc';
+  if(isClassic)set=(Array.isArray(sets)?sets:[]).find(x=>normalizeSetName(x.id)==='cel25cc'||normalizeSetName(x.name)===normalizeSetName('Celebrations Classic Collection'));
   if(!set){valueResult.textContent='Set niet gevonden. Probeer de volledige setnaam.';return;}
   const raw=(numberInput.split('/')[0]||'').trim(),local=raw.replace(/^0+/,'')||'0';
   let candidates=[];
-  const isCelebrations=isClassic||normalizeSetName(set?.name)==='celebrations'||normalizeSetName(set?.id)==='cel25';
-  if(!isClassic){
+  if(isClassic){
     const ids=[raw,local].filter((x,i,a)=>x&&a.indexOf(x)===i);
     for(const id of ids){
       const c=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id)+'/'+encodeURIComponent(id));
       if(c&&!candidates.some(x=>x.id===c.id))candidates.push(c);
     }
-  }
-  if(isCelebrations){
-    // Celebrations has a normal subset and Classic Collection. For the same
-    // printed number, show both when they exist so the user can tap the right card.
-    const tryIds=[`cel25-${local}a`,`cel25-${raw}a`];
-    for(const id of [...new Set(tryIds)]){
-      const c=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(id));
+  }else{
+    const ids=[raw,local].filter((x,i,a)=>x&&a.indexOf(x)===i);
+    for(const id of ids){
+      const c=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id)+'/'+encodeURIComponent(id));
       if(c&&!candidates.some(x=>x.id===c.id))candidates.push(c);
     }
-    if(isClassic && !candidates.length){
-      const all=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards');
-      const briefs=(Array.isArray(all)?all:[]).filter(x=>{
-        const id=String(x.id||'').toLowerCase(),lid=String(x.localId||'').toLowerCase().replace(/^0+/,'');
-        return id.startsWith('cel25-')&&(lid===local.toLowerCase()+'a'||id===`cel25-${local}a`);
-      });
-      for(const b of briefs.slice(0,8)){
-        const c=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(b.id));
-        if(c&&!candidates.some(x=>x.id===c.id))candidates.push(c);
+    // If normal Celebrations is selected, also offer the Classic Collection
+    // card with the same printed number when it exists.
+    if(normalizeSetName(set?.id)==='cel25'||normalizeSetName(set?.name)==='celebrations'){
+      const classicSet=(Array.isArray(sets)?sets:[]).find(x=>normalizeSetName(x.id)==='cel25cc'||normalizeSetName(x.name)===normalizeSetName('Celebrations Classic Collection'));
+      if(classicSet){
+        for(const id of ids){
+          const c=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(classicSet.id)+'/'+encodeURIComponent(id));
+          if(c&&!candidates.some(x=>x.id===c.id))candidates.push(c);
+        }
       }
     }
   }
@@ -1045,8 +1040,8 @@ async function checkCardValue(){
   const displaySet=isClassic?'Celebrations: Classic Collection':set.name;
   if(candidates.length>1){
     valueResult.innerHTML=`<b>Meerdere kaarten gevonden</b><div class="muted" style="margin:4px 0 8px">Tik op de juiste kaart:</div>`+candidates.map(c=>{
-      const classic=String(c.id||'').toLowerCase().endsWith('a')&&String(c.id||'').toLowerCase().startsWith('cel25-');
-      return valueCardOptionHtml(c,classic?'Celebrations: Classic Collection':displaySet,numberInput);
+      const classic=String(c.id||'').toLowerCase().startsWith('cel25cc-')||normalizeSetName(c?.set?.id||'')==='cel25cc';
+      return valueCardOptionHtml(c,classic?'Celebrations Classic Collection':displaySet,numberInput);
     }).join('');
     return;
   }
