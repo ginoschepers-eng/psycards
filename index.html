@@ -429,15 +429,59 @@ function fixedSpecialVariant(card){
 }
 function formatSetCardNumber(localId,official){const local=String(localId??''),total=String(official??'?'),width=Math.max(3,/^\d+$/.test(total)?total.length:3),left=/^\d+$/.test(local)?local.padStart(width,'0'):local,right=/^\d+$/.test(total)?total.padStart(width,'0'):total;return left+'/'+right;}
 function setEntryStoredName(card,set,official){return card.name+' — '+set.name+' '+formatSetCardNumber(card.localId,official);}
+
+const SET_LOCAL_CACHE_DB='psycards-set-cache-v1';
+const SET_LOCAL_CACHE_STORE='sets';
+const SET_LOCAL_CACHE_MAX_AGE=60*24*60*60*1000;
+
+function openSetLocalCache(){
+  return new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window))return reject(new Error('IndexedDB niet beschikbaar'));
+    const req=indexedDB.open(SET_LOCAL_CACHE_DB,1);
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(SET_LOCAL_CACHE_STORE))db.createObjectStore(SET_LOCAL_CACHE_STORE,{keyPath:'key'});};
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function readSetLocalCache(saved){
+  try{
+    const db=await openSetLocalCache();
+    const key=String(saved.language)+'|'+String(saved.tcgdex_id);
+    const row=await new Promise((resolve,reject)=>{
+      const tx=db.transaction(SET_LOCAL_CACHE_STORE,'readonly');
+      const req=tx.objectStore(SET_LOCAL_CACHE_STORE).get(key);
+      req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);
+    });
+    db.close();
+    if(!row||!row.savedAt||Date.now()-row.savedAt>SET_LOCAL_CACHE_MAX_AGE||!row.data?.cards?.length)return null;
+    return row.data;
+  }catch(e){console.warn('Lokale setcache lezen overgeslagen:',e);return null;}
+}
+async function writeSetLocalCache(saved,set){
+  try{
+    if(!set?.cards?.length)return;
+    const db=await openSetLocalCache();
+    const row={key:String(saved.language)+'|'+String(saved.tcgdex_id),savedAt:Date.now(),data:set};
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(SET_LOCAL_CACHE_STORE,'readwrite');
+      tx.objectStore(SET_LOCAL_CACHE_STORE).put(row);
+      tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+    });
+    db.close();
+  }catch(e){console.warn('Lokale setcache opslaan overgeslagen:',e);}
+}
+
 async function loadSetEntryCards(){
   const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return alert('Kies of voeg eerst een set toe.');
   show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaarten en afbeeldingen laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
   let set=null,current=[];
   try{
+    const cachedSet=await readSetLocalCache(saved);
     [set,current]=await Promise.all([
-      fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/sets/'+encodeURIComponent(saved.tcgdex_id)),
+      cachedSet ? Promise.resolve(cachedSet) : fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/sets/'+encodeURIComponent(saved.tcgdex_id)),
       getAll()
     ]);
+    if(!cachedSet&&set?.cards?.length)writeSetLocalCache(saved,set);
   }catch(e){
     console.error('Set laden mislukt:',saved,e);
     setCardsStatus.textContent='De set kon niet worden geladen. Probeer het opnieuw.';
