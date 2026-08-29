@@ -224,7 +224,7 @@
     <div class="card">
       <h2 style="margin:0 0 5px">💶 Kaartwaarde controleren</h2>
       <div class="muted">Vul de set (afkorting of volledige naam) en het kaartnummer in.</div>
-      <label>Set</label><input id="valueSet" placeholder="Bijv. Prismatic of DRI" autocomplete="off" oninput="suggestValueSets()" onfocus="suggestValueSets()"><div id="valueSetSuggestions" class="hidden" style="margin-top:6px"></div>
+      <label>Set</label><input id="valueSet" placeholder="Bijv. Prismatic of DRI" autocomplete="off" oninput="suggestValueSets()" onfocus="suggestValueSets()"><div id="valueSetSuggestions" class="hidden" style="margin-top:6px"></div><div id="valueSpecialCards" class="hidden" style="margin-top:10px"></div>
       <label>Kaartnummer</label><input id="valueNumber" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')checkCardValue()">
       <button class="primary" style="width:100%;margin-top:12px" onclick="checkCardValue()">Zoek kaart en prijs</button>
       <div id="valueResult" class="scan-status" style="margin-top:12px"></div>
@@ -968,7 +968,7 @@ async function renderSold(){
   soldList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Verkochte items</h2><div class="muted">Deze aantallen zijn niet meer opgenomen in je beschikbare voorraad.</div></div>'+soldBundles.map(b=>`<div class="card"><b>🎁 ${escapeHtml(b.name)}</b><div>25 kaarten als bundel verkocht</div><div>Totale verkoop: <span class="money">€${(+b.sold_price||0).toFixed(2)}</span></div><div class="muted">${b.sold_date?new Date(b.sold_date).toLocaleDateString('nl-NL'):''} · ${escapeHtml(b.payment||'')}</div></div>`).join('')+cards.map(c=>`<div class="card item">${c.photo?`<img class="thumb" src="${c.photo}" onclick="openPhotoViewer(this.src)" style="cursor:zoom-in">`:'<div class="thumb"></div>'}<div><b>${escapeHtml(c.name)}</b><div class="muted">${escapeHtml(c.productType)}${c.productType==='Pokémonkaart'?' · '+escapeHtml(c.condition)+' · '+escapeHtml(c.variant||'Normaal'):''}</div><div><b>${c.soldQuantity}× verkocht</b></div><div>Totale verkoop: <span class="money">€${c.soldPrice.toFixed(2)}</span></div><div class="muted">${c.soldDate?'Laatste verkoop: '+new Date(c.soldDate).toLocaleDateString('nl-NL'):''}</div></div></div>`).join('');
 }
 function openValueCheck(){
- show('valuecheck');valueSet.value='';valueNumber.value='';valueResult.innerHTML='';valueSetSuggestions.innerHTML='';valueSetSuggestions.classList.add('hidden');setTimeout(()=>valueSet.focus(),50);
+ show('valuecheck');valueSet.value='';valueNumber.value='';valueResult.innerHTML='';valueSetSuggestions.innerHTML='';valueSetSuggestions.classList.add('hidden');valueSpecialCards.innerHTML='';valueSpecialCards.classList.add('hidden');setTimeout(()=>valueSet.focus(),50);
 }
 function valueMoney(n){return '€'+Number(n||0).toFixed(2).replace('.',',');}
 async function suggestValueSets(){
@@ -980,9 +980,33 @@ async function suggestValueSets(){
  if(!matches.length){box.innerHTML='<div class="muted">Geen sets gevonden.</div>';box.classList.remove('hidden');return;}
  box.innerHTML=matches.map(x=>`<button type="button" class="light" style="width:100%;text-align:left;margin:2px 0" onclick="chooseValueSet('${encodeURIComponent(x.name)}')"><b>${escapeHtml(x.name)}</b>${x.id?' <span class="muted">('+escapeHtml(x.id)+')</span>':''}</button>`).join('');
  box.classList.remove('hidden');
+ showValueSpecialCards();
 }
 function chooseValueSet(name){
- valueSet.value=decodeURIComponent(name);valueSetSuggestions.innerHTML='';valueSetSuggestions.classList.add('hidden');valueNumber.focus();
+ valueSet.value=decodeURIComponent(name);valueSetSuggestions.innerHTML='';valueSetSuggestions.classList.add('hidden');showValueSpecialCards();valueNumber.focus();
+}
+async function showValueSpecialCards(){
+ const box=document.getElementById('valueSpecialCards'),norm=normalizeSetName(valueSet.value);
+ const classic=norm===normalizeSetName('Celebrations Classic Collection')||norm===normalizeSetName('Celebrations: Classic Collection')||norm==='cel25cc';
+ if(!classic){box.innerHTML='';box.classList.add('hidden');return;}
+ box.classList.remove('hidden');box.innerHTML='<b>Classic Collection kaarten</b><div class="muted" style="margin-top:4px">Laden…</div>';
+ try{
+  const sets=await loadSetCatalog();
+  const set=(Array.isArray(sets)?sets:[]).find(x=>normalizeSetName(x.id)==='cel25cc'||normalizeSetName(x.name)===normalizeSetName('Celebrations Classic Collection'));
+  if(!set){box.innerHTML='<span class="muted">Classic Collection kon niet worden geladen.</span>';return;}
+  const full=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id));
+  const cards=Array.isArray(full?.cards)?full.cards:[];
+  if(!cards.length){box.innerHTML='<span class="muted">Geen kaarten gevonden.</span>';return;}
+  const sorted=[...cards].sort((a,b)=>{
+    const an=parseInt(String(a.localId||'').match(/\d+/)?.[0]||'9999'),bn=parseInt(String(b.localId||'').match(/\d+/)?.[0]||'9999');
+    return an-bn||String(a.name||'').localeCompare(String(b.name||''));
+  });
+  box.innerHTML='<b>Classic Collection kaarten</b><div class="muted" style="margin:4px 0 8px">Tik op de kaart die je wilt controleren:</div>'+
+   sorted.map(c=>`<button type="button" class="light" style="width:100%;text-align:left;margin:4px 0;padding:11px" onclick="pickValueSpecialCard('${encodeURIComponent(c.localId||'')}')"><b>${escapeHtml(c.name||'Kaart')}</b> <span class="muted">#${escapeHtml(String(c.localId||''))}</span></button>`).join('');
+ }catch(e){box.innerHTML='<span class="muted">Kaartenlijst kon niet worden geladen.</span>';}
+}
+function pickValueSpecialCard(number){
+ valueNumber.value=decodeURIComponent(number);checkCardValue();
 }
 function valueCardOptionHtml(card,setName,shownNumber){
  const pricing=card?.pricing?.cardmarket,market=pricing?cardmarketAdvicePrice(pricing,'Normaal'):0;
