@@ -482,6 +482,7 @@ async function loadSetEntryCards(){
       getAll()
     ]);
     if(!cachedSet&&set?.cards?.length)writeSetLocalCache(saved,set);
+    await loadPhotosForOpenedSet(saved,current);
   }catch(e){
     console.error('Set laden mislukt:',saved,e);
     setCardsStatus.textContent='De set kon niet worden geladen. Probeer het opnieuw.';
@@ -552,7 +553,76 @@ async function getAll(forceRefresh=false){
 }
 function fromDb(c){const rawCondition=String(c.condition||''),productType=['Doosje','Losse sleeve'].includes(rawCondition)?rawCondition:'Pokémonkaart',parts=productType==='Pokémonkaart'?rawCondition.split(' | '):[rawCondition];return {id:c.id,name:c.name,productType,condition:parts[0]||'NM',variant:parts[1]||'Normaal',buy:+c.buy||0,ask:+c.ask||0,min:+c.minimum||0,status:c.status,photo:Object.prototype.hasOwnProperty.call(c,'photo')?(c.photo||''):undefined,quantity:+c.quantity||1,soldQuantity:+c.sold_quantity||0,soldPrice:+c.sold_price||0,payment:c.payment||'',soldDate:c.sold_date||''};}
 function toDb(c){const storedCondition=c.productType==='Pokémonkaart'?c.condition+' | '+(c.variant||'Normaal'):c.condition;const row={name:c.name,condition:storedCondition,buy:c.buy,ask:c.ask,minimum:c.min,status:c.status,quantity:c.quantity||1,sold_quantity:c.soldQuantity||0,sold_price:c.soldPrice||0,payment:c.payment||null,sold_date:c.soldDate||null};if(typeof c.photo==='string')row.photo=c.photo||null;return row;}
-async function loadCardPhoto(id){const {data,error}=await cloud.from('cards').select('photo').eq('id',id).maybeSingle();if(error){console.warn('Foto laden mislukt:',error);return '';}return data?.photo||'';}
+
+const PHOTO_LOCAL_CACHE_DB='psycards-photo-cache-v1';
+const PHOTO_LOCAL_CACHE_STORE='setPhotos';
+const PHOTO_LOCAL_CACHE_MAX_AGE=60*24*60*60*1000;
+
+function openPhotoLocalCache(){
+  return new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window))return reject(new Error('IndexedDB niet beschikbaar'));
+    const req=indexedDB.open(PHOTO_LOCAL_CACHE_DB,1);
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(PHOTO_LOCAL_CACHE_STORE))db.createObjectStore(PHOTO_LOCAL_CACHE_STORE,{keyPath:'key'});};
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+function photoSetCacheKey(saved){return String(saved.id);}
+async function readSetPhotoCache(saved){
+  try{
+    const db=await openPhotoLocalCache();
+    const row=await new Promise((resolve,reject)=>{
+      const tx=db.transaction(PHOTO_LOCAL_CACHE_STORE,'readonly');
+      const req=tx.objectStore(PHOTO_LOCAL_CACHE_STORE).get(photoSetCacheKey(saved));
+      req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);
+    });
+    db.close();
+    if(!row||Date.now()-Number(row.savedAt||0)>PHOTO_LOCAL_CACHE_MAX_AGE)return null;
+    return Array.isArray(row.items)?row.items:null;
+  }catch(e){console.warn('Lokale fotocache lezen mislukt:',e);return null;}
+}
+async function writeSetPhotoCache(saved,items){
+  try{
+    const db=await openPhotoLocalCache();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(PHOTO_LOCAL_CACHE_STORE,'readwrite');
+      tx.objectStore(PHOTO_LOCAL_CACHE_STORE).put({key:photoSetCacheKey(saved),savedAt:Date.now(),items:items||[]});
+      tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+    });
+    db.close();
+  }catch(e){console.warn('Lokale fotocache opslaan mislukt:',e);}
+}
+function applyCachedPhotos(items){
+  if(!Array.isArray(items)||!items.length)return;
+  const byId=new Map(items.map(x=>[String(x.id),x.photo||'']));
+  cardsCache.forEach(c=>{if(byId.has(String(c.id)))c.photo=byId.get(String(c.id));});
+}
+async function loadPhotosForOpenedSet(saved,current){
+  const cached=await readSetPhotoCache(saved);
+  if(cached){applyCachedPhotos(cached);return cached;}
+  const marker='— '+String(saved.name||'')+' ';
+  const ids=(current||[]).filter(c=>c.productType==='Pokémonkaart'&&String(c.name||'').includes(marker)).map(c=>c.id);
+  if(!ids.length){await writeSetPhotoCache(saved,[]);return [];}
+  const items=[];
+  for(let i=0;i<ids.length;i+=150){
+    const {data,error}=await cloud.from('cards').select('id,photo').in('id',ids.slice(i,i+150));
+    if(error){console.warn('Setfoto’s laden mislukt:',error);return [];}
+    (data||[]).forEach(x=>{if(x.photo)items.push({id:x.id,photo:x.photo});});
+  }
+  applyCachedPhotos(items);
+  await writeSetPhotoCache(saved,items);
+  return items;
+}
+
+async function loadCardPhoto(id){
+  const cached=cardsCache.find(c=>String(c.id)===String(id));
+  if(cached&&typeof cached.photo==='string')return cached.photo;
+  const {data,error}=await cloud.from('cards').select('photo').eq('id',id).maybeSingle();
+  if(error){console.warn('Foto laden mislukt:',error);return '';}
+  const photo=data?.photo||'';
+  if(cached)cached.photo=photo;
+  return photo;
+}
 function displayId(id){return 'PSY-'+String(id).padStart(4,'0');}
 async function del(id){const {error}=await cloud.from('cards').delete().eq('id',id);if(error)throw error;await loadCards();}
 function fileToDataURL(file){
