@@ -998,8 +998,20 @@ async function checkCardValue(){
   const local=(numberInput.split('/')[0]||'').replace(/^0+/,'')||'0';
   const ids=[numberInput.split('/')[0],local].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i);
   let card=null;
-  for(const id of ids){card=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id)+'/'+encodeURIComponent(id));if(card)break;}
-  if(!card){valueResult.textContent='Kaartnummer niet gevonden in '+set.name+'.';return;}
+  if(isClassic){
+    const all=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards');
+    const candidates=(Array.isArray(all)?all:[]).filter(x=>{
+      const lid=String(x.localId||'').replace(/^0+/,'')||'0';
+      return lid===local && (/celebrations/i.test(String(x.id||''))||/celebrations/i.test(String(x.name||''))||String(x.id||'').toLowerCase().startsWith('cel'));
+    });
+    for(const c of candidates){
+      const full=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id));
+      if(full&&normalizeSetName(full?.set?.name)==='celebrations'){card=full;break;}
+    }
+  }else{
+    for(const id of ids){card=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id)+'/'+encodeURIComponent(id));if(card)break;}
+  }
+  if(!card){valueResult.textContent='Kaartnummer niet gevonden in '+(isClassic?'Celebrations: Classic Collection':set.name)+'.';return;}
   const pricing=card?.pricing?.cardmarket;
   if(!pricing){valueResult.innerHTML='<b>'+escapeHtml(card.name||'Kaart')+'</b><br>'+escapeHtml(set.name)+' · '+escapeHtml(String(card.localId||numberInput))+'<br>Geen Cardmarket-prijs beschikbaar.';return;}
   const market=cardmarketAdvicePrice(pricing,'Normaal');
