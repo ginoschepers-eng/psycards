@@ -999,14 +999,21 @@ async function checkCardValue(){
   const ids=[numberInput.split('/')[0],local].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i);
   let card=null;
   if(isClassic){
-    const all=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards');
-    const candidates=(Array.isArray(all)?all:[]).filter(x=>{
-      const lid=String(x.localId||'').replace(/^0+/,'')||'0';
-      return lid===local && (/celebrations/i.test(String(x.id||''))||/celebrations/i.test(String(x.name||''))||String(x.id||'').toLowerCase().startsWith('cel'));
-    });
-    for(const c of candidates){
-      const full=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id));
-      if(full&&normalizeSetName(full?.set?.name)==='celebrations'){card=full;break;}
+    const classicIds=[local+'a',String(numberInput.split('/')[0]||'').trim()+'a'];
+    for(const cid of [...new Set(classicIds)]){
+      card=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent('cel25-'+cid));
+      if(card)break;
+    }
+    if(!card){
+      const all=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards');
+      const candidates=(Array.isArray(all)?all:[]).filter(x=>{
+        const lid=String(x.localId||'').toLowerCase().replace(/^0+/,'');
+        return (lid===local.toLowerCase()+'a'||lid===local.toLowerCase())&&String(x.id||'').toLowerCase().startsWith('cel25-');
+      });
+      for(const c of candidates){
+        const full=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id));
+        if(full){card=full;break;}
+      }
     }
   }else{
     for(const id of ids){card=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id)+'/'+encodeURIComponent(id));if(card)break;}
@@ -1017,7 +1024,7 @@ async function checkCardValue(){
   const market=cardmarketAdvicePrice(pricing,'Normaal');
   if(!market){valueResult.textContent='Geen bruikbare Cardmarket-prijs gevonden.';return;}
   const trade=market*.80,cash=market*.70;
-  valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(String(card.localId||numberInput))}</div><div style="margin-top:10px"><b>Cardmarket waarde: ${valueMoney(market)}</b></div><div style="margin-top:7px">🔄 Inruilwaarde 80%: <b>${valueMoney(trade)}</b></div><div>💵 Inkoop contant 70%: <b>${valueMoney(cash)}</b></div>`;
+  valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(isClassic?'Celebrations: Classic Collection':set.name)} · ${escapeHtml(isClassic?numberInput:String(card.localId||numberInput))}</div><div style="margin-top:10px"><b>Cardmarket waarde: ${valueMoney(market)}</b></div><div style="margin-top:7px">🔄 Inruilwaarde 80%: <b>${valueMoney(trade)}</b></div><div>💵 Inkoop contant 70%: <b>${valueMoney(cash)}</b></div>`;
  }catch(e){valueResult.textContent='Prijs kon niet worden opgehaald. Probeer het opnieuw.';}
 }
 
