@@ -188,7 +188,7 @@
 
   <section id="setCards" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug naar sets</button></nav>
-    <div class="card"><h2 id="setCardsTitle" style="margin:0 0 5px">Kaarten invoeren</h2><div class="muted">Vink per kaart één of meerdere kaartsoorten aan. Iedere soort wordt apart in de voorraad opgeslagen.</div><div id="setCardsStatus" class="scan-status"></div><div class="set-jumpbar"><div><label>🔎 Ga naar kaartnummer</label><input id="setCardJump" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')jumpToSetCard()"></div><button class="light" onclick="jumpToSetCard()">Ga</button></div><button id="setCollectButton" class="light set-star" style="width:100%;margin-bottom:10px" onclick="toggleCurrentSetCollected()">☆ Wordt gespaard</button></div>
+    <div class="card"><h2 id="setCardsTitle" style="margin:0 0 5px">Kaarten invoeren</h2><div class="muted">Vink per kaart één of meerdere kaartsoorten aan. Iedere soort wordt apart in de voorraad opgeslagen.</div><div id="setCardsStatus" class="scan-status"></div><div class="set-jumpbar"><div><label>🔎 Ga naar kaartnummer</label><input id="setCardJump" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')jumpToSetCard()"></div><button class="light" onclick="jumpToSetCard()">Ga</button></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button id="setShowAllButton" class="primary" style="flex:1;min-width:95px" onclick="filterSetCards('all')">Alle kaarten</button><button id="setShowExButton" class="light" style="flex:1;min-width:65px" onclick="filterSetCards('ex')">EX</button><button id="setShowIrButton" class="light" style="flex:1;min-width:65px" onclick="filterSetCards('ir')">IR</button><button id="setShowSirButton" class="light" style="flex:1;min-width:65px" onclick="filterSetCards('sir')">SIR</button><button id="setShowSrButton" class="light" style="flex:1;min-width:65px" onclick="filterSetCards('sr')">SR</button><button id="setShowUrButton" class="light" style="flex:1;min-width:65px" onclick="filterSetCards('ur')">UR</button><button id="setShowRaresButton" class="light" style="flex:1;min-width:100px" onclick="filterSetCards('rares')">Alle rares</button></div><button id="setCollectButton" class="light set-star" style="width:100%;margin-bottom:10px" onclick="toggleCurrentSetCollected()">☆ Wordt gespaard</button></div>
     <div id="setEntryCards"></div>
     <div id="setEntrySavebar" class="set-savebar hidden"><div id="setEntryCount" class="muted" style="text-align:center;margin-bottom:7px">Nog geen aantallen ingevuld</div><button id="setEntrySaveButton" class="green" style="width:100%;padding:13px;font-size:16px" onclick="saveSetEntry()">Aantallen opslaan</button></div>
   </section>
@@ -393,6 +393,16 @@ function toggleSavedSetCollected(id,event){if(event){event.preventDefault();even
 function updateCurrentSetCollectButton(){const b=document.getElementById('setCollectButton'),saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!b||!saved)return;const on=isSetCollected(saved);b.textContent=on?'⭐ Wordt gespaard':'☆ Wordt gespaard';b.classList.toggle('active',on);}
 function toggleCurrentSetCollected(){const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return;setSetCollected(saved,!isSetCollected(saved));updateCurrentSetCollectButton();}
 function jumpToSetCard(){const input=document.getElementById('setCardJump');if(!input)return;const raw=String(input.value||'').trim();const n=(raw.match(/\d+/)||[])[0];if(!n)return alert('Vul een kaartnummer in, bijvoorbeeld 182.');const el=document.querySelector('.set-entry[data-card-number="'+Number(n)+'"]');if(!el)return alert('Kaartnummer '+n+' is niet gevonden in deze set.');document.querySelectorAll('.set-entry-target').forEach(x=>x.classList.remove('set-entry-target'));el.classList.add('set-entry-target');el.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>el.classList.remove('set-entry-target'),2200);}
+let currentSetCardFilter='all';
+function filterSetCards(mode){
+ currentSetCardFilter=['ex','ir','sir','sr','ur','rares'].includes(mode)?mode:'all';
+ document.querySelectorAll('#setEntryCards .set-entry').forEach(el=>{
+  const show=currentSetCardFilter==='all'||(currentSetCardFilter==='ex'&&el.dataset.isEx==='1')||(currentSetCardFilter==='ir'&&el.dataset.isIr==='1')||(currentSetCardFilter==='sir'&&el.dataset.isSir==='1')||(currentSetCardFilter==='sr'&&el.dataset.isSr==='1')||(currentSetCardFilter==='ur'&&el.dataset.isUr==='1')||(currentSetCardFilter==='rares'&&el.dataset.isRare==='1');
+  el.style.display=show?'':'none';
+ });
+ const ids={all:'setShowAllButton',ex:'setShowExButton',ir:'setShowIrButton',sir:'setShowSirButton',sr:'setShowSrButton',ur:'setShowUrButton',rares:'setShowRaresButton'};
+ Object.entries(ids).forEach(([k,id])=>{const x=document.getElementById(id);if(x)x.className=currentSetCardFilter===k?'primary':'light';});
+}
 
 async function openSetEntry(){
   show('setEntry');setEntryStatus.textContent='Mijn sets laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');toggleAddSet(false);
@@ -508,7 +518,7 @@ async function writeSetLocalCache(saved,set){
 
 async function loadSetEntryCards(){
   const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return alert('Kies of voeg eerst een set toe.');
-  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaarten en afbeeldingen laden…';updateCurrentSetCollectButton();const jump=document.getElementById('setCardJump');if(jump)jump.value='';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
+  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaarten en afbeeldingen laden…';updateCurrentSetCollectButton();currentSetCardFilter='all';const jump=document.getElementById('setCardJump');if(jump)jump.value='';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
   let set=null,current=[];
   try{
     const cachedSet=await readSetLocalCache(saved);
@@ -537,7 +547,11 @@ async function loadSetEntryCards(){
     const quantityFor=variant=>current.filter(c=>bundleCardIdentity(c)===identity&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&canonicalBundleVariant(c.variant)===canonicalBundleVariant(variant)).reduce((sum,c)=>sum+availableQuantity(c),0);
     const variants=realVariantsForCard(card),common=variants.map(v=>setEntryVariantHtml(card.id,v,quantityFor(v))).join('');
     const hasStock=variants.some(v=>quantityFor(v)>0);
-    return `<div class="set-entry ${hasStock?'':'no-stock'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(number.split('/')[0])} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(number)}</div><div class="set-entry-options">${common}</div></div></div>`;
+    const isEx=/\bex\b/i.test(String(card.name||''))||variants.some(v=>String(v).toLowerCase()==='ex');
+    const rarity=String(card.rarity||'').trim(),isSir=/special\s+illustration\s+rare|\bSIR\b|\bSRI\b/i.test(rarity),isIr=!isSir&&(/illustration\s+rare|\bIR\b/i.test(rarity)),isUr=/ultra\s+rare|\bUR\b/i.test(rarity),isSr=!isSir&&!isIr&&!isUr&&(/secret\s+rare|\bSR\b/i.test(rarity)),isRare=isEx||isIr||isSir||isSr||isUr||/rare/i.test(rarity);
+    const rows=SET_ENTRY_COMMON.concat(SET_ENTRY_SPECIAL).map(v=>existingFor(v)).filter(Boolean),priced=rows.find(x=>Number(x.ask||0)>0)||rows[0],ask=Number(priced?.ask||0),min=Number(priced?.minimum||0);
+    const priceHtml=isRare?`<div style="margin:5px 0 2px;font-weight:900">💶 ${ask>0?'€'+ask.toFixed(2).replace('.',','):'Prijs —'}${min>0?' · Min. €'+min.toFixed(2).replace('.',','):''}</div>`:'';
+    return `<div class="set-entry ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(number.split('/')[0])} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(number)}${rarity?' · '+escapeHtml(rarity):''}</div>${priceHtml}<div class="set-entry-options">${common}</div></div></div>`;
   }).join('')+'</div>';
   setCardsStatus.textContent=set.cards.length+' kaarten geladen uit '+set.name+'.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();
 }
