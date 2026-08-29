@@ -975,7 +975,9 @@ async function suggestValueSets(){
  const box=document.getElementById('valueSetSuggestions'),q=normalizeSetName(valueSet.value);
  if(!q){box.innerHTML='';box.classList.add('hidden');return;}
  const sets=await loadSetCatalog();
- const matches=(Array.isArray(sets)?sets:[]).filter(x=>normalizeSetName(x.name).includes(q)||normalizeSetName(x.id).includes(q)||normalizeSetName(x.abbreviation||'').includes(q)).slice(0,12);
+ let matches=(Array.isArray(sets)?sets:[]).filter(x=>normalizeSetName(x.name).includes(q)||normalizeSetName(x.id).includes(q)||normalizeSetName(x.abbreviation||'').includes(q)).slice(0,12);
+ const classicWanted='celebrationsclassiccollection'.includes(q)||'classiccollection'.includes(q)||'celebrations'.includes(q)||'classic'.includes(q);
+ if(classicWanted&&!matches.some(x=>x.virtualClassic))matches=[{name:'Celebrations: Classic Collection',id:'celebrations-classic',virtualClassic:true},...matches].slice(0,12);
  if(!matches.length){box.innerHTML='<div class="muted">Geen sets gevonden.</div>';box.classList.remove('hidden');return;}
  box.innerHTML=matches.map(x=>`<button type="button" class="light" style="width:100%;text-align:left;margin:2px 0" onclick="chooseValueSet('${encodeURIComponent(x.name)}')"><b>${escapeHtml(x.name)}</b>${x.id?' <span class="muted">('+escapeHtml(x.id)+')</span>':''}</button>`).join('');
  box.classList.remove('hidden');
@@ -989,7 +991,9 @@ async function checkCardValue(){
  valueResult.textContent='Kaart en Cardmarket-prijs zoeken…';
  try{
   const sets=await loadSetCatalog(),norm=normalizeSetName(setInput);
-  const set=(Array.isArray(sets)?sets:[]).find(x=>normalizeSetName(x.id)===norm||normalizeSetName(x.name)===norm||normalizeSetName(x.abbreviation||'')===norm||normalizeSetName(x.serie?.name||'')===norm);
+  let set=(Array.isArray(sets)?sets:[]).find(x=>normalizeSetName(x.id)===norm||normalizeSetName(x.name)===norm||normalizeSetName(x.abbreviation||'')===norm||normalizeSetName(x.serie?.name||'')===norm);
+  const isClassic=norm===normalizeSetName('Celebrations: Classic Collection');
+  if(isClassic)set=(Array.isArray(sets)?sets:[]).find(x=>normalizeSetName(x.name)==='celebrations'||normalizeSetName(x.id)==='cel25');
   if(!set){valueResult.textContent='Set niet gevonden. Probeer de volledige setnaam.';return;}
   const local=(numberInput.split('/')[0]||'').replace(/^0+/,'')||'0';
   const ids=[numberInput.split('/')[0],local].map(x=>String(x||'').trim()).filter((x,i,a)=>x&&a.indexOf(x)===i);
