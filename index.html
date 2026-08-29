@@ -351,7 +351,7 @@ async function openSetEntryByLanguage(language){
 }
 
 async function loadCards(){
-  const {data,error}=await cloud.from('cards').select('*').order('id',{ascending:true});
+  const {data,error}=await cloud.from('cards').select('id,name,condition,buy,ask,minimum,status,quantity,sold_quantity,sold_price,payment,sold_date').order('id',{ascending:true});
   if(error){console.error(error);alert('De gezamenlijke voorraad kon niet worden geladen. Controleer de database-instelling.');return cardsCache;}
   cardsCache=(data||[]).map(fromDb);
   cardsCacheLoaded=true;
@@ -532,7 +532,7 @@ async function saveSetEntry(){
   for(const item of selected){
     const storedName=setEntryStoredName(item.card,setEntrySet,official),photo=item.card.image?item.card.image+'/high.webp':'',identity=bundleCardIdentity({name:storedName}),advice=cardmarketAdvicePrice(priceCards.get(String(item.card.id))?.pricing?.cardmarket,item.variant);
     const matches=current.filter(c=>bundleCardIdentity(c)===identity&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&canonicalBundleVariant(c.variant)===canonicalBundleVariant(item.variant)).sort((a,b)=>(b.soldQuantity+allocatedQuantity(b.id))-(a.soldQuantity+allocatedQuantity(a.id))),existing=matches[0];
-    if(existing){const removable=matches.slice(1).filter(c=>c.soldQuantity===0&&allocatedQuantity(c.id)===0);if(removable.length){const {error:deleteError}=await cloud.from('cards').delete().in('id',removable.map(c=>c.id));if(deleteError){setEntrySaveButton.disabled=false;return alert('Dubbele regel samenvoegen is niet gelukt: '+deleteError.message);}}existing.name=storedName;existing.variant=canonicalBundleVariant(item.variant);existing.quantity=existing.soldQuantity+allocatedQuantity(existing.id)+item.quantity;existing.status='Op voorraad';if(existing.ask<=0&&advice>0)existing.ask=advice;if(!existing.photo&&photo)existing.photo=photo;const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);if(error){setEntrySaveButton.disabled=false;return alert('Opslaan stopte bij '+item.card.name+': '+error.message);}updated++;}
+    if(existing){const removable=matches.slice(1).filter(c=>c.soldQuantity===0&&allocatedQuantity(c.id)===0);if(removable.length){const {error:deleteError}=await cloud.from('cards').delete().in('id',removable.map(c=>c.id));if(deleteError){setEntrySaveButton.disabled=false;return alert('Dubbele regel samenvoegen is niet gelukt: '+deleteError.message);}}existing.name=storedName;existing.variant=canonicalBundleVariant(item.variant);existing.quantity=existing.soldQuantity+allocatedQuantity(existing.id)+item.quantity;existing.status='Op voorraad';if(existing.ask<=0&&advice>0)existing.ask=advice;const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);if(error){setEntrySaveButton.disabled=false;return alert('Opslaan stopte bij '+item.card.name+': '+error.message);}updated++;}
     else inserts.push(toDb({name:storedName,productType:'Pokémonkaart',condition:'NM',variant:item.variant,buy:0,ask:advice,min:0,quantity:item.quantity,soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''}));
   }
   if(inserts.length){const {error}=await cloud.from('cards').insert(inserts);if(error){setEntrySaveButton.disabled=false;return alert('Nieuwe kaarten opslaan is niet gelukt: '+error.message);}}
@@ -550,8 +550,9 @@ async function getAll(forceRefresh=false){
   if(!forceRefresh&&cardsCacheLoaded)return cardsCache;
   return await loadCards();
 }
-function fromDb(c){const rawCondition=String(c.condition||''),productType=['Doosje','Losse sleeve'].includes(rawCondition)?rawCondition:'Pokémonkaart',parts=productType==='Pokémonkaart'?rawCondition.split(' | '):[rawCondition];return {id:c.id,name:c.name,productType,condition:parts[0]||'NM',variant:parts[1]||'Normaal',buy:+c.buy||0,ask:+c.ask||0,min:+c.minimum||0,status:c.status,photo:c.photo||'',quantity:+c.quantity||1,soldQuantity:+c.sold_quantity||0,soldPrice:+c.sold_price||0,payment:c.payment||'',soldDate:c.sold_date||''};}
-function toDb(c){const storedCondition=c.productType==='Pokémonkaart'?c.condition+' | '+(c.variant||'Normaal'):c.condition;return {name:c.name,condition:storedCondition,buy:c.buy,ask:c.ask,minimum:c.min,status:c.status,photo:c.photo||null,quantity:c.quantity||1,sold_quantity:c.soldQuantity||0,sold_price:c.soldPrice||0,payment:c.payment||null,sold_date:c.soldDate||null};}
+function fromDb(c){const rawCondition=String(c.condition||''),productType=['Doosje','Losse sleeve'].includes(rawCondition)?rawCondition:'Pokémonkaart',parts=productType==='Pokémonkaart'?rawCondition.split(' | '):[rawCondition];return {id:c.id,name:c.name,productType,condition:parts[0]||'NM',variant:parts[1]||'Normaal',buy:+c.buy||0,ask:+c.ask||0,min:+c.minimum||0,status:c.status,photo:Object.prototype.hasOwnProperty.call(c,'photo')?(c.photo||''):undefined,quantity:+c.quantity||1,soldQuantity:+c.sold_quantity||0,soldPrice:+c.sold_price||0,payment:c.payment||'',soldDate:c.sold_date||''};}
+function toDb(c){const storedCondition=c.productType==='Pokémonkaart'?c.condition+' | '+(c.variant||'Normaal'):c.condition;const row={name:c.name,condition:storedCondition,buy:c.buy,ask:c.ask,minimum:c.min,status:c.status,quantity:c.quantity||1,sold_quantity:c.soldQuantity||0,sold_price:c.soldPrice||0,payment:c.payment||null,sold_date:c.soldDate||null};if(typeof c.photo==='string')row.photo=c.photo||null;return row;}
+async function loadCardPhoto(id){const {data,error}=await cloud.from('cards').select('photo').eq('id',id).maybeSingle();if(error){console.warn('Foto laden mislukt:',error);return '';}return data?.photo||'';}
 function displayId(id){return 'PSY-'+String(id).padStart(4,'0');}
 async function del(id){const {error}=await cloud.from('cards').delete().eq('id',id);if(error)throw error;await loadCards();}
 function fileToDataURL(file){
@@ -784,8 +785,7 @@ async function saveCard(){
     const oldQuantity=existing.quantity,newQuantity=card.quantity,totalQuantity=oldQuantity+newQuantity;
     existing.buy=((existing.buy*oldQuantity)+(card.buy*newQuantity))/totalQuantity;
     existing.quantity=totalQuantity;existing.status='Op voorraad';
-    if(card.ask>0)existing.ask=card.ask;if(card.min>0)existing.min=card.min;if(!existing.photo&&card.photo)existing.photo=card.photo;
-    const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);
+    if(card.ask>0)existing.ask=card.ask;if(card.min>0)existing.min=card.min;const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);
     if(error)return alert('Voorraad verhogen is niet gelukt: '+error.message);
     await loadCards();resetNewProductForm();alert(displayId(existing.id)+' bestond al. '+newQuantity+' toegevoegd; totaal op voorraad: '+availableQuantity(existing)+'. Je kunt nu direct de volgende kaart scannen.');show('new');return;
   }
@@ -902,6 +902,7 @@ async function startSale(id){
 function splitStoredName(value){const match=String(value||'').match(/^(.*?)\s+—\s+(.*?)\s+([^\s]+\/[^\s]+)$/);return match?{name:match[1],set:match[2],number:match[3]}:{name:value||'',set:'',number:''};}
 async function openEdit(id){
   const cards=await getAll();editingCard=cards.find(c=>String(c.id)===String(id));if(!editingCard)return alert('Dit product kon niet worden geladen.');
+  if(typeof editingCard.photo==='undefined')editingCard.photo=await loadCardPhoto(editingCard.id);
   const parts=splitStoredName(editingCard.name),preview=document.getElementById('editPreview');
   editName.value=parts.name;editSet.value=parts.set;editNumber.value=parts.number;editCondition.value=editingCard.condition;editVariant.value=editingCard.variant||'Normaal';document.getElementById('editVariantFields').classList.toggle('hidden',editingCard.productType!=='Pokémonkaart');editQuantity.value=editingCard.quantity;editBuy.value=editingCard.buy;editAsk.value=editingCard.ask;editMin.value=editingCard.min;editPhoto.value='';
   if(editingCard.photo){preview.src=editingCard.photo;preview.classList.remove('hidden');}else{preview.removeAttribute('src');preview.classList.add('hidden');}
