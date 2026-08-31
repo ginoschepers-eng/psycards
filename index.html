@@ -107,7 +107,7 @@
       <h2>Nieuw product</h2>
       <div id="fixedSetBanner" class="scanbox hidden">📁 Toevoegen aan set: <b id="fixedSetLabel"></b><div class="muted">De kaartzoeker gebruikt alleen deze set.</div></div>
       <label>Soort product</label>
-      <select id="productType" onchange="updateProductForm()"><option>Pokémonkaart</option><option>Doosje</option><option>Losse sleeve</option></select>
+      <select id="productType" onchange="updateProductForm()"><option>Pokémonkaart</option><option>Knuffel</option><option>Doosje</option><option>Losse sleeve</option><option>Toploader</option><option>Binder</option><option>Sticker</option><option>Figuur</option><option>Sleutelhanger</option><option>Overig Pokémon-product</option></select>
       <div id="scannerFields">
       <label>📷 Maak een foto of scan met Samsung-camera</label>
       <input id="cameraPhoto" class="file-hidden" type="file" accept="image/*" capture="environment" onchange="photoChosen('cameraPhoto')">
@@ -263,7 +263,7 @@
       <label>Nieuwe foto kiezen (optioneel)</label><input id="editPhoto" type="file" accept="image/*">
       <label>Kaartnaam / productnaam</label><input id="editName">
       <div class="row"><div><label>Set</label><input id="editSet"></div><div><label>Kaartnummer</label><input id="editNumber" placeholder="Bijv. 039/191"></div></div>
-      <label>Conditie</label><select id="editCondition"><option>NM</option><option>EX</option><option>LP</option><option>PL</option><option>Doosje</option><option>Losse sleeve</option></select>
+      <label>Conditie</label><select id="editCondition"><option>NM</option><option>EX</option><option>LP</option><option>PL</option><option>Knuffel</option><option>Doosje</option><option>Losse sleeve</option><option>Toploader</option><option>Binder</option><option>Sticker</option><option>Figuur</option><option>Sleutelhanger</option><option>Overig Pokémon-product</option></select>
       <div id="editVariantFields"><label>Kaartsoort</label><select id="editVariant"><option>Normaal</option><option>Holo</option><option>Reverse holo</option><option>ex</option><option>V</option><option>VMAX</option><option>VSTAR</option><option>Illustration Rare</option><option>Special Illustration Rare</option><option>Ultra Rare</option><option>Hyper Rare</option><option>Promo</option><option>Anders</option></select></div>
       <label>Aantal totaal</label><input id="editQuantity" type="number" min="1" inputmode="numeric">
       <div class="row"><div><label>Gekocht voor €</label><input id="editBuy" type="number" step="0.01" inputmode="decimal"></div><div><label>Verkopen voor €</label><input id="editAsk" type="number" step="0.01" inputmode="decimal"></div></div>
@@ -617,7 +617,7 @@ async function getAll(forceRefresh=false){
   if(!forceRefresh&&cardsCacheLoaded)return cardsCache;
   return await loadCards();
 }
-function fromDb(c){const rawCondition=String(c.condition||''),productType=['Doosje','Losse sleeve'].includes(rawCondition)?rawCondition:'Pokémonkaart',parts=productType==='Pokémonkaart'?rawCondition.split(' | '):[rawCondition];return {id:c.id,name:c.name,productType,condition:parts[0]||'NM',variant:parts[1]||'Normaal',buy:+c.buy||0,ask:+c.ask||0,min:+c.minimum||0,status:c.status,photo:Object.prototype.hasOwnProperty.call(c,'photo')?(c.photo||''):undefined,quantity:+c.quantity||1,soldQuantity:+c.sold_quantity||0,soldPrice:+c.sold_price||0,payment:c.payment||'',soldDate:c.sold_date||''};}
+function fromDb(c){const rawCondition=String(c.condition||''),productType=['Knuffel','Doosje','Losse sleeve','Toploader','Binder','Sticker','Figuur','Sleutelhanger','Overig Pokémon-product'].includes(rawCondition)?rawCondition:'Pokémonkaart',parts=productType==='Pokémonkaart'?rawCondition.split(' | '):[rawCondition];return {id:c.id,name:c.name,productType,condition:parts[0]||'NM',variant:parts[1]||'Normaal',buy:+c.buy||0,ask:+c.ask||0,min:+c.minimum||0,status:c.status,photo:Object.prototype.hasOwnProperty.call(c,'photo')?(c.photo||''):undefined,quantity:+c.quantity||1,soldQuantity:+c.sold_quantity||0,soldPrice:+c.sold_price||0,payment:c.payment||'',soldDate:c.sold_date||''};}
 function toDb(c){const storedCondition=c.productType==='Pokémonkaart'?c.condition+' | '+(c.variant||'Normaal'):c.condition;const row={name:c.name,condition:storedCondition,buy:c.buy,ask:c.ask,minimum:c.min,status:c.status,quantity:c.quantity||1,sold_quantity:c.soldQuantity||0,sold_price:c.soldPrice||0,payment:c.payment||null,sold_date:c.soldDate||null};if(typeof c.photo==='string')row.photo=c.photo||null;return row;}
 
 const PHOTO_LOCAL_CACHE_DB='psycards-photo-cache-v1';
@@ -705,8 +705,20 @@ function updateProductForm(){
   document.getElementById('regularPhoto').classList.toggle('hidden',isCard);
   document.getElementById('conditionFields').classList.toggle('hidden',!isCard);
   document.getElementById('variantFields').classList.toggle('hidden',!isCard);
-  document.getElementById('nameLabel').textContent=isCard?'🃏 Kaartnaam':type==='Doosje'?'📦 Omschrijving doosje':'🛡️ Omschrijving sleeve';
-  document.getElementById('name').placeholder=isCard?'Bijv. Pikachu':type==='Doosje'?'Bijv. Tin box Charizard':'Bijv. Pikachu sleeve rood';
+  const productMeta={
+    'Knuffel':['🧸 Productnaam','Bijv. Snorlax knuffel 20 cm'],
+    'Doosje':['📦 Omschrijving doosje','Bijv. Tin box Charizard'],
+    'Losse sleeve':['🛡️ Omschrijving sleeve','Bijv. Pikachu sleeve rood'],
+    'Toploader':['🛡️ Omschrijving toploader','Bijv. Toploader standaard'],
+    'Binder':['📒 Productnaam','Bijv. Pokémon binder 9-pocket'],
+    'Sticker':['🏷️ Productnaam','Bijv. Pikachu sticker'],
+    'Figuur':['🧍 Productnaam','Bijv. Charizard figuur'],
+    'Sleutelhanger':['🔑 Productnaam','Bijv. Eevee sleutelhanger'],
+    'Overig Pokémon-product':['🎁 Productnaam','Bijv. Pokémon accessoire']
+  };
+  const meta=productMeta[type]||['🎁 Productnaam','Bijv. Pokémon product'];
+  document.getElementById('nameLabel').textContent=isCard?'🃏 Kaartnaam':meta[0];
+  document.getElementById('name').placeholder=isCard?'Bijv. Pikachu':meta[1];
 }
 async function openCardCamera(){
   if(!navigator.mediaDevices?.getUserMedia)return alert('De camera wordt op dit toestel niet ondersteund. Gebruik de gewone fotoknop.');
