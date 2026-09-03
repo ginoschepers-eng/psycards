@@ -268,7 +268,7 @@
 
   <section id="bundles" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
-    <div class="card"><h2 style="margin:0 0 5px">Kaartenbundels per set</h2><div class="muted">Iedere bundel bevat precies 20 Normale kaarten en 5 Holo/Reverse holo-kaarten uit dezelfde set. Speciale kaarten gaan niet mee.</div><label>Maximale vraagprijs per kaart €</label><input id="bundleMaxCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="2.00"><label>Vraagprijs per nieuwe bundel €</label><input id="newBundleAsk" type="number" step="0.01" inputmode="decimal" value="2.99"><div class="muted" style="margin-top:6px">Adviesverkoopprijs: €2,99 per bundel · actie 3 voor €7,50</div><button class="primary" style="width:100%;margin-top:12px" onclick="startBundleBuilder()">🧮 Bereken mogelijke bundels</button></div>
+    <div class="card"><h2 style="margin:0 0 5px">Kaartenbundels per set</h2><div class="muted">Iedere bundel bevat precies 20 Normale kaarten en 5 Holo/Reverse holo-kaarten uit dezelfde set. Speciale kaarten gaan niet mee.</div><label>Maximale Cardmarket-indicatie per kaart €</label><input id="bundleMaxCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="4.00"><label>Verkoopprijs van 1 bundel €</label><input id="newBundleAsk" type="number" step="0.01" inputmode="decimal" value="2.99"><div class="muted" style="margin-top:6px"><b>1 bundel €2,99</b> · actie: <b>3 bundels voor €7,50</b> · totale kosten per bundel blijven onder €0,50</div><button class="primary" style="width:100%;margin-top:12px" onclick="startBundleBuilder()">🧮 Bereken mogelijke bundels</button></div>
     <div id="bundleSaveStatus" class="scan-status"></div>
     <div id="bundleExisting"></div>
     <div id="bundleBuilder" class="hidden"><div id="bundleProgress" class="bundle-progress">Mogelijke bundels per set</div><div id="bundleCardList"></div><button class="light" style="width:100%;margin:12px 0 18px" onclick="cancelBundleBuilder()">Terug naar bundels</button></div>
@@ -334,7 +334,7 @@ const SHARED_PIN='6129';
 const cloud=window.supabase.createClient(PROJECT_URL,PUBLISHABLE_KEY);
 let cardsCache=[],expenseCache=[];
 let cardsCacheLoaded=false;
-let bundlesCache=[],bundleItemsCache=[],bundleTablesReady=true,bundlePlans=[],bundlePlanMaxPrice=2;
+let bundlesCache=[],bundleItemsCache=[],bundleTablesReady=true,bundlePlans=[],bundlePlanMaxPrice=4;
 let scanCandidates=[];
 let selectedPhotoFile=null;
 let editingCard=null,editingAdvicePrice=0;
