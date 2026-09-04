@@ -483,15 +483,24 @@ async function renderSetEntryTiles(){
   setEntrySetGrid.innerHTML=savedSetsCache.map(saved=>`<button class="set-tile" onclick="selectSetEntryTile('${saved.id}')"><span class="folder-icon">${isSetCollected(saved)?'⭐':'🗂️'}</span><b>${escapeHtml(saved.name)}</b><small>${escapeHtml(saved.set_code||SET_LANGUAGES[saved.language]||saved.language)}</small><span class="set-star${isSetCollected(saved)?' active':''}" onclick="toggleSavedSetCollected('${saved.id}',event)">${isSetCollected(saved)?'⭐ Wordt gespaard':'☆ Sparen'}</span></button>`).join('');
 }
 async function selectSetEntryTile(id){setEntrySelect.value=String(id);await loadSetEntryCards();}
-function toggleAddSet(open){addSetPanel.classList.toggle('hidden',!open);if(open){addSetQuery.value='';addSetStatus.textContent='Alle sets laden…';addSetResults.classList.add('hidden');searchSetsToAdd();}}
+function toggleAddSet(open){
+  const panel=document.getElementById('addSetPanel'),query=document.getElementById('addSetQuery'),status=document.getElementById('addSetStatus'),results=document.getElementById('addSetResults');
+  if(!panel)return alert('Het scherm Set toevoegen kon niet worden geopend. Vernieuw de pagina en probeer opnieuw.');
+  panel.classList.toggle('hidden',!open);
+  if(open){if(query)query.value='';if(status)status.textContent='Alle sets laden…';if(results)results.classList.add('hidden');panel.scrollIntoView({behavior:'smooth',block:'start'});setTimeout(()=>searchSetsToAdd(),50);}
+}
 async function searchSetsToAdd(){
   const language=addSetLanguage.value,query=addSetQuery.value.trim();
   addSetStatus.textContent='Sets zoeken…';addSetResults.classList.add('hidden');
   try{const sets=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(language)+'/sets');if(!Array.isArray(sets))throw new Error('Setlijst niet beschikbaar');const wanted=normalizeSetName(query);setSearchResults=(query?sets.filter(s=>normalizeSetName(s.name).includes(wanted)||String(s.id).toLocaleLowerCase('en').includes(query.toLocaleLowerCase('en'))):sets).slice().sort((a,b)=>a.name.localeCompare(b.name));if(!setSearchResults.length)throw new Error('Geen set gevonden. Probeer een deel van de naam of de databasecode.');addSetResultSelect.innerHTML=setSearchResults.map((s,i)=>`<option value="${i}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`).join('');addSetResults.classList.remove('hidden');addSetStatus.textContent=query?setSearchResults.length+' sets gevonden.':setSearchResults.length+' sets beschikbaar in deze taal.';}catch(e){addSetStatus.textContent=e.message||'Zoeken is niet gelukt.';}
 }
 async function saveSelectedSet(){
-  const selected=setSearchResults[Number(addSetResultSelect.value)||0];if(!selected)return alert('Kies eerst een gevonden set.');
-  const row={language:addSetLanguage.value,tcgdex_id:selected.id,name:selected.name,set_code:addSetCode.value.trim().toUpperCase()||null},{error}=await cloud.from('psycard_sets').insert(row);
+  const resultSelect=document.getElementById('addSetResultSelect'),languageEl=document.getElementById('addSetLanguage'),codeEl=document.getElementById('addSetCode');
+  const selected=setSearchResults[Number(resultSelect?.value)||0];if(!selected)return alert('Kies eerst een gevonden set.');
+  const autoCode=String(selected.abbreviation||selected.code||selected.id||'').trim().toUpperCase();
+  const manualCode=String(codeEl?.value||'').trim().toUpperCase();
+  const safeCode=(manualCode&&!/^\d{1,3}\/\d{1,3}$/.test(manualCode))?manualCode:autoCode;
+  const row={language:languageEl?.value||'en',tcgdex_id:selected.id,name:selected.name,set_code:safeCode||null},{error}=await cloud.from('psycard_sets').insert(row);
   if(error){if(String(error.code)==='23505')return alert('Deze set staat al in Mijn sets.');return alert('Set toevoegen is niet gelukt: '+error.message);}
   toggleAddSet(false);await openSetEntry();const saved=savedSetsCache.find(s=>s.language===row.language&&s.tcgdex_id===row.tcgdex_id);if(saved)setEntrySelect.value=String(saved.id);setEntryStatus.textContent=selected.name+' is toegevoegd aan Mijn sets.';
 }
