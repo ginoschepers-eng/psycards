@@ -615,7 +615,8 @@ async function loadSetEntryCards(){
     // De set direct tonen. Niet eerst voor iedere kaart apart gegevens ophalen;
     // dat kon op een tweede telefoon minutenlang lijken alsof de set niet laadde.
     // De setgegevens uit TCGdex/Supabase zijn voldoende om de volledige set te openen.
-    await loadPhotosForOpenedSet(saved,current);
+    // Foto's uit de eigen voorraad hoeven het openen van de set niet te blokkeren.
+    loadPhotosForOpenedSet(saved,current).catch(e=>console.warn('Setfoto’s op achtergrond laden mislukt:',e));
   }catch(e){
     console.error('Set laden mislukt:',saved,e);
     setCardsStatus.textContent='De set kon niet worden geladen. Probeer het opnieuw.';
@@ -636,6 +637,7 @@ async function loadSetEntryCards(){
     const hasStock=variants.some(v=>quantityFor(v)>0);
     const isEx=/\bex\b/i.test(String(card.name||''))||variants.some(v=>String(v).toLowerCase()==='ex');
     const rarity=String(card.rarity||'').trim(),isSir=/special\s+illustration\s+rare|\bSIR\b|\bSRI\b/i.test(rarity),isIr=!isSir&&(/illustration\s+rare|\bIR\b/i.test(rarity)),isUr=/ultra\s+rare|\bUR\b/i.test(rarity),isSr=!isSir&&!isIr&&!isUr&&(/secret\s+rare|\bSR\b/i.test(rarity)),isRare=isEx||isIr||isSir||isSr||isUr||/rare/i.test(rarity);
+    const existingFor=variant=>current.find(c=>bundleCardIdentity(c)===identity&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&canonicalBundleVariant(c.variant)===canonicalBundleVariant(variant));
     const rows=SET_ENTRY_COMMON.concat(SET_ENTRY_SPECIAL).map(v=>existingFor(v)).filter(Boolean),priced=rows.find(x=>Number(x.ask||0)>0)||rows[0],ask=Number(priced?.ask||0),min=Number(priced?.minimum||0);
     const priceHtml=isRare?`<div style="margin:5px 0 2px;font-weight:900">💶 ${ask>0?'€'+ask.toFixed(2).replace('.',','):'Prijs —'}${min>0?' · Min. €'+min.toFixed(2).replace('.',','):''}</div>`:'';
     return `<div class="set-entry ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(number.split('/')[0])} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(number)}${rarity?' · '+escapeHtml(rarity):''}</div>${priceHtml}<div class="set-entry-options">${common}</div></div></div>`;
