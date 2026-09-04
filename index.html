@@ -612,9 +612,9 @@ async function loadSetEntryCards(){
         await cloud.from('psycard_set_cache').upsert({language:saved.language,tcgdex_id:saved.tcgdex_id,set_name:saved.name,set_data:set,updated_at:new Date().toISOString()},{onConflict:'language,tcgdex_id'});
       }catch(e){console.warn('Set centraal opslaan overgeslagen:',e);}
     }
-    set=await enrichSetCardVariants(saved,set);
-    // Ook de verrijkte kaartgegevens centraal bewaren voor andere telefoons.
-    try{await cloud.from('psycard_set_cache').upsert({language:saved.language,tcgdex_id:saved.tcgdex_id,set_name:saved.name,set_data:set,updated_at:new Date().toISOString()},{onConflict:'language,tcgdex_id'});}catch(e){console.warn('Verrijkte set centraal opslaan overgeslagen:',e);}
+    // De set direct tonen. Niet eerst voor iedere kaart apart gegevens ophalen;
+    // dat kon op een tweede telefoon minutenlang lijken alsof de set niet laadde.
+    // De setgegevens uit TCGdex/Supabase zijn voldoende om de volledige set te openen.
     await loadPhotosForOpenedSet(saved,current);
   }catch(e){
     console.error('Set laden mislukt:',saved,e);
