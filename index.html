@@ -531,18 +531,26 @@ function realVariantsForCard(card){
 }
 async function enrichSetCardVariants(saved,set){
   if(!set?.cards?.length)return set;
+  if(set._psycardsVariantsComplete===true)return set;
   const missing=set.cards.filter(c=>!c.variants);
-  if(!missing.length)return set;
-  setCardsStatus.textContent='Werkelijke kaartuitvoeringen laden…';
-  let cursor=0;
+  if(!missing.length){set._psycardsVariantsComplete=true;return set;}
+  setCardsStatus.textContent='Eenmalige controle: kaartvarianten van deze set bepalen…';
+  let cursor=0,failed=0;
   async function worker(){
     while(cursor<missing.length){
       const card=missing[cursor++];
-      try{const full=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/cards/'+encodeURIComponent(card.id));if(full?.variants)Object.assign(card,{variants:full.variants,rarity:full.rarity||card.rarity});}catch(e){console.warn('Uitvoeringen niet geladen voor',card.id,e);}
+      try{
+        const full=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/cards/'+encodeURIComponent(card.id));
+        if(full?.variants)Object.assign(card,{variants:full.variants,rarity:full.rarity||card.rarity});
+        else failed++;
+      }catch(e){failed++;console.warn('Uitvoeringen niet geladen voor',card.id,e);}
     }
   }
   await Promise.all(Array.from({length:Math.min(8,missing.length)},()=>worker()));
-  writeSetLocalCache(saved,set);
+  // Alleen als alle kaarten gecontroleerd zijn markeren we de set als compleet.
+  // Bij een tijdelijke netwerkfout wordt de ontbrekende controle later opnieuw geprobeerd.
+  set._psycardsVariantsComplete=failed===0 && set.cards.every(c=>!!c.variants || !!fixedSpecialVariant(c));
+  await writeSetLocalCache(saved,set);
   return set;
 }
 function formatSetCardNumber(localId,official){const local=String(localId??''),total=String(official??'?'),width=Math.max(3,/^\d+$/.test(total)?total.length:3),left=/^\d+$/.test(local)?local.padStart(width,'0'):local,right=/^\d+$/.test(total)?total.padStart(width,'0'):total;return left+'/'+right;}
@@ -606,15 +614,18 @@ async function loadSetEntryCards(){
       cachedSet ? Promise.resolve(cachedSet) : fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/sets/'+encodeURIComponent(saved.tcgdex_id)),
       getAll()
     ]);
-    if(!centralSet&&set?.cards?.length){
-      writeSetLocalCache(saved,set);
+    // Controleer per set één keer welke officiële uitvoeringen iedere kaart heeft.
+    // Het complete resultaat wordt centraal opgeslagen, zodat andere telefoons dezelfde
+    // variantinformatie gebruiken zonder de hele set opnieuw kaart voor kaart op te vragen.
+    if(set?.cards?.length && set._psycardsVariantsComplete!==true){
+      set=await enrichSetCardVariants(saved,set);
+    }
+    if(set?.cards?.length){
+      await writeSetLocalCache(saved,set);
       try{
         await cloud.from('psycard_set_cache').upsert({language:saved.language,tcgdex_id:saved.tcgdex_id,set_name:saved.name,set_data:set,updated_at:new Date().toISOString()},{onConflict:'language,tcgdex_id'});
       }catch(e){console.warn('Set centraal opslaan overgeslagen:',e);}
     }
-    // De set direct tonen. Niet eerst voor iedere kaart apart gegevens ophalen;
-    // dat kon op een tweede telefoon minutenlang lijken alsof de set niet laadde.
-    // De setgegevens uit TCGdex/Supabase zijn voldoende om de volledige set te openen.
     // Foto's uit de eigen voorraad hoeven het openen van de set niet te blokkeren.
     loadPhotosForOpenedSet(saved,current).catch(e=>console.warn('Setfoto’s op achtergrond laden mislukt:',e));
   }catch(e){
