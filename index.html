@@ -375,14 +375,18 @@ async function startApp(){
   await seedKnownExpenses();
   await loadBundleData();
   await renderHomeDashboard();
-  cloud.channel('psycards-live').on('postgres_changes',{event:'*',schema:'public',table:'cards'},async()=>{
-    await loadCards();
+  cloud.channel('psycards-live').on('postgres_changes',{event:'*',schema:'public',table:'cards'},async(payload)=>{
+    // Verwerk alleen de gewijzigde kaart lokaal. Voorheen werd bij ELKE Realtime-
+    // wijziging de volledige cards-tabel opnieuw gedownload. Een batch van 1.395
+    // kaarten kon daardoor 1.395 volledige voorraad-downloads per open telefoon geven.
+    applyRealtimeCardChange(payload);
     const active=document.querySelector('main>section:not(.hidden)')?.id;
     if(active==='stock')renderStock();
     if(active==='money')renderMoney();
     if(active==='sell')refreshSellList();
     if(active==='sold')renderSold();
     if(active==='missingCollector')renderMissingCollector();
+    if(active==='home')renderHomeDashboard();
   }).subscribe();
   cloud.channel('psycards-bundles-live').on('postgres_changes',{event:'*',schema:'public',table:'bundles'},async()=>{await loadBundleData();if(document.querySelector('main>section:not(.hidden)')?.id==='bundles')renderBundles();}).on('postgres_changes',{event:'*',schema:'public',table:'bundle_items'},async()=>{await loadBundleData();const active=document.querySelector('main>section:not(.hidden)')?.id;if(active==='bundles')renderBundles();if(active==='stock')renderStock();}).subscribe();
 }
@@ -404,6 +408,27 @@ async function renderHomeDashboard(){
 async function openSetEntryByLanguage(language){
   await openSetEntry();const found=savedSetsCache.find(s=>language==='zh'?String(s.language).startsWith('zh'):s.language===language);if(found){setEntrySelect.value=String(found.id);return loadSetEntryCards();}
   addSetLanguage.value=language==='zh'?'zh-tw':language;toggleAddSet(true);addSetStatus.textContent='Er staat nog geen set uit deze regio in Mijn sets. Kies hieronder een set.';
+}
+
+function applyRealtimeCardChange(payload){
+  if(!payload)return;
+  const event=String(payload.eventType||'').toUpperCase();
+  const raw=event==='DELETE'?payload.old:payload.new;
+  if(!raw||raw.id==null)return;
+  const id=String(raw.id);
+  if(event==='DELETE'){
+    cardsCache=cardsCache.filter(c=>String(c.id)!==id);
+    expenseCache=expenseCache.filter(c=>String(c.id)!==id);
+    return;
+  }
+  // INSERT/UPDATE payload bevat de gewijzigde rij; geen nieuwe SELECT nodig.
+  const card=fromDb(raw);
+  cardsCache=cardsCache.filter(c=>String(c.id)!==id);
+  expenseCache=expenseCache.filter(c=>String(c.id)!==id);
+  if(card.productType==='Kosten')expenseCache.push(card);else cardsCache.push(card);
+  cardsCache.sort((a,b)=>(+a.id||0)-(+b.id||0));
+  expenseCache.sort((a,b)=>(+a.id||0)-(+b.id||0));
+  cardsCacheLoaded=true;
 }
 
 async function loadCards(){
