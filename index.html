@@ -1402,7 +1402,7 @@ function buildBalancedBundlePlan(entries,count){
   if(!count)return [];
   const bins=Array.from({length:count},()=>({items:[],value:0,keys:new Set(),variants:{'Normaal':0,'Reverse holo':0,'Holo':0}}));
   const grouped={};entries.forEach(entry=>{const key=bundleUniqueKey(entry.card);grouped[key]??={key,variant:canonicalBundleVariant(entry.card.variant),cards:[]};for(let i=0;i<entry.quantity;i++)grouped[key].cards.push(entry.card);});
-  const variantOrder={'Reverse holo':0,'Holo':1,'Normaal':2},ordered=Object.values(grouped).sort((a,b)=>(variantOrder[a.variant]??3)-(variantOrder[b.variant]??3)||Math.max(...b.cards.map(c=>+c.ask||0))-Math.max(...a.cards.map(c=>+c.ask||0))||a.cards.length-b.cards.length);
+  const variantOrder={'Reverse holo':0,'Holo':1,'Normaal':2},groupNumber=g=>Math.min(...g.cards.map(c=>bundleCardNumber(c))),ordered=Object.values(grouped).sort((a,b)=>(variantOrder[a.variant]??3)-(variantOrder[b.variant]??3)||groupNumber(a)-groupNumber(b)||a.cards.length-b.cards.length||Math.max(...b.cards.map(c=>+c.ask||0))-Math.max(...a.cards.map(c=>+c.ask||0)));
   ordered.forEach(group=>{
     const key=group.key,variant=group.variant,cards=group.cards.slice().sort((a,b)=>(+b.ask||0)-(+a.ask||0)),amount=Math.min(cards.length,count);
     for(let i=0;i<amount;i++){
