@@ -271,7 +271,7 @@
     <div class="card"><h2 style="margin:0 0 5px">Kaartenbundels per set</h2><div class="muted">Iedere bundel bevat precies 20 Normale kaarten en 5 Holo/Reverse holo-kaarten uit dezelfde set. Speciale kaarten gaan niet mee.</div><label>Maximale Cardmarket-indicatie per kaart €</label><input id="bundleMaxCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="4.00"><label>Verkoopprijs van 1 bundel €</label><input id="newBundleAsk" type="number" step="0.01" inputmode="decimal" value="2.99"><div class="muted" style="margin-top:6px"><b>1 bundel €2,99</b> · actie: <b>3 bundels voor €7,50</b> · totale kosten per bundel blijven onder €0,50</div><button class="primary" style="width:100%;margin-top:12px" onclick="startBundleBuilder()">🧮 Bereken mogelijke bundels</button></div>
     <div id="bundleSaveStatus" class="scan-status"></div>
     <div id="bundleExisting"></div>
-    <div id="bundleBuilder" class="hidden"><div id="bundleProgress" class="bundle-progress">Mogelijke bundels per set</div><div id="bundleCardList"></div><button class="light" style="width:100%;margin:12px 0 18px" onclick="cancelBundleBuilder()">Terug naar bundels</button></div>
+    <div id="bundleBuilder" class="hidden"><div id="bundleProgress" class="bundle-progress">Mogelijke bundels per set</div><button class="primary" style="width:100%;margin:10px 0" onclick="printAllBundlePlans()">🖨️ Print complete zoeklijst</button><div class="muted" style="text-align:center;margin-bottom:8px">Print alle mogelijke bundels van alle sets in één overzicht.</div><div id="bundleCardList"></div><button class="light" style="width:100%;margin:12px 0 18px" onclick="cancelBundleBuilder()">Terug naar bundels</button></div>
   </section>
 
   <section id="money" class="hidden">
@@ -1433,6 +1433,24 @@ function renderBundlePlanOverview(){
   document.getElementById('bundleProgress').textContent='Mogelijke bundels per set';
   document.getElementById('bundleCardList').innerHTML='<div class="card"><h3 style="margin:0">Kies een set</h3><div class="muted">Tik op een set om de voorgestelde bundels te bekijken.</div>'+bundlePlans.map((plan,index)=>{const made=plan.bundles.length,left=Math.max(0,plan.available-made*25);return `<button class="dashboard-set" onclick="showBundlePlan(${index})"><span><b>${escapeHtml(plan.set)}</b><small class="muted" style="display:block">${plan.available} kaarten beschikbaar · ${left} blijven los</small></span><span class="dashboard-set-count">${made} bundel${made===1?'':'s'} ›</span></button>`;}).join('')+'</div>';
 }
+function printAllBundlePlans(){
+  if(!bundlePlans.length)return alert('Bereken eerst de mogelijke bundels.');
+  const possible=bundlePlans.filter(plan=>plan.bundles&&plan.bundles.length);
+  if(!possible.length)return alert('Er zijn op dit moment geen complete bundels mogelijk.');
+  const esc=v=>String(v??'').replace(/[&<>\"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','\\':'&#92;','"':'&quot;'}[ch]||ch));
+  const body=possible.map(plan=>{
+    const existing=bundlesCache.filter(b=>String(b.name).startsWith(plan.set+' Bundel ')).map(b=>Number(String(b.name).match(/Bundel\\s+(\\d+)/)?.[1])||0);
+    let next=Math.max(0,...existing)+1;
+    const bundles=plan.bundles.map((bundle,i)=>{
+      const rows=bundle.items.slice().sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||(a.variant||'').localeCompare(b.variant||'','nl')).map(card=>'<li>'+bundleCardLabel(card)+'</li>').join('');
+      return '<section class="bundle"><h3>☐ '+esc(plan.set)+' Bundel '+(next+i)+'</h3><div class="meta">20 Normaal + 5 Holo/Reverse holo · 25 kaarten · indicatiewaarde €'+bundle.value.toFixed(2)+'</div><ol>'+rows+'</ol></section>';
+    }).join('');
+    return '<div class="set"><h2>'+esc(plan.set)+' — '+plan.bundles.length+' bundel'+(plan.bundles.length===1?'':'s')+' mogelijk</h2>'+bundles+'</div>';
+  }).join('');
+  const w=window.open('','_blank');if(!w)return alert('Sta pop-ups toe om de bundellijst te kunnen printen.');
+  w.document.write('<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Psycards bundel zoeklijst</title><style>@page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;color:#111;font-size:11px}h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;border-bottom:2px solid #222;padding-bottom:4px;margin:20px 0 8px}.bundle{break-inside:avoid;border:1px solid #bbb;border-radius:7px;padding:8px 10px;margin:0 0 10px}.bundle h3{font-size:14px;margin:0 0 3px}.meta{font-size:10px;color:#555;margin-bottom:5px}ol{columns:2;column-gap:24px;margin:5px 0 0;padding-left:24px}li{break-inside:avoid;margin:0 0 2px}.summary{margin-bottom:12px}.set{break-before:auto}@media print{button{display:none}}</style></head><body><h1>Psycards — complete bundel zoeklijst</h1><div class="summary">'+possible.length+' sets · '+possible.reduce((n,p)=>n+p.bundles.length,0)+' mogelijke bundels · geprint '+new Date().toLocaleString('nl-NL')+'</div>'+body+'<script>window.onload=()=>setTimeout(()=>window.print(),200)<\\/script></body></html>');
+  w.document.close();
+}
 function showBundlePlan(index){
   const plan=bundlePlans[index];if(!plan)return;plan.count=plan.bundles.length;document.getElementById('bundleProgress').textContent=plan.set+' · '+plan.count+' bundel'+(plan.count===1?'':'s')+' mogelijk';
   const details=plan.bundles.map((bundle,bundleIndex)=>{const rows=bundle.items.slice().sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||(a.variant||'').localeCompare(b.variant||'','nl')).map(bundleCardLabel).join('<br>');return `<div class="card" style="margin-top:10px"><label style="display:flex;gap:10px;align-items:center;margin:0"><input class="planned-bundle-check" type="checkbox" data-plan-index="${index}" data-bundle-index="${bundleIndex}" onchange="autoSavePlannedBundle(${index},${bundleIndex},this)" style="width:24px;height:24px;margin:0"><span><b>Voorgestelde bundel ${bundleIndex+1}</b><br><span class="muted">20 Normaal + 5 Holo/Reverse holo · geschatte waarde €${bundle.value.toFixed(2)}</span></span></label><details style="margin-top:9px"><summary>Bekijk de 25 kaarten op nummervolgorde</summary><div class="muted" style="margin-top:10px">${rows}</div></details></div>`;}).join('');
@@ -1468,7 +1486,7 @@ async function createPlannedBundles(planIndex,bundleIndex=null,sourceBox=null){
     status.textContent=made+' bundel'+(made===1?'':'s')+' van '+plan.set+' gemaakt.';
     await renderBundles();alert(status.textContent+' Iedere bundel bevat 25 kaarten.');
   }catch(error){console.error(error);status.textContent='Opslaan mislukt: '+(error?.message||error);alert(status.textContent);}
-  finally{button.disabled=false;}
+  finally{if(sourceBox)sourceBox.disabled=false;}
 }
 function updateBundleProgress(changed){const checked=[...document.querySelectorAll('.bundle-check:checked')];if(checked.length>25&&changed){changed.checked=false;return alert('Een bundel bestaat uit precies 25 kaarten.');}document.getElementById('bundleProgress').textContent=Math.min(checked.length,25)+' van 25 kaarten gekozen';}
 function cancelBundleBuilder(){document.getElementById('bundleBuilder').classList.add('hidden');renderBundles();}
