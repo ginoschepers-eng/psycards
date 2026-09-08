@@ -268,7 +268,7 @@
 
   <section id="bundles" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
-    <div class="card"><h2 style="margin:0 0 5px">Kaartenbundels per set</h2><div class="muted">Iedere bundel bevat precies 20 Normale kaarten en 5 Holo/Reverse holo-kaarten uit dezelfde set. Speciale kaarten gaan niet mee.</div><label>Maximale Cardmarket-indicatie per kaart €</label><input id="bundleMaxCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="4.00"><label>Verkoopprijs van 1 bundel €</label><input id="newBundleAsk" type="number" step="0.01" inputmode="decimal" value="2.99"><div class="muted" style="margin-top:6px"><b>1 bundel €2,99</b> · actie: <b>3 bundels voor €7,50</b> · totale kosten per bundel blijven onder €0,50</div><button class="primary" style="width:100%;margin-top:12px" onclick="startBundleBuilder()">🧮 Bereken mogelijke bundels</button></div>
+    <div class="card"><h2 style="margin:0 0 5px">Kaartenbundels per set</h2><div class="muted">Iedere bundel bevat precies 20 Normale kaarten en 5 Holo/Reverse holo-kaarten uit dezelfde set. Speciale kaarten gaan niet mee.</div><label>Maximale Cardmarket-indicatie per kaart €</label><input id="bundleMaxCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="4.00"><label>Verkoopprijs van 1 bundel €</label><input id="newBundleAsk" type="number" step="0.01" inputmode="decimal" value="2.99"><div class="muted" style="margin-top:6px"><b>1 bundel €2,99</b> · actie: <b>3 bundels voor €7,50</b> · totale kosten per bundel blijven onder €0,50</div><button class="primary" style="width:100%;margin-top:12px" onclick="startBundleBuilder()">🧮 Bereken mogelijke bundels</button><button class="light" style="width:100%;margin-top:8px;padding:12px;font-size:14px" onclick="registerTemporalLegacy789()">✓ Registreer reeds gemaakte Temporal Forces bundels 7, 8 en 9</button><div class="muted" style="margin-top:6px">Eenmalige correctie voor de drie bundels die al vanaf de geprinte lijsten zijn samengesteld.</div></div>
     <div id="bundleSaveStatus" class="scan-status"></div>
     <div id="bundleExisting"></div>
     <div id="bundleBuilder" class="hidden"><div id="bundleProgress" class="bundle-progress">Mogelijke bundels per set</div><div class="muted" style="text-align:center;margin:10px 0 8px">Kies eerst een set. Daarna kun je alleen de nog mogelijke bundels van die set printen.</div><div id="bundleCardList"></div><button class="light" style="width:100%;margin:12px 0 18px" onclick="cancelBundleBuilder()">Terug naar bundels</button></div>
@@ -1379,6 +1379,43 @@ async function updateEditPrice(card){
   }catch(e){box.classList.add('unavailable');box.textContent='Prijs kon niet worden geladen';}
 }
 function applyEditAdvicePrice(){if(!editingAdvicePrice)return alert('Er is geen adviesprijs beschikbaar.');document.getElementById('editAsk').value=editingAdvicePrice.toFixed(2);}
+
+async function registerTemporalLegacy789(){
+  const specs={
+    7:[['005','Normaal'],['006','Reverse holo'],['024','Normaal'],['030','Reverse holo'],['036','Normaal'],['039','Normaal'],['043','Normaal'],['053','Normaal'],['054','Normaal'],['063','Normaal'],['072','Normaal'],['083','Normaal'],['094','Normaal'],['097','Normaal'],['101','Reverse holo'],['102','Normaal'],['116','Normaal'],['119','Holo'],['121','Holo'],['125','Normaal'],['130','Normaal'],['150','Normaal'],['156','Normaal'],['159','Normaal'],['161','Normaal']],
+    8:[['006','Normaal'],['009','Normaal'],['013','Reverse holo'],['020','Normaal'],['021','Holo'],['036','Normaal'],['043','Normaal'],['053','Normaal'],['054','Normaal'],['063','Normaal'],['072','Reverse holo'],['083','Normaal'],['084','Normaal'],['094','Normaal'],['097','Normaal'],['102','Normaal'],['103','Reverse holo'],['116','Normaal'],['119','Holo'],['125','Normaal'],['130','Normaal'],['144','Normaal'],['156','Normaal'],['161','Normaal'],['167','Normaal']],
+    9:[['004','Normaal'],['008','Normaal'],['013','Normaal'],['021','Holo'],['027','Normaal'],['039','Normaal'],['044','Normaal'],['058','Normaal'],['059','Normaal'],['066','Normaal'],['073','Normaal'],['076','Normaal'],['088','Normaal'],['090','Normaal'],['095','Normaal'],['105','Normaal'],['105','Reverse holo'],['106','Normaal'],['119','Holo'],['128','Reverse holo'],['131','Normaal'],['140','Normaal'],['151','Normaal'],['155','Normaal'],['161','Normaal']]
+  };
+  if(!confirm('Bundels 7, 8 en 9 zijn al fysiek gemaakt. Deze correctie registreert exact de kaarten van de geprinte lijsten en reserveert ze in de voorraad. Doorgaan?'))return;
+  const status=document.getElementById('bundleSaveStatus');status.textContent='Temporal Forces bundels 7, 8 en 9 controleren…';
+  try{
+    await Promise.all([loadCards(),loadBundleData()]);
+    if(!bundleTablesReady)throw new Error('De bundeltabellen ontbreken in Supabase.');
+    const existing=new Set(bundlesCache.map(b=>String(b.name).trim().toLowerCase()));
+    const made=[];
+    for(const [nr,items] of Object.entries(specs)){
+      const name='Temporal Forces Bundel '+nr;
+      if(existing.has(name.toLowerCase())){made.push(name+' (bestond al)');continue;}
+      const rows=[];
+      for(const [num,variant] of items){
+        const candidates=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad'&&normalizeSetName(stockFolderName(c))===normalizeSetName('Temporal Forces')&&String(parseInt(splitStoredName(c.name).number,10)||'')===String(parseInt(num,10))&&canonicalBundleVariant(c.variant)===variant&&availableQuantity(c)>0);
+        if(!candidates.length)throw new Error(name+': kaart '+num+' '+variant+' is niet meer beschikbaar. Er is niets gewijzigd voor deze bundel.');
+        rows.push(candidates[0]);
+      }
+      const needed={};rows.forEach(c=>needed[c.id]=(needed[c.id]||0)+1);
+      for(const [id,q] of Object.entries(needed)){const card=cardsCache.find(c=>String(c.id)===String(id));if(availableQuantity(card)<q)throw new Error(name+': onvoldoende voorraad van '+bundleCardLabel(card).replace(/<[^>]+>/g,''));}
+      const ask=+document.getElementById('newBundleAsk').value||2.99;
+      const {data:bundle,error}=await cloud.from('bundles').insert({name,status:'Samengesteld',ask}).select().single();if(error)throw error;
+      const counts={};rows.forEach(c=>counts[String(c.id)]=(counts[String(c.id)]||0)+1);
+      const bundleRows=Object.entries(counts).map(([card_id,quantity])=>({bundle_id:bundle.id,card_id,quantity}));
+      const {error:itemError}=await cloud.from('bundle_items').insert(bundleRows);if(itemError){await cloud.from('bundles').delete().eq('id',bundle.id);throw itemError;}
+      bundlesCache.push(bundle);bundleRows.forEach(r=>bundleItemsCache.push(r));made.push(name);
+    }
+    status.textContent='Geregistreerd: '+made.join(', ')+'. De volgende berekening start vanaf bundel 10 en gebruikt de resterende voorraad.';
+    alert(status.textContent);await renderBundles();
+  }catch(error){console.error(error);status.textContent='Correctie niet uitgevoerd: '+(error?.message||error);alert(status.textContent);}
+}
+
 async function renderBundles(){
   await Promise.all([loadCards(),loadBundleData()]);
   const host=document.getElementById('bundleExisting');document.getElementById('bundleBuilder').classList.add('hidden');
@@ -1402,7 +1439,7 @@ function buildBalancedBundlePlan(entries,count){
   if(!count)return [];
   const bins=Array.from({length:count},()=>({items:[],value:0,keys:new Set(),variants:{'Normaal':0,'Reverse holo':0,'Holo':0}}));
   const grouped={};entries.forEach(entry=>{const key=bundleUniqueKey(entry.card);grouped[key]??={key,variant:canonicalBundleVariant(entry.card.variant),cards:[]};for(let i=0;i<entry.quantity;i++)grouped[key].cards.push(entry.card);});
-  const variantOrder={'Reverse holo':0,'Holo':1,'Normaal':2},ordered=Object.values(grouped).sort((a,b)=>(variantOrder[a.variant]??3)-(variantOrder[b.variant]??3)||Math.max(...b.cards.map(c=>+c.ask||0))-Math.max(...a.cards.map(c=>+c.ask||0))||a.cards.length-b.cards.length);
+  const variantOrder={'Reverse holo':0,'Holo':1,'Normaal':2},groupNumber=g=>Math.min(...g.cards.map(c=>bundleCardNumber(c))),ordered=Object.values(grouped).sort((a,b)=>(variantOrder[a.variant]??3)-(variantOrder[b.variant]??3)||groupNumber(a)-groupNumber(b)||a.cards.length-b.cards.length||Math.max(...b.cards.map(c=>+c.ask||0))-Math.max(...a.cards.map(c=>+c.ask||0)));
   ordered.forEach(group=>{
     const key=group.key,variant=group.variant,cards=group.cards.slice().sort((a,b)=>(+b.ask||0)-(+a.ask||0)),amount=Math.min(cards.length,count);
     for(let i=0;i<amount;i++){
