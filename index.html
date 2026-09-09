@@ -199,7 +199,9 @@
       <h2>Kaart verkocht</h2>
       <div class="scanbox">
         <b>Zoek de kaart in je voorraad</b>
-        <div class="muted">Vul bijvoorbeeld SSP en 039 of 039/191 in.</div>
+        <div class="muted">Zoek op Pokémon-/kaartnaam óf op setafkorting + kaartnummer.</div>
+        <label>Pokémon-/kaartnaam</label><input id="sellCardName" placeholder="Bijv. Pikachu" autocomplete="off" onkeydown="if(event.key==='Enter')findSellCard()">
+        <div class="muted" style="margin:5px 0 8px">Of zoek op set en kaartnummer:</div>
         <div class="row">
           <div><label>Setafkorting</label><input id="sellSetCode" placeholder="Bijv. SSP" autocapitalize="characters"></div>
           <div><label>Kaartnummer</label><input id="sellCardNumber" placeholder="Bijv. 039/191" inputmode="text"></div>
@@ -998,18 +1000,31 @@ async function refreshSellList(){
   select.innerHTML=cards.length?cards.map(c=>`<option value="${c.id}">${displayId(c.id)} – ${escapeHtml(c.productType)}: ${escapeHtml(c.name)} (${availableQuantity(c)}×)</option>`).join(''):'<option value="">Geen producten op voorraad</option>';
 }
 async function findSellCard(){
-  const setCode=normalizeSetCode(document.getElementById('sellSetCode').value),raw=document.getElementById('sellCardNumber').value.trim(),match=raw.match(/(\d{1,3})(?:\s*\/\s*(\d{2,3}))?/),status=document.getElementById('sellSearchStatus');
-  if(!setCode)return alert('Vul de setafkorting in, bijvoorbeeld SSP.');
-  if(!match)return alert('Vul het kaartnummer in, bijvoorbeeld 039 of 039/191.');
-  const number=match[1],total=match[2]||'';status.textContent='Kaart in voorraad zoeken…';
-  let candidates=await searchTcgdex({setCode,number,total});
-  if(!candidates.length)candidates=await searchPokemonTcgFallback({setCode,number,total});
-  const candidateSets=new Set(candidates.map(c=>normalizeSetName(c.set?.name))),cleanNumber=String(Number(number));
-  await loadBundleData();const cards=(await getAll()).filter(c=>c.status==='Op voorraad'&&c.productType==='Pokémonkaart'&&availableQuantity(c)>0);
-  const found=cards.filter(c=>{const p=splitStoredName(c.name),storedNumber=(p.number.split('/')[0]||'').replace(/^0+/,'')||'0';return storedNumber===cleanNumber&&candidateSets.has(normalizeSetName(p.set));});
-  if(!found.length){status.textContent='Deze kaart staat niet in de voorraad. Controleer de afkorting en het kaartnummer.';return;}
-  await refreshSellList();document.getElementById('sellCard').value=found[0].id;status.textContent=found.length===1?'✓ Gevonden: '+found[0].name:'✓ '+found.length+' varianten gevonden. Kies hieronder de juiste kaart.';
+  const name=(document.getElementById('sellCardName')?.value||'').trim().toLocaleLowerCase('nl');
+  const setCode=normalizeSetCode(document.getElementById('sellSetCode').value),raw=document.getElementById('sellCardNumber').value.trim(),status=document.getElementById('sellSearchStatus');
+  await loadBundleData();
+  const cards=(await getAll()).filter(c=>c.status==='Op voorraad'&&c.productType==='Pokémonkaart'&&availableQuantity(c)>0);
+  let found=[];
+  if(name){
+    found=cards.filter(c=>String(splitStoredName(c.name).name||c.name).toLocaleLowerCase('nl').includes(name));
+    if(!found.length){status.textContent='Geen kaart met deze naam gevonden in de beschikbare voorraad.';return;}
+  }else{
+    const match=raw.match(/(\d{1,3})(?:\s*\/\s*(\d{2,3}))?/);
+    if(!setCode)return alert('Vul een Pokémon-/kaartnaam in, of een setafkorting zoals SSP.');
+    if(!match)return alert('Vul het kaartnummer in, bijvoorbeeld 039 of 039/191.');
+    const number=match[1],total=match[2]||'';status.textContent='Kaart in voorraad zoeken…';
+    let candidates=await searchTcgdex({setCode,number,total});
+    if(!candidates.length)candidates=await searchPokemonTcgFallback({setCode,number,total});
+    const candidateSets=new Set(candidates.map(c=>normalizeSetName(c.set?.name))),cleanNumber=String(Number(number));
+    found=cards.filter(c=>{const p=splitStoredName(c.name),storedNumber=(p.number.split('/')[0]||'').replace(/^0+/,'')||'0';return storedNumber===cleanNumber&&candidateSets.has(normalizeSetName(p.set));});
+    if(!found.length){status.textContent='Deze kaart staat niet in de voorraad. Controleer de afkorting en het kaartnummer.';return;}
+  }
+  const select=document.getElementById('sellCard');
+  select.innerHTML=found.map(c=>{const p=splitStoredName(c.name);return `<option value="${c.id}">${escapeHtml(p.name||c.name)} · ${escapeHtml(p.set||'Set onbekend')} · ${escapeHtml(p.number||'')} · ${escapeHtml(c.variant||'Normaal')} · ${availableQuantity(c)}× beschikbaar</option>`;}).join('');
+  select.value=found[0].id;
+  status.textContent=found.length===1?'✓ Gevonden: '+found[0].name:'✓ '+found.length+' resultaten gevonden. Kies hieronder de juiste kaart.';
 }
+
 async function sellCard(){
   const id=document.getElementById('sellCard').value;
   if(!id) return alert('Geen kaart geselecteerd.');
@@ -1024,7 +1039,7 @@ async function sellCard(){
   card.soldQuantity+=amount; card.soldPrice+=unitPrice*amount; card.status=card.soldQuantity>=card.quantity?'Verkocht':'Op voorraad'; card.payment=payment.value; card.soldDate=new Date().toISOString();
   const {error}=await cloud.from('cards').update(toDb(card)).eq('id',card.id);
   if(error)return alert('Verkoop opslaan is niet gelukt: '+error.message);
-  await loadCards(); soldPrice.value=''; sellQuantity.value='1';sellSetCode.value='';sellCardNumber.value='';sellSearchStatus.textContent=''; alert('Verkoop opgeslagen. Het verkochte aantal staat nu bij Verkochte items. Winst op deze verkoop: €'+((unitPrice-card.buy)*amount).toFixed(2)); show('sold');renderSold();
+  await loadCards(); soldPrice.value=''; sellQuantity.value='1';sellSetCode.value='';sellCardNumber.value='';if(document.getElementById('sellCardName'))sellCardName.value='';sellSearchStatus.textContent=''; alert('Verkoop opgeslagen. Het verkochte aantal staat nu bij Verkochte items. Winst op deze verkoop: €'+((unitPrice-card.buy)*amount).toFixed(2)); show('sold');renderSold();
 }
 async function renderSold(){
   const sold=(await getAll()).filter(c=>c.soldQuantity>0).sort((a,b)=>String(b.soldDate).localeCompare(String(a.soldDate)));await loadBundleData();const soldBundles=bundlesCache.filter(b=>b.status==='Verkocht');
