@@ -270,7 +270,7 @@
 
   <section id="bundles" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
-    <div class="card"><h2 style="margin:0 0 5px">Kaartenbundels per set</h2><div class="muted">Standaard bevat iedere bundel 20 Normale kaarten en 5 Holo/Reverse holo-kaarten uit dezelfde set. Black Bolt (Pitch Black) bevat 25 Normale en 5 Holo/Reverse holo-kaarten: 30 kaarten totaal. Speciale kaarten gaan niet mee.</div><label>Maximale Cardmarket-indicatie per bundel €</label><input id="bundleMaxCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="4.00"><label>Verkoopprijs van 1 bundel €</label><input id="newBundleAsk" type="number" step="0.01" inputmode="decimal" value="2.99"><div class="muted" style="margin-top:6px"><b>1 bundel €2,99</b> · actie: <b>3 bundels voor €7,50</b><br>Inkoopprijs per bundel: <b>€0,50</b> (€0,25 kaarten + €0,25 materialen)</div><button class="primary" style="width:100%;margin-top:12px" onclick="startBundleBuilder()">🧮 Bereken mogelijke bundels</button></div>
+    <div class="card"><h2 style="margin:0 0 5px">Kaartenbundels per set</h2><div class="muted">Standaard bevat iedere bundel 20 Normale kaarten en 5 Holo/Reverse holo-kaarten uit dezelfde set. Black Bolt (Pitch Black) bevat 25 Normale en 5 Holo/Reverse holo-kaarten: 30 kaarten totaal. Speciale kaarten gaan niet mee.</div><label>Cardmarket-waarde nieuwe bundels</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><span class="muted">Minimaal €</span><input id="bundleMinCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="3.00"></div><div><span class="muted">Maximaal €</span><input id="bundleMaxCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="3.75"></div></div><label>Verkoopprijs van 1 bundel €</label><input id="newBundleAsk" type="number" step="0.01" inputmode="decimal" value="2.99"><div class="muted" style="margin-top:6px"><b>1 bundel €2,99</b> · actie: <b>3 bundels voor €7,50</b><br>Inkoopprijs per bundel: <b>€0,50</b> (€0,25 kaarten + €0,25 materialen)</div><button class="primary" style="width:100%;margin-top:12px" onclick="startBundleBuilder()">🧮 Bereken mogelijke bundels</button></div>
     <div id="bundleSaveStatus" class="scan-status"></div>
     <div id="bundleExisting"></div>
     <div id="bundleBuilder" class="hidden"><div id="bundleProgress" class="bundle-progress">Mogelijke bundels per set</div><div id="bundleCardList"></div><button class="light" style="width:100%;margin:12px 0 18px" onclick="cancelBundleBuilder()">Terug naar bundels</button></div>
@@ -336,7 +336,7 @@ const SHARED_PIN='6129';
 const cloud=window.supabase.createClient(PROJECT_URL,PUBLISHABLE_KEY);
 let cardsCache=[],expenseCache=[];
 let cardsCacheLoaded=false;
-let bundlesCache=[],bundleItemsCache=[],bundleTablesReady=true,bundlePlans=[],bundlePlanMaxPrice=4;
+let bundlesCache=[],bundleItemsCache=[],bundleTablesReady=true,bundlePlans=[],bundlePlanMinPrice=3.00,bundlePlanMaxPrice=3.75;
 let scanCandidates=[];
 let selectedPhotoFile=null;
 let editingCard=null,editingAdvicePrice=0;
@@ -1387,13 +1387,13 @@ async function updateExistingBundleMarketValues(bundles){
 }
 async function startBundleBuilder(){
   await Promise.all([loadCards(),loadBundleData()]);if(!bundleTablesReady)return alert('Voer eerst het nieuwe bestand supabase-setup.sql uit in Supabase.');
-  bundlePlanMaxPrice=Math.max(0,+document.getElementById('bundleMaxCardPrice').value||0);const allowed=new Set(['Normaal','Holo','Reverse holo']),groups={};
+  bundlePlanMinPrice=Math.max(0,+document.getElementById('bundleMinCardPrice').value||3.00);bundlePlanMaxPrice=Math.max(bundlePlanMinPrice,+document.getElementById('bundleMaxCardPrice').value||3.75);const allowed=new Set(['Normaal','Holo','Reverse holo']),groups={};
   cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad').forEach(card=>{const set=stockFolderName(card);if(set!=='Kaarten zonder set')(groups[set]??=[]).push(card);});
-  bundlePlans=Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0],'nl')).map(([set,cards])=>{const eligible=cards.filter(c=>allowed.has(canonicalBundleVariant(c.variant))).map(card=>({card,quantity:availableQuantity(card)})).filter(x=>x.quantity>0),available=eligible.reduce((sum,x)=>sum+x.quantity,0),rules=bundleRulesForSet(set),count=maxMixedBundleCount(eligible,rules);return {set,available,rules,count,bundles:buildBalancedBundlePlan(eligible,count,rules,bundlePlanMaxPrice)};});
+  bundlePlans=Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0],'nl')).map(([set,cards])=>{const eligible=cards.filter(c=>allowed.has(canonicalBundleVariant(c.variant))).map(card=>({card,quantity:availableQuantity(card)})).filter(x=>x.quantity>0),available=eligible.reduce((sum,x)=>sum+x.quantity,0),rules=bundleRulesForSet(set),count=maxMixedBundleCount(eligible,rules);return {set,available,rules,count,bundles:buildBalancedBundlePlan(eligible,count,rules,bundlePlanMinPrice,bundlePlanMaxPrice)};});
   if(!bundlePlans.length)return alert('Er staan nog geen kaarten per set in de voorraad.');
   document.getElementById('bundleExisting').innerHTML='';document.getElementById('bundleBuilder').classList.remove('hidden');renderBundlePlanOverview();
 }
-function buildBalancedBundlePlan(entries,count,rules={total:25,normal:20,foil:5},maxBundleValue=0){
+function buildBalancedBundlePlan(entries,count,rules={total:25,normal:20,foil:5},minBundleValue=0,maxBundleValue=0){
   if(!count)return [];
   const bins=Array.from({length:count},()=>({items:[],value:0,keys:new Set(),variants:{'Normaal':0,'Reverse holo':0,'Holo':0}}));
   const grouped={};entries.forEach(entry=>{const key=bundleUniqueKey(entry.card);grouped[key]??={key,variant:canonicalBundleVariant(entry.card.variant),cards:[]};for(let i=0;i<entry.quantity;i++)grouped[key].cards.push(entry.card);});
@@ -1407,7 +1407,7 @@ function buildBalancedBundlePlan(entries,count,rules={total:25,normal:20,foil:5}
       const card=cards[i],bin=choices[0];bin.items.push(card);bin.keys.add(key);bin.variants[variant]=(bin.variants[variant]||0)+1;bin.value+=+card.ask||0;
     }
   });
-  return bins.filter(bin=>bin.items.length===rules.total&&(!maxBundleValue||bin.value<=maxBundleValue));
+  return bins.filter(bin=>bin.items.length===rules.total&&(!minBundleValue||bin.value>=minBundleValue)&&(!maxBundleValue||bin.value<=maxBundleValue));
 }
 function bundleRulesForSet(set){const norm=normalizeSetName(set);const thirty=norm==='blackbolt'||norm==='pitchblack';return {total:thirty?30:25,normal:thirty?25:20,foil:5};}
 function canonicalBundleVariant(value){const variant=normalizeSetName(value||'Normaal');if(variant==='reverseholo'||variant==='reverse')return 'Reverse holo';if(variant==='holo')return 'Holo';if(variant==='normal'||variant==='normaal')return 'Normaal';return String(value||'Normaal');}
@@ -1427,7 +1427,7 @@ function maxMixedBundleCount(entries,rules={total:25,normal:20,foil:5}){
 }
 function renderBundlePlanOverview(){
   document.getElementById('bundleProgress').textContent='Mogelijke bundels per set';
-  document.getElementById('bundleCardList').innerHTML='<div class="card"><h3 style="margin:0">Kies een set</h3><div class="muted">Tik op een set om de voorgestelde bundels te bekijken.</div>'+bundlePlans.map((plan,index)=>{const made=plan.bundles.length,left=Math.max(0,plan.available-made*plan.rules.total);return `<button class="dashboard-set" onclick="showBundlePlan(${index})"><span><b>${escapeHtml(plan.set)}</b><small class="muted" style="display:block">${plan.available} kaarten beschikbaar · ${left} blijven los</small></span><span class="dashboard-set-count">${made} bundel${made===1?'':'s'} ›</span></button>`;}).join('')+'</div>';
+  document.getElementById('bundleCardList').innerHTML='<div class="card"><h3 style="margin:0">Kies een set</h3><div class="muted">Tik op een set om de voorgestelde bundels te bekijken. Nieuwe bundels moeten een geschatte Cardmarket-waarde tussen €${bundlePlanMinPrice.toFixed(2)} en €${bundlePlanMaxPrice.toFixed(2)} hebben.</div>'+bundlePlans.map((plan,index)=>{const made=plan.bundles.length,left=Math.max(0,plan.available-made*plan.rules.total);return `<button class="dashboard-set" onclick="showBundlePlan(${index})"><span><b>${escapeHtml(plan.set)}</b><small class="muted" style="display:block">${plan.available} kaarten beschikbaar · ${left} blijven los</small></span><span class="dashboard-set-count">${made} bundel${made===1?'':'s'} ›</span></button>`;}).join('')+'</div>';
 }
 function showBundlePlan(index){
   const plan=bundlePlans[index];if(!plan)return;plan.count=plan.bundles.length;document.getElementById('bundleProgress').textContent=plan.set+' · '+plan.count+' bundel'+(plan.count===1?'':'s')+' mogelijk';
