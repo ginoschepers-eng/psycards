@@ -1540,7 +1540,7 @@ function showBundlePlan(index){
   const plan=bundlePlans[index];if(!plan)return;plan.count=plan.bundles.length;document.getElementById('bundleProgress').textContent=plan.set+' · '+plan.count+' bundel'+(plan.count===1?'':'s')+' mogelijk';
   const details=plan.bundles.map((bundle,bundleIndex)=>{
     const workflow=bundleWorkflowGet(plan,bundle),rows=bundle.items.slice().sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||canonicalBundleVariant(a.variant).localeCompare(canonicalBundleVariant(b.variant),'nl')).map(bundleCardLabel).join('<br>');
-    return `<div class="card" style="margin-top:10px"><div style="display:flex;gap:10px;align-items:center;margin:0"><span><b>Voorgestelde bundel ${bundleIndex+1}</b><br><span class="muted">${plan.rules.normal} Common/Normaal + ${plan.rules.foil} Holo/Reverse holo · geschatte waarde €${bundle.value.toFixed(2)}</span></span></div><div style="display:flex;gap:10px;align-items:center;margin-top:10px;padding:9px;background:#f5f7fb;border-radius:10px"><span class="muted" style="flex:1">${workflow.sorted?'✅ Klaar om op te slaan':''}</span><label style="display:flex;align-items:center;gap:7px;margin:0;font-size:13px"><input type="checkbox" ${workflow.sorted?'checked':''} onchange="setPlannedBundleSorted(${index},${bundleIndex},this.checked)" style="width:21px;height:21px;margin:0"> Gesorteerd</label></div><details style="margin-top:9px"><summary>Bekijk de ${plan.rules.total} kaarten op nummervolgorde</summary><div class="muted" style="margin-top:10px">${rows}</div></details></div>`;
+    return `<div class="card" style="margin-top:10px"><div style="display:flex;gap:10px;align-items:center;margin:0"><span><b>Voorgestelde bundel ${bundleIndex+1}</b><br><span class="muted">${plan.rules.normal} Common/Normaal + ${plan.rules.foil} Holo/Reverse holo · geschatte waarde €${bundle.value.toFixed(2)}</span></span></div><div style="display:flex;gap:10px;align-items:center;margin-top:10px;padding:9px;background:#f5f7fb;border-radius:10px"><span class="muted" style="flex:1"><span class="sorted-ready-text"></span></span><label style="display:flex;align-items:center;gap:7px;margin:0;font-size:13px"><input class="sorted-bundle-check" type="checkbox" data-plan-index="${index}" data-bundle-index="${bundleIndex}" onchange="setPlannedBundleSorted(${index},${bundleIndex},this.checked)" style="width:21px;height:21px;margin:0"> Gesorteerd</label></div><details style="margin-top:9px"><summary>Bekijk de ${plan.rules.total} kaarten op nummervolgorde</summary><div class="muted" style="margin-top:10px">${rows}</div></details></div>`;
   }).join('');
   document.getElementById('bundleCardList').innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderBundlePlanOverview()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(plan.set)}</h3><div><b>${plan.count} bundel${plan.count===1?'':'s'} van ${plan.rules.total} kaarten mogelijk</b></div><div class="muted">Common/Normaal, Holo en Reverse holo worden meegerekend. Hetzelfde nummer mag in verschillende kaartsoorten voorkomen, maar nooit tweemaal in dezelfde kaartsoort.</div>${plan.count?`<button class="primary" style="width:100%;margin-top:12px;padding:12px;font-size:15px" onclick="printBundlePlan(${index})">📄 PDF / printlijst openen</button>`:''}</div>${details}${plan.count?`<button id="createPlannedButton-${index}" class="green" style="width:100%;margin:12px 0" onclick="createPlannedBundles(${index})">Vink Gesorteerd aan om op te slaan</button>`:`<div class="card muted">Niet genoeg voorraad voor ${plan.rules.normal} Common/Normaal én ${plan.rules.foil} Holo/Reverse holo. Er wordt geen bundel gemaakt.</div>`}`;
   setTimeout(()=>updatePlannedBundleSaveButton(index),0);
@@ -1558,9 +1558,7 @@ function bundleWorkflowSet(plan,bundle,patch){
   localStorage.setItem(BUNDLE_WORKFLOW_KEY,JSON.stringify(all));
 }
 function setPlannedBundleSorted(planIndex,bundleIndex,checked){
-  const plan=bundlePlans[planIndex],bundle=plan?.bundles?.[bundleIndex];if(!bundle)return;
-  bundleWorkflowSet(plan,bundle,{sorted:!!checked,readyForSale:!!checked});
-  showBundlePlan(planIndex);
+  updatePlannedBundleSaveButton(planIndex);
 }
 function markPlanPrinted(planIndex){
   const plan=bundlePlans[planIndex];if(!plan)return;
@@ -1631,14 +1629,16 @@ function printBundlePlan(planIndex){
 }
 function updatePlannedBundleSelection(planIndex){updatePlannedBundleSaveButton(planIndex);}
 function updatePlannedBundleSaveButton(planIndex){
-  const plan=bundlePlans[planIndex],button=document.getElementById('createPlannedButton-'+planIndex);
-  if(!plan||!button)return;
-  const count=(plan.bundles||[]).filter(bundle=>bundleWorkflowGet(plan,bundle).sorted).length;
+  const button=document.getElementById('createPlannedButton-'+planIndex);
+  if(!button)return;
+  const count=document.querySelectorAll('.sorted-bundle-check[data-plan-index="'+planIndex+'"]:checked').length;
   button.disabled=count===0;
   button.textContent=count===0?'Vink Gesorteerd aan om op te slaan':('Maak '+count+' gesorteerde bundel'+(count===1?'':'s'));
 }
 async function createPlannedBundles(planIndex){
-  const status=document.getElementById('bundleSaveStatus'),button=document.getElementById('createPlannedButton-'+planIndex),plan=bundlePlans[planIndex],chosen=(plan?.bundles||[]).filter(bundle=>bundle?.items?.length===plan?.rules?.total&&bundleWorkflowGet(plan,bundle).sorted);
+  const status=document.getElementById('bundleSaveStatus'),button=document.getElementById('createPlannedButton-'+planIndex),plan=bundlePlans[planIndex];
+  const indexes=[...document.querySelectorAll('.sorted-bundle-check[data-plan-index="'+planIndex+'"]:checked')].map(cb=>+cb.dataset.bundleIndex);
+  const chosen=indexes.map(i=>plan?.bundles?.[i]).filter(bundle=>bundle?.items?.length===plan?.rules?.total);
   if(!chosen.length){status.textContent='Vink eerst bij minimaal één bundel Gesorteerd aan.';return alert(status.textContent);}
   if(!confirm(chosen.length+' bundel'+(chosen.length===1?'':'s')+' van '+plan.set+' samenstellen?'))return;
   button.disabled=true;status.textContent='Bundels controleren en opslaan…';
