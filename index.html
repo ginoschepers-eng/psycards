@@ -1523,9 +1523,10 @@ function showBundlePlan(index){
   const plan=bundlePlans[index];if(!plan)return;plan.count=plan.bundles.length;document.getElementById('bundleProgress').textContent=plan.set+' · '+plan.count+' bundel'+(plan.count===1?'':'s')+' mogelijk';
   const details=plan.bundles.map((bundle,bundleIndex)=>{
     const workflow=bundleWorkflowGet(plan,bundle),rows=bundle.items.slice().sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||canonicalBundleVariant(a.variant).localeCompare(canonicalBundleVariant(b.variant),'nl')).map(bundleCardLabel).join('<br>');
-    return `<div class="card" style="margin-top:10px"><label style="display:flex;gap:10px;align-items:center;margin:0"><input class="planned-bundle-check" type="checkbox" data-plan-index="${index}" data-bundle-index="${bundleIndex}" onchange="updatePlannedBundleSelection(${index})" style="width:24px;height:24px;margin:0"><span><b>Voorgestelde bundel ${bundleIndex+1}</b><br><span class="muted">${plan.rules.normal} Common/Normaal + ${plan.rules.foil} Holo/Reverse holo · geschatte waarde €${bundle.value.toFixed(2)}</span></span></label><div style="display:flex;gap:10px;align-items:center;margin-top:10px;padding:9px;background:#f5f7fb;border-radius:10px"><span class="muted" style="flex:1">${workflow.readyForSale?'✅ Klaar voor verkoop':(workflow.printed?'🖨️ Geprint':'Nog niet geprint')}</span><label style="display:flex;align-items:center;gap:7px;margin:0;font-size:13px"><input type="checkbox" ${workflow.sorted?'checked':''} onchange="setPlannedBundleSorted(${index},${bundleIndex},this.checked)" style="width:21px;height:21px;margin:0"> Gesorteerd</label></div><details style="margin-top:9px"><summary>Bekijk de ${plan.rules.total} kaarten op nummervolgorde</summary><div class="muted" style="margin-top:10px">${rows}</div></details></div>`;
+    return `<div class="card" style="margin-top:10px"><label style="display:flex;gap:10px;align-items:center;margin:0"><input class="planned-bundle-check" type="checkbox" data-plan-index="${index}" data-bundle-index="${bundleIndex}" onchange="updatePlannedBundleSelection(${index})" style="width:24px;height:24px;margin:0"><span><b>Voorgestelde bundel ${bundleIndex+1}</b><br><span class="muted">${plan.rules.normal} Common/Normaal + ${plan.rules.foil} Holo/Reverse holo · geschatte waarde €${bundle.value.toFixed(2)}</span></span></label><div style="display:flex;gap:10px;align-items:center;margin-top:10px;padding:9px;background:#f5f7fb;border-radius:10px"><span class="muted" style="flex:1">${workflow.readyForSale?'✅ Klaar voor verkoop':(workflow.printed?'🖨️ Geprint':'Nog niet geprint')}</span><label style="display:flex;align-items:center;gap:7px;margin:0;font-size:13px"><input type="checkbox" ${workflow.sorted?'checked':''} onchange="setPlannedBundleSorted(${index},${bundleIndex},this.checked)" style="width:21px;height:21px;margin:0"> Gesorteerd / klaar om op te slaan</label></div><details style="margin-top:9px"><summary>Bekijk de ${plan.rules.total} kaarten op nummervolgorde</summary><div class="muted" style="margin-top:10px">${rows}</div></details></div>`;
   }).join('');
-  document.getElementById('bundleCardList').innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderBundlePlanOverview()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(plan.set)}</h3><div><b>${plan.count} bundel${plan.count===1?'':'s'} van ${plan.rules.total} kaarten mogelijk</b></div><div class="muted">Common/Normaal, Holo en Reverse holo worden meegerekend. Hetzelfde nummer mag in verschillende kaartsoorten voorkomen, maar nooit tweemaal in dezelfde kaartsoort.</div>${plan.count?`<button class="primary" style="width:100%;margin-top:12px;padding:12px;font-size:15px" onclick="printBundlePlan(${index})">🖨️ Voorgestelde bundels van deze set printen</button><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><button class="light" style="padding:10px;font-size:13px" onclick="setAllPlannedBundleChecks(${index},true)">☑ Alles selecteren</button><button class="light" style="padding:10px;font-size:13px" onclick="setAllPlannedBundleChecks(${index},false)">☐ Selectie wissen</button></div><button class="green" style="width:100%;margin-top:8px;padding:11px;font-size:14px" onclick="setSelectedPlannedBundlesSorted(${index},true)">✅ Aangevinkte bundels gesorteerd / klaar voor verkoop</button>`:''}</div>${details}${plan.count?`<button id="createPlannedButton-${index}" class="green" style="width:100%;margin:12px 0" onclick="createPlannedBundles(${index})">Maak aangevinkte bundels</button>`:`<div class="card muted">Niet genoeg voorraad voor ${plan.rules.normal} Common/Normaal én ${plan.rules.foil} Holo/Reverse holo. Er wordt geen bundel gemaakt.</div>`}`;
+  document.getElementById('bundleCardList').innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderBundlePlanOverview()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(plan.set)}</h3><div><b>${plan.count} bundel${plan.count===1?'':'s'} van ${plan.rules.total} kaarten mogelijk</b></div><div class="muted">Common/Normaal, Holo en Reverse holo worden meegerekend. Hetzelfde nummer mag in verschillende kaartsoorten voorkomen, maar nooit tweemaal in dezelfde kaartsoort.</div>${plan.count?`<button class="primary" style="width:100%;margin-top:12px;padding:12px;font-size:15px" onclick="printBundlePlan(${index})">🖨️ Voorgestelde bundels van deze set printen</button><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><button class="light" style="padding:10px;font-size:13px" onclick="setAllPlannedBundleChecks(${index},true)">☑ Alles selecteren</button><button class="light" style="padding:10px;font-size:13px" onclick="setAllPlannedBundleChecks(${index},false)">☐ Selectie wissen</button></div>`:''}</div>${details}${plan.count?`<button id="createPlannedButton-${index}" class="green" style="width:100%;margin:12px 0" onclick="createPlannedBundles(${index})">Vink Gesorteerd aan om op te slaan</button>`:`<div class="card muted">Niet genoeg voorraad voor ${plan.rules.normal} Common/Normaal én ${plan.rules.foil} Holo/Reverse holo. Er wordt geen bundel gemaakt.</div>`}`;
+  setTimeout(()=>updatePlannedBundleSaveButton(index),0);
 }
 const BUNDLE_WORKFLOW_KEY='psycards-bundle-workflow-v1';
 function bundleWorkflowState(){try{return JSON.parse(localStorage.getItem(BUNDLE_WORKFLOW_KEY)||'{}')}catch(e){return {}}}
@@ -1581,29 +1582,69 @@ function printBundlePlan(planIndex){
 
 function updatePlannedBundleSelection(planIndex){const amount=document.querySelectorAll(`.planned-bundle-check[data-plan-index="${planIndex}"]:checked`).length,button=document.getElementById('createPlannedButton-'+planIndex);if(button)button.textContent=amount?'Maak '+amount+' aangevinkte bundel'+(amount===1?'':'s'):'Maak aangevinkte bundels';}
 async function createPlannedBundles(planIndex){
-  const status=document.getElementById('bundleSaveStatus'),button=document.getElementById('createPlannedButton-'+planIndex),plan=bundlePlans[planIndex],indexes=[...document.querySelectorAll(`.planned-bundle-check[data-plan-index="${planIndex}"]:checked`)].map(box=>+box.dataset.bundleIndex),chosen=indexes.map(i=>plan?.bundles?.[i]).filter(bundle=>bundle?.items?.length===plan?.rules?.total);
-  if(!chosen.length){status.textContent='Vink minimaal één complete voorgestelde bundel aan.';return alert(status.textContent);}
+  const status=document.getElementById('bundleSaveStatus'),button=document.getElementById('createPlannedButton-'+planIndex),plan=bundlePlans[planIndex],chosen=(plan?.bundles||[]).filter(bundle=>bundle?.items?.length===plan?.rules?.total&&bundleWorkflowGet(plan,bundle).sorted);
+  if(!chosen.length){status.textContent='Vink bij minimaal één bundel Gesorteerd aan.';return alert(status.textContent);}
   if(!confirm(chosen.length+' bundel'+(chosen.length===1?'':'s')+' van '+plan.set+' samenstellen?'))return;
-  button.disabled=true;status.textContent='Bundels opslaan…';
+  button.disabled=true;status.textContent='Bundels controleren en opslaan…';
   try{
     await Promise.all([loadCards(),loadBundleData()]);
     if(!bundleTablesReady)throw new Error('De tabellen bundles en bundle_items ontbreken. Voer het nieuwe supabase-setup.sql uit.');
-    const needed={};chosen.forEach(bundle=>bundle.items.forEach(card=>needed[card.id]=(needed[card.id]||0)+1));
-    for(const [id,quantity] of Object.entries(needed)){const card=cardsCache.find(c=>String(c.id)===String(id));if(!card||availableQuantity(card)<quantity)throw new Error('De voorraad is gewijzigd. Bereken de bundels opnieuw.');}
-    const ask=+document.getElementById('newBundleAsk').value||0;let made=0;
-    for(const bundlePlan of chosen){
-      status.textContent='Bundel '+(made+1)+' van '+chosen.length+' opslaan…';
-      const sameSet=bundlesCache.filter(b=>String(b.name).startsWith(plan.set+' Bundel ')),next=Math.max(0,...sameSet.map(b=>Number(String(b.name).match(/Bundel\s+(\d+)/)?.[1])||0))+1,name=plan.set+' Bundel '+next;
-      const {data:bundle,error}=await cloud.from('bundles').insert({name,status:'Samengesteld',ask}).select().single();if(error)throw error;
-      const counts={};bundlePlan.items.forEach(card=>counts[String(card.id)]=(counts[String(card.id)]||0)+1);
-      const rows=Object.entries(counts).map(([card_id,quantity])=>({bundle_id:bundle.id,card_id,quantity})),{error:itemError}=await cloud.from('bundle_items').insert(rows);
-      if(itemError){await cloud.from('bundles').delete().eq('id',bundle.id);throw itemError;}
-      bundlesCache.push(bundle);made++;
+
+    // Controleer de actuele voorraad vóórdat er iets wordt opgeslagen.
+    const needed={};chosen.forEach(bundle=>bundle.items.forEach(card=>needed[String(card.id)]=(needed[String(card.id)]||0)+1));
+    for(const [id,quantity] of Object.entries(needed)){
+      const card=cardsCache.find(c=>String(c.id)===String(id));
+      if(!card||availableQuantity(card)<quantity)throw new Error('De voorraad is gewijzigd. Bereken de bundels opnieuw.');
     }
+
+    // Haal ALLE bestaande namen rechtstreeks uit Supabase op.
+    // Zo kunnen oude/onzichtbare bundels nooit een duplicate-name fout veroorzaken.
+    const {data:remoteBundles,error:remoteError}=await cloud.from('bundles').select('id,name,status,ask');
+    if(remoteError)throw remoteError;
+    const usedNames=new Set((remoteBundles||[]).map(b=>String(b.name||'').trim()));
+    const escapedSet=String(plan.set).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const rx=new RegExp('^'+escapedSet+' Bundel\\s+(\\d+)$','i');
+    let next=Math.max(0,...[...usedNames].map(name=>Number(name.match(rx)?.[1])||0))+1;
+
+    const ask=+document.getElementById('newBundleAsk').value||0;
+    let made=0;
+    for(const bundlePlan of chosen){
+      while(usedNames.has(plan.set+' Bundel '+next))next++;
+      const name=plan.set+' Bundel '+next++;
+      status.textContent=name+' opslaan…';
+
+      // Eerst bundel + kaartkoppelingen volledig opslaan. Voorraad wordt hierdoor
+      // alleen via succesvolle bundle_items gereserveerd; bij een fout wordt de bundel teruggedraaid.
+      const {data:bundle,error}=await cloud.from('bundles').insert({name,status:'Samengesteld',ask}).select().single();
+      if(error)throw error;
+
+      const counts={};bundlePlan.items.forEach(card=>counts[String(card.id)]=(counts[String(card.id)]||0)+1);
+      const rows=Object.entries(counts).map(([card_id,quantity])=>({bundle_id:bundle.id,card_id,quantity}));
+      const {error:itemError}=await cloud.from('bundle_items').insert(rows);
+      if(itemError){
+        await cloud.from('bundle_items').delete().eq('bundle_id',bundle.id);
+        await cloud.from('bundles').delete().eq('id',bundle.id);
+        throw itemError;
+      }
+
+      usedNames.add(name);
+      bundlesCache.push(bundle);
+      made++;
+    }
+
+    // Herlaad uit Supabase zodat Gemaakte bundels en de voorraad direct de echte situatie tonen.
+    await loadBundleData(true);
+    await loadCards(true);
     status.textContent=made+' bundel'+(made===1?'':'s')+' van '+plan.set+' gemaakt.';
-    await renderBundles();alert(status.textContent+' Iedere bundel bevat '+plan.rules.total+' kaarten.');
-  }catch(error){console.error(error);status.textContent='Opslaan mislukt: '+(error?.message||error);alert(status.textContent);}
-  finally{button.disabled=false;}
+    await renderBundles();
+    alert(status.textContent+' Iedere bundel bevat '+plan.rules.total+' kaarten.');
+  }catch(error){
+    console.error(error);
+    status.textContent='Opslaan mislukt: '+(error?.message||error);
+    alert(status.textContent);
+  }finally{
+    button.disabled=false;
+  }
 }
 function updateBundleProgress(changed){const checked=[...document.querySelectorAll('.bundle-check:checked')];if(checked.length>25&&changed){changed.checked=false;return alert('Een bundel bestaat uit precies 25 kaarten.');}document.getElementById('bundleProgress').textContent=Math.min(checked.length,25)+' van 25 kaarten gekozen';}
 function cancelBundleBuilder(){document.getElementById('bundleBuilder').classList.add('hidden');renderBundles();}
