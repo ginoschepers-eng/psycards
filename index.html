@@ -97,7 +97,7 @@
     <div class="card">
       <h3 style="margin:0 0 10px">Overig beheer</h3>
       <div class="manage-grid"><button class="light" onclick="openNewProduct()">📷 Eén product</button><button class="gold" onclick="openValueCheck()">💶 Kaartwaarde</button><button class="green" onclick="show('sell')">💰 Verkocht</button><button class="light" onclick="show('stock');renderStock()">📦 Voorraad</button><button class="gold" onclick="show('money');renderMoney()">📒 Kasboek</button><button class="light" onclick="show('sold');renderSold()">✅ Verkopen</button><button class="green" onclick="show('bundles');renderBundles()">🎁 Bundels</button><button class="light" onclick="openCollector()">📚 TCG Collector</button><button class="danger" onclick="openMissingCollector()">⚠️ Nog niet in TCG</button></div>
-      <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
+      <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div><button id="manualSyncButton" class="light" style="width:100%;padding:10px;font-size:13px;margin-top:8px" onclick="manualFullSync()">🔄 Nu synchroniseren</button><div id="lastSyncText" class="muted" style="text-align:center;margin-top:6px"></div>
     </div>
   </section>
 
@@ -225,7 +225,7 @@
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
     <div class="card">
       <h2 style="margin:0 0 5px">📚 Eigen verzameling</h2>
-      <div class="muted">Deze kaarten zitten in aparte binders en worden niet bij de verkoopvoorraad opgeteld. De app controleert ze wel vóór iedere kaartverkoop.</div>
+      <div class="muted">Deze kaarten zitten in aparte binders en worden niet bij de verkoopvoorraad opgeteld. De app controleert TCG Collector alleen bij sets die met ⭐ Wordt gespaard zijn aangevinkt.</div>
       <div class="stats" style="margin-top:12px"><div class="stat">Kaartregels<b id="collectorRows">0</b></div><div class="stat">Kaarten totaal<b id="collectorQuantity">0</b></div></div>
       <div id="collectorStatus" class="scan-status"></div>
       <label>Nieuw exportbestand van TCG Collector</label>
@@ -239,7 +239,7 @@
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
     <div class="card">
       <h2 style="margin:0 0 5px">⚠️ Nog niet in TCG Collector</h2>
-      <div class="muted">Alle kaarten uit de verkoopvoorraad die nog niet overeenkomen met de eigen binderregistratie.</div>
+      <div class="muted">Alleen kaarten uit sets met ⭐ Wordt gespaard worden gecontroleerd. Hier staan de kaarten uit die spaarsets die nog niet overeenkomen met TCG Collector.</div>
       <div class="stats" style="margin-top:12px"><div class="stat">Kaartregels<b id="missingCollectorRows">0</b></div><div class="stat">Kaarten totaal<b id="missingCollectorQuantity">0</b></div></div>
       <button class="light" style="width:100%;margin-top:12px;padding:12px;font-size:15px" onclick="openCollector()">📚 TCG Collector-CSV bijwerken</button>
     </div>
@@ -336,6 +336,10 @@ const SHARED_PIN='6129';
 const cloud=window.supabase.createClient(PROJECT_URL,PUBLISHABLE_KEY);
 let cardsCache=[],expenseCache=[];
 let cardsCacheLoaded=false;
+const DATA_CACHE_KEY='psycards-data-cache-v2';
+const BUNDLE_CACHE_KEY='psycards-bundle-cache-v2';
+const DATA_SYNC_MAX_AGE=4*24*60*60*1000;
+let remoteChangesPending=false;
 let bundlesCache=[],bundleItemsCache=[],bundleTablesReady=true,bundlePlans=[],bundlePlanMinPrice=3.00,bundlePlanMaxPrice=3.75;
 let scanCandidates=[];
 let selectedPhotoFile=null;
@@ -373,30 +377,44 @@ async function startApp(){
   history.replaceState({psycardsSection:'home'},'','#home');
   updateConnection();
   loadCollectorCards();
-  await loadCards();
+  await loadCards(false);
   await seedKnownExpenses();
-  await loadBundleData();
+  await loadBundleData(false);
   await renderHomeDashboard();
-  cloud.channel('psycards-live').on('postgres_changes',{event:'*',schema:'public',table:'cards'},async()=>{
-    await loadCards();
-    const active=document.querySelector('main>section:not(.hidden)')?.id;
-    if(active==='stock')renderStock();
-    if(active==='money')renderMoney();
-    if(active==='sell')refreshSellList();
-    if(active==='sold')renderSold();
-    if(active==='missingCollector')renderMissingCollector();
-  }).subscribe();
-  cloud.channel('psycards-bundles-live').on('postgres_changes',{event:'*',schema:'public',table:'bundles'},async()=>{await loadBundleData();if(document.querySelector('main>section:not(.hidden)')?.id==='bundles')renderBundles();}).on('postgres_changes',{event:'*',schema:'public',table:'bundle_items'},async()=>{await loadBundleData();const active=document.querySelector('main>section:not(.hidden)')?.id;if(active==='bundles')renderBundles();if(active==='stock')renderStock();}).subscribe();
+  updateLastSyncText();
+  // Realtime meldt alleen dat een ander toestel iets wijzigde. Geen volledige tabellen meer downloaden.
+  cloud.channel('psycards-live').on('postgres_changes',{event:'*',schema:'public',table:'cards'},()=>markRemoteChange()).subscribe();
+  cloud.channel('psycards-bundles-live').on('postgres_changes',{event:'*',schema:'public',table:'bundles'},()=>markRemoteChange()).on('postgres_changes',{event:'*',schema:'public',table:'bundle_items'},()=>markRemoteChange()).subscribe();
+}
+
+function markRemoteChange(){
+  remoteChangesPending=true;
+  const text=document.getElementById('syncText');if(text&&navigator.onLine)text.textContent='Wijziging beschikbaar · synchroniseer wanneer nodig';
+}
+function cacheAgeOk(savedAt){return Number(savedAt)>0&&(Date.now()-Number(savedAt)<DATA_SYNC_MAX_AGE);}
+function readJsonCache(key){try{return JSON.parse(localStorage.getItem(key)||'null');}catch(e){return null;}}
+function writeJsonCache(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch(e){console.warn('Lokale cache opslaan mislukt:',e);}}
+function updateLastSyncText(){
+  const el=document.getElementById('lastSyncText');if(!el)return;
+  const c=readJsonCache(DATA_CACHE_KEY),t=Number(c?.savedAt||0);
+  el.textContent=t?'Laatste volledige synchronisatie: '+new Date(t).toLocaleString('nl-NL')+' · automatisch maximaal 1× per 4 dagen':'Nog geen lokale synchronisatie opgeslagen';
+}
+async function manualFullSync(){
+  if(!navigator.onLine)return alert('Geen internetverbinding. Synchroniseren kan zodra je weer online bent.');
+  const btn=document.getElementById('manualSyncButton');if(btn){btn.disabled=true;btn.textContent='Synchroniseren…';}
+  try{await Promise.all([loadCards(true),loadBundleData(true)]);remoteChangesPending=false;updateConnection();updateLastSyncText();await renderHomeDashboard();const active=document.querySelector('main>section:not(.hidden)')?.id;if(active==='stock')renderStock();if(active==='bundles')renderBundles();if(active==='money')renderMoney();if(active==='sold')renderSold();alert('Synchronisatie voltooid. Beide telefoons kunnen nu dezelfde Supabase-gegevens ophalen.');}
+  finally{if(btn){btn.disabled=false;btn.textContent='🔄 Nu synchroniseren';}}
 }
 
 function updateConnection(){
   const online=navigator.onLine;
   const dot=document.getElementById('syncDot'), text=document.getElementById('syncText');
   if(dot)dot.classList.toggle('offline',!online);
-  if(text)text.textContent=online?'Verbonden':'Geen internetverbinding';
+  if(text)text.textContent=!online?'Geen internetverbinding':(remoteChangesPending?'Wijziging beschikbaar · synchroniseer wanneer nodig':'Verbonden');
 }
 async function renderHomeDashboard(){
   const cards=await getAll(),open=cards.filter(c=>c.status==='Op voorraad'&&availableQuantity(c)>0),{data:sets}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true}),saved=sets||[];
+  savedSetsCache=saved;
   const regions=[['en','🌍','Internationaal'],['ja','🇯🇵','Japan'],['ko','🇰🇷','Korea'],['zh','🇨🇳','China']];
   dashboardRegions.innerHTML=regions.map(([code,icon,label])=>{const count=saved.filter(s=>code==='zh'?String(s.language).startsWith('zh'):s.language===code).length;return `<button class="region-button" onclick="openSetEntryByLanguage('${code}')"><span>${icon}</span>${label}<small class="muted">${count} sets</small></button>`;}).join('');
   const stockAmount=open.reduce((sum,c)=>sum+availableQuantity(c),0),uniqueCards=new Set(open.filter(c=>c.productType==='Pokémonkaart').map(c=>c.name)).size;
@@ -408,19 +426,23 @@ async function openSetEntryByLanguage(language){
   addSetLanguage.value=language==='zh'?'zh-tw':language;toggleAddSet(true);addSetStatus.textContent='Er staat nog geen set uit deze regio in Mijn sets. Kies hieronder een set.';
 }
 
-async function loadCards(){
+async function loadCards(forceRefresh=false){
+  const cached=readJsonCache(DATA_CACHE_KEY);
+  if(!forceRefresh&&cached&&cacheAgeOk(cached.savedAt)&&Array.isArray(cached.all)){
+    const all=cached.all.map(fromDb);
+    expenseCache=all.filter(c=>c.productType==='Kosten');cardsCache=all.filter(c=>c.productType!=='Kosten');cardsCacheLoaded=true;updateLastSyncText();return cardsCache;
+  }
   const {data,error}=await cloud.from('cards').select('id,name,condition,buy,ask,minimum,status,quantity,sold_quantity,sold_price,payment,sold_date').order('id',{ascending:true});
-  if(error){console.error(error);alert('De gezamenlijke voorraad kon niet worden geladen. Controleer de database-instelling.');return cardsCache;}
-  const all=(data||[]).map(fromDb);
-  expenseCache=all.filter(c=>c.productType==='Kosten');
-  cardsCache=all.filter(c=>c.productType!=='Kosten');
-  cardsCacheLoaded=true;
-  return cardsCache;
+  if(error){console.error(error);if(cached&&Array.isArray(cached.all)){const all=cached.all.map(fromDb);expenseCache=all.filter(c=>c.productType==='Kosten');cardsCache=all.filter(c=>c.productType!=='Kosten');cardsCacheLoaded=true;return cardsCache;}alert('De gezamenlijke voorraad kon niet worden geladen. Controleer de database-instelling.');return cardsCache;}
+  writeJsonCache(DATA_CACHE_KEY,{savedAt:Date.now(),all:data||[]});
+  const all=(data||[]).map(fromDb);expenseCache=all.filter(c=>c.productType==='Kosten');cardsCache=all.filter(c=>c.productType!=='Kosten');cardsCacheLoaded=true;remoteChangesPending=false;updateLastSyncText();return cardsCache;
 }
-async function loadBundleData(){
+async function loadBundleData(forceRefresh=false){
+  const cached=readJsonCache(BUNDLE_CACHE_KEY);
+  if(!forceRefresh&&cached&&cacheAgeOk(cached.savedAt)&&Array.isArray(cached.bundles)&&Array.isArray(cached.items)){bundleTablesReady=true;bundlesCache=cached.bundles;bundleItemsCache=cached.items;return true;}
   const [bundles,items]=await Promise.all([cloud.from('bundles').select('*').order('id',{ascending:true}),cloud.from('bundle_items').select('*').order('id',{ascending:true})]);
-  if(bundles.error||items.error){bundleTablesReady=false;bundlesCache=[];bundleItemsCache=[];console.error('Bundeltabellen:',bundles.error||items.error);return false;}
-  bundleTablesReady=true;bundlesCache=bundles.data||[];bundleItemsCache=items.data||[];return true;
+  if(bundles.error||items.error){if(cached&&Array.isArray(cached.bundles)&&Array.isArray(cached.items)){bundleTablesReady=true;bundlesCache=cached.bundles;bundleItemsCache=cached.items;return true;}bundleTablesReady=false;bundlesCache=[];bundleItemsCache=[];console.error('Bundeltabellen:',bundles.error||items.error);return false;}
+  bundleTablesReady=true;bundlesCache=bundles.data||[];bundleItemsCache=items.data||[];writeJsonCache(BUNDLE_CACHE_KEY,{savedAt:Date.now(),bundles:bundlesCache,items:bundleItemsCache});return true;
 }
 function allocatedQuantity(cardId){return bundleItemsCache.filter(x=>String(x.card_id)===String(cardId)).reduce((sum,x)=>sum+(+x.quantity||0),0);}
 function availableQuantity(c){return Math.max(0,c.quantity-c.soldQuantity-allocatedQuantity(c.id));}
@@ -653,7 +675,7 @@ async function saveSetEntry(){
     else inserts.push(toDb({name:storedName,productType:'Pokémonkaart',condition:'NM',variant:item.variant,buy:0,ask:advice,min:0,quantity:item.quantity,soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''}));
   }
   if(inserts.length){const {error}=await cloud.from('cards').insert(inserts);if(error){setEntrySaveButton.disabled=false;return alert('Nieuwe kaarten opslaan is niet gelukt: '+error.message);}}
-  await loadCards();setEntrySaveButton.disabled=false;alert('Klaar: '+inserts.length+' nieuwe kaartsoorten toegevoegd en '+updated+' bestaande aantallen bijgewerkt.');await loadSetEntryCards();
+  await loadCards(true);setEntrySaveButton.disabled=false;alert('Klaar: '+inserts.length+' nieuwe kaartsoorten toegevoegd en '+updated+' bestaande aantallen bijgewerkt.');await loadSetEntryCards();
 }
 async function startAddFromSet(folderName){
   const sets=await loadSetCatalog(),set=(Array.isArray(sets)?sets:[]).find(s=>normalizeSetName(s.name)===normalizeSetName(folderName));
@@ -740,7 +762,7 @@ async function loadCardPhoto(id){
   return photo;
 }
 function displayId(id){return 'PSY-'+String(id).padStart(4,'0');}
-async function del(id){const {error}=await cloud.from('cards').delete().eq('id',id);if(error)throw error;await loadCards();}
+async function del(id){const {error}=await cloud.from('cards').delete().eq('id',id);if(error)throw error;await loadCards(true);}
 function fileToDataURL(file){
   return new Promise(res=>{
     if(!file)return res('');
@@ -985,11 +1007,11 @@ async function saveCard(){
     existing.quantity=totalQuantity;existing.status='Op voorraad';
     if(card.ask>0)existing.ask=card.ask;if(card.min>0)existing.min=card.min;const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);
     if(error)return alert('Voorraad verhogen is niet gelukt: '+error.message);
-    await loadCards();resetNewProductForm();alert(displayId(existing.id)+' bestond al. '+newQuantity+' toegevoegd; totaal op voorraad: '+availableQuantity(existing)+'. Je kunt nu direct de volgende kaart scannen.');show('new');return;
+    await loadCards(true);resetNewProductForm();alert(displayId(existing.id)+' bestond al. '+newQuantity+' toegevoegd; totaal op voorraad: '+availableQuantity(existing)+'. Je kunt nu direct de volgende kaart scannen.');show('new');return;
   }
   const {data,error}=await cloud.from('cards').insert(toDb(card)).select().single();
   if(error)return alert('Opslaan is niet gelukt: '+error.message);
-  await loadCards();
+  await loadCards(true);
   resetNewProductForm();
   alert(displayId(data.id)+' opgeslagen. Je kunt nu direct de volgende kaart scannen.');
   show('new');
@@ -1039,7 +1061,7 @@ async function sellCard(){
   card.soldQuantity+=amount; card.soldPrice+=unitPrice*amount; card.status=card.soldQuantity>=card.quantity?'Verkocht':'Op voorraad'; card.payment=payment.value; card.soldDate=new Date().toISOString();
   const {error}=await cloud.from('cards').update(toDb(card)).eq('id',card.id);
   if(error)return alert('Verkoop opslaan is niet gelukt: '+error.message);
-  await loadCards(); soldPrice.value=''; sellQuantity.value='1';sellSetCode.value='';sellCardNumber.value='';if(document.getElementById('sellCardName'))sellCardName.value='';sellSearchStatus.textContent=''; alert('Verkoop opgeslagen. Het verkochte aantal staat nu bij Verkochte items. Winst op deze verkoop: €'+((unitPrice-card.buy)*amount).toFixed(2)); show('sold');renderSold();
+  await loadCards(true); soldPrice.value=''; sellQuantity.value='1';sellSetCode.value='';sellCardNumber.value='';if(document.getElementById('sellCardName'))sellCardName.value='';sellSearchStatus.textContent=''; alert('Verkoop opgeslagen. Het verkochte aantal staat nu bij Verkochte items. Winst op deze verkoop: €'+((unitPrice-card.buy)*amount).toFixed(2)); show('sold');renderSold();
 }
 async function renderSold(){
   const sold=(await getAll()).filter(c=>c.soldQuantity>0).sort((a,b)=>String(b.soldDate).localeCompare(String(a.soldDate)));await loadBundleData();const soldBundles=bundlesCache.filter(b=>b.status==='Verkocht');
@@ -1232,9 +1254,20 @@ function collectorCardKey(card){const p=splitStoredName(card.name);return normal
 function getCollectorDecisions(){try{return JSON.parse(localStorage.getItem(COLLECTOR_DECISIONS_KEY)||'{}')||{};}catch(e){return {};}}
 function getCollectorDecision(card){return getCollectorDecisions()[collectorCardKey(card)]||'';}
 function setCollectorDecision(encodedKey,decision){const all=getCollectorDecisions();all[decodeURIComponent(encodedKey)]=decision;localStorage.setItem(COLLECTOR_DECISIONS_KEY,JSON.stringify(all));renderMissingCollector();}
+function cardSavedSet(card){
+  const p=splitStoredName(card.name),set=normalizeSetName(p.set);
+  if(!set)return null;
+  return savedSetsCache.find(saved=>normalizeSetName(saved.name)===set||normalizeSetName(saved.set_code)===set)||null;
+}
+function cardNeedsCollectorCheck(card){
+  const saved=cardSavedSet(card);
+  return !!(saved&&isSetCollected(saved));
+}
 function collectorRegistryCheck(card){
+  // TCG Collector is alleen van toepassing op sets die met ⭐ Wordt gespaard zijn gemarkeerd.
+  if(!cardNeedsCollectorCheck(card))return {ok:true,skipped:true};
   if(!collectorCards.length)loadCollectorCards();
-  if(!collectorCards.length)return {ok:false,message:'Er is nog geen TCG Collector-binderlijst geladen.'};
+  if(!collectorCards.length)return {ok:false,message:'Er is nog geen TCG Collector-binderlijst geladen voor deze spaarset.'};
   const p=splitStoredName(card.name),set=normalizeSetName(p.set),number=collectorNumber(p.number),finish=collectorFinish(card.variant);
   if(!set||!number)return {ok:false,message:'Set of kaartnummer ontbreekt bij '+card.name+', waardoor de binder niet kan worden gecontroleerd.'};
   const same=collectorCards.filter(c=>c.s===set&&c.n===number);
@@ -1246,9 +1279,9 @@ function collectorRegistryCheck(card){
 function collectorCheckCard(card){const registered=collectorRegistryCheck(card);if(registered.ok)return registered;if(getCollectorDecision(card)==='verkopen')return {ok:true,overridden:true};return registered;}
 async function renderMissingCollector(){
   loadCollectorCards();await loadCards();await loadBundleData();
-  const missing=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&availableQuantity(c)>0&&!collectorRegistryCheck(c).ok).sort((a,b)=>{const x=splitStoredName(a.name),y=splitStoredName(b.name);return x.set.localeCompare(y.set,'nl',{numeric:true})||Number(collectorNumber(x.number))-Number(collectorNumber(y.number))||(a.variant||'').localeCompare(b.variant||'','nl');});
+  const missing=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&availableQuantity(c)>0&&cardNeedsCollectorCheck(c)&&!collectorRegistryCheck(c).ok).sort((a,b)=>{const x=splitStoredName(a.name),y=splitStoredName(b.name);return x.set.localeCompare(y.set,'nl',{numeric:true})||Number(collectorNumber(x.number))-Number(collectorNumber(y.number))||(a.variant||'').localeCompare(b.variant||'','nl');});
   missingCollectorRows.textContent=missing.length.toLocaleString('nl-NL');missingCollectorQuantity.textContent=missing.reduce((sum,c)=>sum+availableQuantity(c),0).toLocaleString('nl-NL');
-  missingCollectorList.innerHTML=missing.length?missing.map(c=>{const p=splitStoredName(c.name),decision=getCollectorDecision(c),key=encodeURIComponent(collectorCardKey(c)),status=decision==='bewaren'?'📚 Bewaren – nog toevoegen aan TCG Collector':decision==='verkopen'?'💰 Verkopen – vrijgegeven voor verkoop':'Nog geen keuze gemaakt';return `<div class="card ${decision==='bewaren'?'stock-variant-holo':decision==='verkopen'?'stock-variant-normal':'stock-variant-special'}"><b>${escapeHtml(p.name)}</b><div class="muted">${escapeHtml(p.set||'Set onbekend')} · ${escapeHtml(p.number||'Nummer onbekend')} · ${escapeHtml(c.variant||'Normaal')}</div><div><b>${availableQuantity(c)}× beschikbaar</b></div><div class="scan-status">${status}</div><div class="row" style="margin-top:10px"><button class="gold" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','bewaren')">📚 Bewaren</button><button class="green" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','verkopen')">💰 Verkopen</button></div></div>`;}).join(''):'<div class="card"><b>✓ Alles gecontroleerd</b><div class="muted">Alle kaarten uit de verkoopvoorraad staan in TCG Collector.</div></div>';
+  missingCollectorList.innerHTML=missing.length?missing.map(c=>{const p=splitStoredName(c.name),decision=getCollectorDecision(c),key=encodeURIComponent(collectorCardKey(c)),status=decision==='bewaren'?'📚 Bewaren – nog toevoegen aan TCG Collector':decision==='verkopen'?'💰 Verkopen – vrijgegeven voor verkoop':'Nog geen keuze gemaakt';return `<div class="card ${decision==='bewaren'?'stock-variant-holo':decision==='verkopen'?'stock-variant-normal':'stock-variant-special'}"><b>${escapeHtml(p.name)}</b><div class="muted">${escapeHtml(p.set||'Set onbekend')} · ${escapeHtml(p.number||'Nummer onbekend')} · ${escapeHtml(c.variant||'Normaal')}</div><div><b>${availableQuantity(c)}× beschikbaar</b></div><div class="scan-status">${status}</div><div class="row" style="margin-top:10px"><button class="gold" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','bewaren')">📚 Bewaren</button><button class="green" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','verkopen')">💰 Verkopen</button></div></div>`;}).join(''):'<div class="card"><b>✓ Alles gecontroleerd</b><div class="muted">Alle kaarten uit de sets die je spaart zijn gecontroleerd in TCG Collector.</div></div>';
 }
 function openMissingCollector(){show('missingCollector');renderMissingCollector();}
 function loadSetCatalog(){if(!setCatalogPromise)setCatalogPromise=fetch('https://api.tcgdex.net/v2/en/sets').then(r=>{if(!r.ok)throw new Error('Sets niet beschikbaar');return r.json();}).catch(()=>[]);return setCatalogPromise;}
@@ -1476,9 +1509,9 @@ async function sellBundle(id){
   const items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(id));
   for(const item of items){const card=cardsCache.find(c=>String(c.id)===String(item.card_id));if(card){const check=collectorCheckCard(card);if(!check.ok)return alert('Bundelverkoop geblokkeerd.\n\n'+check.message+'\n\nWerk eerst de eigen verzameling bij in TCG Collector.');}}
   if(!confirm('Deze bundel voor €'+price.toFixed(2)+' als verkocht registreren?'))return;
-  const {error}=await cloud.from('bundles').update({status:'Verkocht',sold_price:price,payment,sold_date:new Date().toISOString()}).eq('id',id);if(error)return alert('Verkoop opslaan is niet gelukt: '+error.message);await renderBundles();
+  const {error}=await cloud.from('bundles').update({status:'Verkocht',sold_price:price,payment,sold_date:new Date().toISOString()}).eq('id',id);if(error)return alert('Verkoop opslaan is niet gelukt: '+error.message);await loadBundleData(true);await renderBundles();
 }
-async function releaseBundle(id){if(!confirm('Bundel opheffen? De 25 kaarten komen weer terug in de losse voorraad.'))return;const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle||bundle.status==='Verkocht')return alert('Een verkochte bundel kan niet worden opgeheven.');const {error}=await cloud.from('bundles').delete().eq('id',id);if(error)return alert('Bundel opheffen is niet gelukt: '+error.message);await renderBundles();}
+async function releaseBundle(id){if(!confirm('Bundel opheffen? De 25 kaarten komen weer terug in de losse voorraad.'))return;const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle||bundle.status==='Verkocht')return alert('Een verkochte bundel kan niet worden opgeheven.');const {error}=await cloud.from('bundles').delete().eq('id',id);if(error)return alert('Bundel opheffen is niet gelukt: '+error.message);await loadBundleData(true);await renderBundles();}
 function openPhotoViewer(src){if(!src)return;document.getElementById('viewerImage').src=src;document.getElementById('photoViewer').classList.remove('hidden');}
 function closePhotoViewer(){document.getElementById('photoViewer').classList.add('hidden');document.getElementById('viewerImage').removeAttribute('src');}
 async function saveEdit(){
@@ -1489,7 +1522,7 @@ async function saveEdit(){
   const replacement=editPhoto.files[0];if(replacement)editingCard.photo=await fileToDataURL(replacement);
   editingCard.name=setName&&number?name+' — '+setName+' '+number:name;editingCard.condition=editCondition.value;editingCard.productType=['Doosje','Losse sleeve'].includes(editingCard.condition)?editingCard.condition:'Pokémonkaart';editingCard.variant=editingCard.productType==='Pokémonkaart'?editVariant.value:'';editingCard.quantity=quantityValue;editingCard.buy=+editBuy.value||0;editingCard.ask=+editAsk.value||0;editingCard.min=+editMin.value||0;editingCard.status=editingCard.soldQuantity>=editingCard.quantity?'Verkocht':'Op voorraad';
   const {error}=await cloud.from('cards').update(toDb(editingCard)).eq('id',editingCard.id);if(error)return alert('Wijzigen is niet gelukt: '+error.message);
-  await loadCards();alert('Wijzigingen opgeslagen.');show('stock');renderStock();
+  await loadCards(true);alert('Wijzigingen opgeslagen.');show('stock');renderStock();
 }
 async function removeCard(id){
   await loadBundleData();if(allocatedQuantity(id)>0)return alert('Deze kaart zit in een bundel. Hef de bundel eerst op.');if(confirm(displayId(id)+' verwijderen?')){try{await del(id);renderStock();}catch(e){alert('Verwijderen is niet gelukt: '+e.message);}}
@@ -1535,13 +1568,13 @@ async function saveExpense(){
   const row={name:description,condition:'Kosten | '+expenseCategory.value,buy:amount,ask:0,minimum:0,status:'Verkocht',quantity:1,sold_quantity:0,sold_price:0,payment:expensePayment.value,sold_date:new Date(date+'T12:00:00').toISOString()};
   const {error}=await cloud.from('cards').insert(row);
   if(error)return alert('Uitgave opslaan is niet gelukt: '+error.message);
-  expenseDescription.value='';expenseAmount.value='';await loadCards();renderMoney();
+  expenseDescription.value='';expenseAmount.value='';await loadCards(true);renderMoney();
 }
 async function deleteExpense(id){
   if(!confirm('Deze uitgave uit het kasboek verwijderen?'))return;
   const {error}=await cloud.from('cards').delete().eq('id',id);
   if(error)return alert('Uitgave verwijderen is niet gelukt: '+error.message);
-  await loadCards();renderMoney();
+  await loadCards(true);renderMoney();
 }
 async function exportKasboekCSV(){
   const cards=await getAll();await loadBundleData();
