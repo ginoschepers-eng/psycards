@@ -1392,8 +1392,9 @@ async function updateEditPrice(card){
 }
 function applyEditAdvicePrice(){if(!editingAdvicePrice)return alert('Er is geen adviesprijs beschikbaar.');document.getElementById('editAsk').value=editingAdvicePrice.toFixed(2);}
 async 
-function openMadeBundles(){
+async function openMadeBundles(){
   show('madeBundles');
+  await Promise.all([loadCards(),loadBundleData()]);
   renderMadeBundleSets();
 }
 function madeBundleGroups(){
@@ -1427,13 +1428,16 @@ function showMadeBundleSet(setName){
   grid.innerHTML='';
   list.innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderMadeBundleSets()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(setName)}</h3><div class="muted">${arr.length} gemaakte bundel${arr.length===1?'':'s'}</div></div>`+
     arr.map((b,i)=>{
-      const items=(bundleItemsCache||[]).filter(x=>String(x.bundle_id)===String(b.id)).slice().sort((a,c)=>bundleCardNumber(a)-bundleCardNumber(c)||canonicalBundleVariant(a.variant).localeCompare(canonicalBundleVariant(c.variant),'nl'));
-      const value=items.reduce((sum,x)=>sum+bundleCardmarketValue(x),0);
-      return `<div class="card"><h3 style="margin:0 0 5px">Bundel ${i+1}</h3><div class="muted">${items.length} kaarten${value?` · Cardmarket ± €${value.toFixed(2)}`:''}</div><details style="margin-top:10px"><summary>Bekijk kaartenlijst</summary><div class="muted" style="margin-top:10px">${items.length?items.map(bundleCardLabel).join('<br>'):'Geen kaartregels gevonden.'}</div></details></div>`;
+      const rows=(bundleItemsCache||[]).filter(x=>String(x.bundle_id)===String(b.id))
+        .map(row=>({row,card:cardsCache.find(c=>String(c.id)===String(row.card_id))}))
+        .sort((a,c)=>bundleCardNumber(a.card||{})-bundleCardNumber(c.card||{})||canonicalBundleVariant(a.card?.variant).localeCompare(canonicalBundleVariant(c.card?.variant),'nl'));
+      const total=rows.reduce((sum,x)=>sum+(+x.row.quantity||0),0);
+      const names=rows.map(({row,card})=>card?bundleCardLabel(card)+(row.quantity>1?' ×'+row.quantity:''):'Onbekende kaart').join('<br>');
+      return `<div class="card"><h3 style="margin:0 0 5px">${escapeHtml(b.name||('Bundel '+(i+1)))}</h3><div class="muted">${total} kaarten · ${b.status||'Samengesteld'}</div><details style="margin-top:10px"><summary>Bekijk kaartenlijst</summary><div class="muted" style="margin-top:10px">${names||'Geen kaartregels gevonden.'}</div></details></div>`;
     }).join('');
 }
 
-function renderBundles(){
+async function renderBundles(){
   await Promise.all([loadCards(),loadBundleData()]);
   const host=document.getElementById('bundleExisting');document.getElementById('bundleBuilder').classList.add('hidden');
   if(!bundleTablesReady){host.innerHTML='<div class="card"><b>Database-uitbreiding nodig</b><div class="muted">Voer eerst het nieuwe bestand supabase-setup.sql uit in de SQL Editor van Supabase.</div></div>';return;}
