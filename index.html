@@ -96,7 +96,7 @@
     <div class="card"><h3 style="margin:0">Mijn sets</h3><div class="muted">Tik op een set om direct aantallen in te voeren.</div><div id="dashboardSets"></div></div>
     <div class="card">
       <h3 style="margin:0 0 10px">Overig beheer</h3>
-      <div class="manage-grid"><button class="light" onclick="openNewProduct()">📷 Eén product</button><button class="gold" onclick="openValueCheck()">💶 Kaartwaarde</button><button class="green" onclick="show('sell')">💰 Verkocht</button><button class="light" onclick="show('stock');renderStock()">📦 Voorraad</button><button class="gold" onclick="show('money');renderMoney()">📒 Kasboek</button><button class="light" onclick="show('sold');renderSold()">✅ Verkopen</button><button class="green" onclick="show('bundles');renderBundles()">🎁 Bundels</button><button class="light" onclick="openCollector()">📚 TCG Collector</button><button class="danger" onclick="openMissingCollector()">⚠️ Nog niet in TCG</button></div>
+      <div class="manage-grid"><button class="light" onclick="openNewProduct()">📷 Eén product</button><button class="gold" onclick="openValueCheck()">💶 Kaartwaarde</button><button class="green" onclick="show('sell')">💰 Verkocht</button><button class="light" onclick="show('stock');renderStock()">📦 Voorraad</button><button class="gold" onclick="show('money');renderMoney()">📒 Kasboek</button><button class="light" onclick="show('sold');renderSold()">✅ Verkopen</button><button class="green" onclick="show('bundles');renderBundles()">🎁 Bundels</button><button class="light" onclick="openMadeBundles()">📦 Gemaakte bundels</button><button class="light" onclick="openCollector()">📚 TCG Collector</button><button class="danger" onclick="openMissingCollector()">⚠️ Nog niet in TCG</button></div>
       <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div><button id="manualSyncButton" class="light" style="width:100%;padding:10px;font-size:13px;margin-top:8px" onclick="manualFullSync()">🔄 Nu synchroniseren</button><div id="lastSyncText" class="muted" style="text-align:center;margin-top:6px"></div>
     </div>
   </section>
@@ -274,6 +274,17 @@
     <div id="bundleSaveStatus" class="scan-status"></div>
     <div id="bundleExisting"></div>
     <div id="bundleBuilder" class="hidden"><div id="bundleProgress" class="bundle-progress">Mogelijke bundels per set</div><div id="bundleCardList"></div><button class="light" style="width:100%;margin:12px 0 18px" onclick="cancelBundleBuilder()">Terug naar bundels</button></div>
+  </section>
+
+
+  <section id="madeBundles" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">📦 Gemaakte bundels</h2>
+      <div class="muted">Kies een set. Daarna zie je alle aangemaakte bundels van die set.</div>
+    </div>
+    <div id="madeBundleSetGrid" class="set-tile-grid"></div>
+    <div id="madeBundleList"></div>
   </section>
 
   <section id="money" class="hidden">
@@ -1380,7 +1391,49 @@ async function updateEditPrice(card){
   }catch(e){box.classList.add('unavailable');box.textContent='Prijs kon niet worden geladen';}
 }
 function applyEditAdvicePrice(){if(!editingAdvicePrice)return alert('Er is geen adviesprijs beschikbaar.');document.getElementById('editAsk').value=editingAdvicePrice.toFixed(2);}
-async function renderBundles(){
+async 
+function openMadeBundles(){
+  show('madeBundles');
+  renderMadeBundleSets();
+}
+function madeBundleGroups(){
+  const groups={};
+  (bundlesCache||[]).forEach(b=>{
+    const set=bundleSetName(b)||'Onbekende set';
+    (groups[set]||(groups[set]=[])).push(b);
+  });
+  return groups;
+}
+function bundleSetLogo(setName){
+  const saved=(typeof getSavedSets==='function'?getSavedSets():[])||[];
+  const norm=normalizeSetName(setName);
+  const hit=saved.find(x=>normalizeSetName(x.name||x.setName||x.code||'')===norm);
+  return hit?.logo||hit?.image||hit?.symbol||hit?.imageUrl||'';
+}
+function renderMadeBundleSets(){
+  const grid=document.getElementById('madeBundleSetGrid'),list=document.getElementById('madeBundleList');
+  if(!grid)return;
+  const groups=madeBundleGroups(),sets=Object.keys(groups).sort((a,b)=>a.localeCompare(b,'nl'));
+  list.innerHTML='';
+  if(!sets.length){grid.innerHTML='<div class="card muted" style="grid-column:1/-1">Nog geen gemaakte bundels.</div>';return;}
+  grid.innerHTML=sets.map(set=>{
+    const logo=bundleSetLogo(set);
+    return `<button class="set-tile" onclick="showMadeBundleSet('${String(set).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${logo?`<img src="${escapeHtml(logo)}" alt="${escapeHtml(set)}">`:'<span style="font-size:38px">🃏</span>'}<b>${escapeHtml(set)}</b><small>${groups[set].length} gemaakte bundel${groups[set].length===1?'':'s'}</small></button>`;
+  }).join('');
+}
+function showMadeBundleSet(setName){
+  const grid=document.getElementById('madeBundleSetGrid'),list=document.getElementById('madeBundleList');
+  const groups=madeBundleGroups(),arr=groups[setName]||[];
+  grid.innerHTML='';
+  list.innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderMadeBundleSets()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(setName)}</h3><div class="muted">${arr.length} gemaakte bundel${arr.length===1?'':'s'}</div></div>`+
+    arr.map((b,i)=>{
+      const items=(bundleItemsCache||[]).filter(x=>String(x.bundle_id)===String(b.id)).slice().sort((a,c)=>bundleCardNumber(a)-bundleCardNumber(c)||canonicalBundleVariant(a.variant).localeCompare(canonicalBundleVariant(c.variant),'nl'));
+      const value=items.reduce((sum,x)=>sum+bundleCardmarketValue(x),0);
+      return `<div class="card"><h3 style="margin:0 0 5px">Bundel ${i+1}</h3><div class="muted">${items.length} kaarten${value?` · Cardmarket ± €${value.toFixed(2)}`:''}</div><details style="margin-top:10px"><summary>Bekijk kaartenlijst</summary><div class="muted" style="margin-top:10px">${items.length?items.map(bundleCardLabel).join('<br>'):'Geen kaartregels gevonden.'}</div></details></div>`;
+    }).join('');
+}
+
+function renderBundles(){
   await Promise.all([loadCards(),loadBundleData()]);
   const host=document.getElementById('bundleExisting');document.getElementById('bundleBuilder').classList.add('hidden');
   if(!bundleTablesReady){host.innerHTML='<div class="card"><b>Database-uitbreiding nodig</b><div class="muted">Voer eerst het nieuwe bestand supabase-setup.sql uit in de SQL Editor van Supabase.</div></div>';return;}
