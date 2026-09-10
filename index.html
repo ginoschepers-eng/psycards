@@ -1542,7 +1542,7 @@ function showBundlePlan(index){
     const workflow=bundleWorkflowGet(plan,bundle),rows=bundle.items.slice().sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||canonicalBundleVariant(a.variant).localeCompare(canonicalBundleVariant(b.variant),'nl')).map(bundleCardLabel).join('<br>');
     return `<div class="card" style="margin-top:10px"><label style="display:flex;gap:10px;align-items:center;margin:0"><input class="planned-bundle-check" type="checkbox" data-plan-index="${index}" data-bundle-index="${bundleIndex}" onchange="updatePlannedBundleSelection(${index})" style="width:24px;height:24px;margin:0"><span><b>Voorgestelde bundel ${bundleIndex+1}</b><br><span class="muted">${plan.rules.normal} Common/Normaal + ${plan.rules.foil} Holo/Reverse holo · geschatte waarde €${bundle.value.toFixed(2)}</span></span></label><div style="display:flex;gap:10px;align-items:center;margin-top:10px;padding:9px;background:#f5f7fb;border-radius:10px"><span class="muted" style="flex:1">${workflow.readyForSale?'✅ Klaar voor verkoop':(workflow.printed?'🖨️ Geprint':'Nog niet geprint')}</span><label style="display:flex;align-items:center;gap:7px;margin:0;font-size:13px"><input type="checkbox" ${workflow.sorted?'checked':''} onchange="setPlannedBundleSorted(${index},${bundleIndex},this.checked)" style="width:21px;height:21px;margin:0"> Gesorteerd / klaar om op te slaan</label></div><details style="margin-top:9px"><summary>Bekijk de ${plan.rules.total} kaarten op nummervolgorde</summary><div class="muted" style="margin-top:10px">${rows}</div></details></div>`;
   }).join('');
-  document.getElementById('bundleCardList').innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderBundlePlanOverview()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(plan.set)}</h3><div><b>${plan.count} bundel${plan.count===1?'':'s'} van ${plan.rules.total} kaarten mogelijk</b></div><div class="muted">Common/Normaal, Holo en Reverse holo worden meegerekend. Hetzelfde nummer mag in verschillende kaartsoorten voorkomen, maar nooit tweemaal in dezelfde kaartsoort.</div>${plan.count?`<button class="primary" style="width:100%;margin-top:12px;padding:12px;font-size:15px" onclick="printBundlePlan(${index})">🖨️ Voorgestelde bundels van deze set printen</button><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><button class="light" style="padding:10px;font-size:13px" onclick="setAllPlannedBundleChecks(${index},true)">☑ Alles selecteren</button><button class="light" style="padding:10px;font-size:13px" onclick="setAllPlannedBundleChecks(${index},false)">☐ Selectie wissen</button></div>`:''}</div>${details}${plan.count?`<button id="createPlannedButton-${index}" class="green" style="width:100%;margin:12px 0" onclick="createPlannedBundles(${index})">Vink Gesorteerd aan om op te slaan</button>`:`<div class="card muted">Niet genoeg voorraad voor ${plan.rules.normal} Common/Normaal én ${plan.rules.foil} Holo/Reverse holo. Er wordt geen bundel gemaakt.</div>`}`;
+  document.getElementById('bundleCardList').innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderBundlePlanOverview()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(plan.set)}</h3><div><b>${plan.count} bundel${plan.count===1?'':'s'} van ${plan.rules.total} kaarten mogelijk</b></div><div class="muted">Common/Normaal, Holo en Reverse holo worden meegerekend. Hetzelfde nummer mag in verschillende kaartsoorten voorkomen, maar nooit tweemaal in dezelfde kaartsoort.</div>${plan.count?`<button class="primary" style="width:100%;margin-top:12px;padding:12px;font-size:15px" onclick="printBundlePlan(${index})">📄 PDF / printlijst openen</button><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><button class="light" style="padding:10px;font-size:13px" onclick="setAllPlannedBundleChecks(${index},true)">☑ Alles selecteren</button><button class="light" style="padding:10px;font-size:13px" onclick="setAllPlannedBundleChecks(${index},false)">☐ Selectie wissen</button></div>`:''}</div>${details}${plan.count?`<button id="createPlannedButton-${index}" class="green" style="width:100%;margin:12px 0" onclick="createPlannedBundles(${index})">Vink Gesorteerd aan om op te slaan</button>`:`<div class="card muted">Niet genoeg voorraad voor ${plan.rules.normal} Common/Normaal én ${plan.rules.foil} Holo/Reverse holo. Er wordt geen bundel gemaakt.</div>`}`;
   setTimeout(()=>updatePlannedBundleSaveButton(index),0);
 }
 const BUNDLE_WORKFLOW_KEY='psycards-bundle-workflow-v1';
@@ -1584,54 +1584,51 @@ function setSelectedPlannedBundlesSorted(planIndex,checked=true){
 
 function printBundlePlan(planIndex){
   const plan=bundlePlans[planIndex];
-  if(!plan||!plan.bundles.length)return alert('Er zijn geen voorgestelde bundels om te printen.');
+  if(!plan||!plan.bundles.length)return alert('Er zijn geen voorgestelde bundels om te openen.');
 
   const sections=plan.bundles.map((bundle,i)=>{
     const rows=bundle.items.slice()
       .sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||canonicalBundleVariant(a.variant).localeCompare(canonicalBundleVariant(b.variant),'nl'))
       .map(card=>'<tr><td>'+bundleCardLabel(card)+'</td></tr>').join('');
-    return '<section class="pb-bundle"><h2>Bundel '+(i+1)+' <span>☐ Gesorteerd</span></h2>'+
-      '<div class="pb-meta">'+plan.rules.normal+' Common/Normaal + '+plan.rules.foil+
+    return '<section class="bundle"><h2>Bundel '+(i+1)+' <span>☐ Gesorteerd</span></h2>'+
+      '<div class="meta">'+plan.rules.normal+' Common/Normaal + '+plan.rules.foil+
       ' Holo/Reverse holo · '+plan.rules.total+' kaarten · geschatte waarde €'+bundle.value.toFixed(2)+'</div>'+
       '<table>'+rows+'</table></section>';
   }).join('');
 
-  let area=document.getElementById('bundlePrintArea');
-  if(area)area.remove();
-  area=document.createElement('div');
-  area.id='bundlePrintArea';
-  area.innerHTML='<h1>'+escapeHtml(plan.set)+'</h1>'+
-    '<div class="pb-sub">Voorgestelde bundels · kaarten op nummer volgorde</div>'+sections;
-  document.body.appendChild(area);
+  const html='<!doctype html><html lang="nl"><head><meta charset="utf-8">'+
+    '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+    '<title>'+escapeHtml(plan.set)+' - printlijst</title>'+
+    '<style>body{font-family:Arial,sans-serif;color:#111;background:#fff;margin:16px;max-width:900px}'+
+    '.top{position:sticky;top:0;background:#fff;padding:8px 0 12px;border-bottom:1px solid #ddd;margin-bottom:18px}'+
+    '.printbtn{width:100%;border:0;border-radius:12px;padding:14px;font-size:17px;font-weight:700;background:#245b86;color:#fff}'+
+    'h1{font-size:24px;margin:12px 0 4px}.sub{color:#555;margin-bottom:10px}.bundle{break-inside:avoid;page-break-inside:avoid;margin:0 0 24px;border-top:2px solid #222;padding-top:8px}'+
+    '.bundle h2{display:flex;justify-content:space-between;gap:10px;margin:0 0 4px;font-size:18px}.meta{font-size:12px;margin-bottom:6px}'+
+    'table{width:100%;border-collapse:collapse;font-size:12px}td{padding:3px 4px;border-bottom:1px solid #ddd}'+
+    '@media print{.top{display:none}body{margin:10mm}.bundle{break-inside:avoid}}</style></head><body>'+
+    '<div class="top"><button class="printbtn" onclick="window.print()">🖨️ Afdrukken / opslaan als PDF</button></div>'+
+    '<h1>'+escapeHtml(plan.set)+'</h1>'+
+    '<div class="sub">'+plan.bundles.length+' voorgestelde bundels · kaarten op nummer volgorde</div>'+
+    sections+'</body></html>';
 
-  if(!document.getElementById('bundlePrintStyle')){
-    const style=document.createElement('style');
-    style.id='bundlePrintStyle';
-    style.textContent=`
-      #bundlePrintArea{display:none}
-      @media print{
-        body > *:not(#bundlePrintArea){display:none !important}
-        #bundlePrintArea{display:block !important;font-family:Arial,sans-serif;color:#111;background:#fff}
-        #bundlePrintArea h1{margin:0 0 4mm}
-        #bundlePrintArea .pb-sub{margin-bottom:6mm}
-        #bundlePrintArea .pb-bundle{break-inside:avoid;page-break-inside:avoid;border-top:2px solid #222;padding-top:3mm;margin-bottom:7mm}
-        #bundlePrintArea .pb-bundle h2{display:flex;justify-content:space-between;font-size:16pt;margin:0 0 2mm}
-        #bundlePrintArea .pb-meta{font-size:9pt;margin-bottom:2mm}
-        #bundlePrintArea table{width:100%;border-collapse:collapse;font-size:9pt}
-        #bundlePrintArea td{padding:1mm;border-bottom:1px solid #ddd}
-      }`;
-    document.head.appendChild(style);
+  try{
+    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.target='_blank';
+    a.rel='noopener';
+    a.download='';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    markPlanPrinted(planIndex);
+    showBundlePlan(planIndex);
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(e){
+    console.error(e);
+    alert('De PDF/printlijst kon niet worden geopend.');
   }
-
-  markPlanPrinted(planIndex);
-  showBundlePlan(planIndex);
-
-  // Print het huidige document. Dit werkt op Android/Chrome/PWA betrouwbaarder
-  // dan een popup of een verborgen iframe.
-  setTimeout(()=>{
-    try{ window.print(); }
-    catch(e){ console.error(e); alert('Het afdrukscherm kon niet worden geopend.'); }
-  },100);
 }
 function updatePlannedBundleSelection(planIndex){const amount=document.querySelectorAll(`.planned-bundle-check[data-plan-index="${planIndex}"]:checked`).length,button=document.getElementById('createPlannedButton-'+planIndex);if(button)button.textContent=amount?'Maak '+amount+' aangevinkte bundel'+(amount===1?'':'s'):'Maak aangevinkte bundels';}
 async function createPlannedBundles(planIndex){
