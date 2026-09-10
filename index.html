@@ -1443,7 +1443,7 @@ function buildBalancedBundlePlan(entries,count,rules={total:25,normal:20,foil:5}
   return bins.filter(bin=>bin.items.length===rules.total&&(!minBundleValue||bin.value>=minBundleValue)&&(!maxBundleValue||bin.value<=maxBundleValue));
 }
 function bundleRulesForSet(set){const norm=normalizeSetName(set);const thirty=norm==='blackbolt'||norm==='pitchblack';return {total:thirty?30:25,normal:thirty?25:20,foil:5};}
-function canonicalBundleVariant(value){const variant=normalizeSetName(value||'Normaal');if(variant==='reverseholo'||variant==='reverse')return 'Reverse holo';if(variant==='holo')return 'Holo';if(variant==='normal'||variant==='normaal')return 'Normaal';return String(value||'Normaal');}
+function canonicalBundleVariant(value){const variant=normalizeSetName(value||'Normaal');if(variant==='reverseholo'||variant==='reverse')return 'Reverse holo';if(variant==='holo')return 'Holo';if(variant==='normal'||variant==='normaal'||variant==='common')return 'Normaal';return String(value||'Normaal');}
 function bundleCardIdentity(card){const parts=splitStoredName(card.name),raw=String(parts.number||'').split('/')[0],number=/^\d+$/.test(raw)?String(Number(raw)):normalizeSetName(raw);return parts.set&&number?normalizeSetName(parts.set)+'|'+number:normalizeSetName(card.name);}
 function bundleUniqueKey(card){return bundleCardIdentity(card)+'|'+normalizeSetName(canonicalBundleVariant(card.variant));}
 function bundleCardNumber(card){return parseInt(splitStoredName(card.name).number,10)||99999;}
@@ -1464,9 +1464,47 @@ function renderBundlePlanOverview(){
 }
 function showBundlePlan(index){
   const plan=bundlePlans[index];if(!plan)return;plan.count=plan.bundles.length;document.getElementById('bundleProgress').textContent=plan.set+' · '+plan.count+' bundel'+(plan.count===1?'':'s')+' mogelijk';
-  const details=plan.bundles.map((bundle,bundleIndex)=>{const rows=bundle.items.slice().sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||(a.variant||'').localeCompare(b.variant||'','nl')).map(bundleCardLabel).join('<br>');return `<div class="card" style="margin-top:10px"><label style="display:flex;gap:10px;align-items:center;margin:0"><input class="planned-bundle-check" type="checkbox" data-plan-index="${index}" data-bundle-index="${bundleIndex}" onchange="updatePlannedBundleSelection(${index})" style="width:24px;height:24px;margin:0"><span><b>Voorgestelde bundel ${bundleIndex+1}</b><br><span class="muted">${plan.rules.normal} Normaal + ${plan.rules.foil} Holo/Reverse holo · geschatte waarde €${bundle.value.toFixed(2)}</span></span></label><details style="margin-top:9px"><summary>Bekijk de ${plan.rules.total} kaarten op nummervolgorde</summary><div class="muted" style="margin-top:10px">${rows}</div></details></div>`;}).join('');
-  document.getElementById('bundleCardList').innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderBundlePlanOverview()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(plan.set)}</h3><div><b>${plan.count} bundel${plan.count===1?'':'s'} van ${plan.rules.total} kaarten mogelijk</b></div><div class="muted">Elke bundel heeft ${plan.rules.normal} Normaal en ${plan.rules.foil} Holo/Reverse holo. Hetzelfde nummer mag in verschillende kaartsoorten voorkomen, maar nooit tweemaal in dezelfde kaartsoort.</div></div>${details}${plan.count?`<button id="createPlannedButton-${index}" class="green" style="width:100%;margin:12px 0" onclick="createPlannedBundles(${index})">Maak aangevinkte bundels</button>`:`<div class="card muted">Niet genoeg voorraad voor ${plan.rules.normal} Normaal én ${plan.rules.foil} Holo/Reverse holo. Er wordt geen bundel gemaakt.</div>`}`;
+  const details=plan.bundles.map((bundle,bundleIndex)=>{
+    const workflow=bundleWorkflowGet(plan,bundle),rows=bundle.items.slice().sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||canonicalBundleVariant(a.variant).localeCompare(canonicalBundleVariant(b.variant),'nl')).map(bundleCardLabel).join('<br>');
+    return `<div class="card" style="margin-top:10px"><label style="display:flex;gap:10px;align-items:center;margin:0"><input class="planned-bundle-check" type="checkbox" data-plan-index="${index}" data-bundle-index="${bundleIndex}" onchange="updatePlannedBundleSelection(${index})" style="width:24px;height:24px;margin:0"><span><b>Voorgestelde bundel ${bundleIndex+1}</b><br><span class="muted">${plan.rules.normal} Common/Normaal + ${plan.rules.foil} Holo/Reverse holo · geschatte waarde €${bundle.value.toFixed(2)}</span></span></label><div style="display:flex;gap:10px;align-items:center;margin-top:10px;padding:9px;background:#f5f7fb;border-radius:10px"><span class="muted" style="flex:1">${workflow.printed?'🖨️ Geprint':'Nog niet geprint'}</span><label style="display:flex;align-items:center;gap:7px;margin:0;font-size:13px"><input type="checkbox" ${workflow.sorted?'checked':''} onchange="setPlannedBundleSorted(${index},${bundleIndex},this.checked)" style="width:21px;height:21px;margin:0"> Gesorteerd</label></div><details style="margin-top:9px"><summary>Bekijk de ${plan.rules.total} kaarten op nummervolgorde</summary><div class="muted" style="margin-top:10px">${rows}</div></details></div>`;
+  }).join('');
+  document.getElementById('bundleCardList').innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderBundlePlanOverview()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(plan.set)}</h3><div><b>${plan.count} bundel${plan.count===1?'':'s'} van ${plan.rules.total} kaarten mogelijk</b></div><div class="muted">Common/Normaal, Holo en Reverse holo worden meegerekend. Hetzelfde nummer mag in verschillende kaartsoorten voorkomen, maar nooit tweemaal in dezelfde kaartsoort.</div>${plan.count?`<button class="primary" style="width:100%;margin-top:12px;padding:12px;font-size:15px" onclick="printBundlePlan(${index})">🖨️ Voorgestelde bundels van deze set printen</button>`:''}</div>${details}${plan.count?`<button id="createPlannedButton-${index}" class="green" style="width:100%;margin:12px 0" onclick="createPlannedBundles(${index})">Maak aangevinkte bundels</button>`:`<div class="card muted">Niet genoeg voorraad voor ${plan.rules.normal} Common/Normaal én ${plan.rules.foil} Holo/Reverse holo. Er wordt geen bundel gemaakt.</div>`}`;
 }
+const BUNDLE_WORKFLOW_KEY='psycards-bundle-workflow-v1';
+function bundleWorkflowState(){try{return JSON.parse(localStorage.getItem(BUNDLE_WORKFLOW_KEY)||'{}')}catch(e){return {}}}
+function bundlePlanWorkflowId(plan,bundle){
+  const ids=(bundle?.items||[]).map(c=>String(c.id)+'|'+canonicalBundleVariant(c.variant)).sort().join(',');
+  return normalizeSetName(plan?.set||'set')+'::'+ids;
+}
+function bundleWorkflowGet(plan,bundle){const all=bundleWorkflowState();return all[bundlePlanWorkflowId(plan,bundle)]||{};}
+function bundleWorkflowSet(plan,bundle,patch){
+  const all=bundleWorkflowState(),id=bundlePlanWorkflowId(plan,bundle);
+  all[id]=Object.assign({},all[id]||{},patch,{updatedAt:new Date().toISOString()});
+  localStorage.setItem(BUNDLE_WORKFLOW_KEY,JSON.stringify(all));
+}
+function setPlannedBundleSorted(planIndex,bundleIndex,checked){
+  const plan=bundlePlans[planIndex],bundle=plan?.bundles?.[bundleIndex];if(!bundle)return;
+  bundleWorkflowSet(plan,bundle,{sorted:!!checked});
+}
+function markPlanPrinted(planIndex){
+  const plan=bundlePlans[planIndex];if(!plan)return;
+  plan.bundles.forEach(bundle=>bundleWorkflowSet(plan,bundle,{printed:true}));
+}
+function printBundlePlan(planIndex){
+  const plan=bundlePlans[planIndex];if(!plan||!plan.bundles.length)return alert('Er zijn geen voorgestelde bundels om te printen.');
+  markPlanPrinted(planIndex);
+  const cards=plan.bundles.map((bundle,i)=>{
+    const sorted=bundleWorkflowGet(plan,bundle).sorted?'☑':'☐';
+    const rows=bundle.items.slice().sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||canonicalBundleVariant(a.variant).localeCompare(canonicalBundleVariant(b.variant),'nl'))
+      .map(card=>'<tr><td>'+bundleCardLabel(card)+'</td></tr>').join('');
+    return '<section class="bundle"><h2>Bundel '+(i+1)+' <span>'+sorted+' Gesorteerd</span></h2><div class="meta">'+plan.rules.normal+' Common/Normaal + '+plan.rules.foil+' Holo/Reverse holo · '+plan.rules.total+' kaarten · geschatte waarde €'+bundle.value.toFixed(2)+'</div><table>'+rows+'</table></section>';
+  }).join('');
+  const w=window.open('','_blank');if(!w)return alert('Sta pop-ups toe om de bundellijst te printen.');
+  w.document.write('<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>'+escapeHtml(plan.set)+' - voorgestelde bundels</title><style>body{font-family:Arial,sans-serif;color:#111;margin:20px}h1{margin:0 0 4px}.sub{margin-bottom:18px;color:#555}.bundle{break-inside:avoid;page-break-inside:avoid;margin:0 0 24px;border-top:2px solid #222;padding-top:8px}.bundle h2{display:flex;justify-content:space-between;margin:0 0 4px;font-size:18px}.meta{font-size:12px;margin-bottom:6px}table{width:100%;border-collapse:collapse;font-size:12px}td{padding:2px 4px;border-bottom:1px solid #ddd}@media print{body{margin:10mm}.bundle{break-inside:avoid}}</style></head><body><h1>'+escapeHtml(plan.set)+'</h1><div class="sub">Voorgestelde bundels · kaarten gesorteerd op kaartnummer · Common/Normaal, Holo en Reverse holo meegerekend</div>'+cards+'</body></html>');
+  w.document.close();w.focus();setTimeout(()=>w.print(),250);
+  setTimeout(()=>showBundlePlan(planIndex),300);
+}
+
 function updatePlannedBundleSelection(planIndex){const amount=document.querySelectorAll(`.planned-bundle-check[data-plan-index="${planIndex}"]:checked`).length,button=document.getElementById('createPlannedButton-'+planIndex);if(button)button.textContent=amount?'Maak '+amount+' aangevinkte bundel'+(amount===1?'':'s'):'Maak aangevinkte bundels';}
 async function createPlannedBundles(planIndex){
   const status=document.getElementById('bundleSaveStatus'),button=document.getElementById('createPlannedButton-'+planIndex),plan=bundlePlans[planIndex],indexes=[...document.querySelectorAll(`.planned-bundle-check[data-plan-index="${planIndex}"]:checked`)].map(box=>+box.dataset.bundleIndex),chosen=indexes.map(i=>plan?.bundles?.[i]).filter(bundle=>bundle?.items?.length===plan?.rules?.total);
