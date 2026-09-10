@@ -1585,45 +1585,54 @@ function setSelectedPlannedBundlesSorted(planIndex,checked=true){
 function printBundlePlan(planIndex){
   const plan=bundlePlans[planIndex];
   if(!plan||!plan.bundles.length)return alert('Er zijn geen voorgestelde bundels om te printen.');
-  markPlanPrinted(planIndex);
-  const cards=plan.bundles.map((bundle,i)=>{
-    const sorted=bundleWorkflowGet(plan,bundle).sorted?'☑':'☐';
+
+  const sections=plan.bundles.map((bundle,i)=>{
     const rows=bundle.items.slice()
       .sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||canonicalBundleVariant(a.variant).localeCompare(canonicalBundleVariant(b.variant),'nl'))
       .map(card=>'<tr><td>'+bundleCardLabel(card)+'</td></tr>').join('');
-    return '<section class="bundle"><h2>Bundel '+(i+1)+' <span>'+sorted+' Gesorteerd</span></h2><div class="meta">'+plan.rules.normal+' Common/Normaal + '+plan.rules.foil+' Holo/Reverse holo · '+plan.rules.total+' kaarten · geschatte waarde €'+bundle.value.toFixed(2)+'</div><table>'+rows+'</table></section>';
+    return '<section class="pb-bundle"><h2>Bundel '+(i+1)+' <span>☐ Gesorteerd</span></h2>'+
+      '<div class="pb-meta">'+plan.rules.normal+' Common/Normaal + '+plan.rules.foil+
+      ' Holo/Reverse holo · '+plan.rules.total+' kaarten · geschatte waarde €'+bundle.value.toFixed(2)+'</div>'+
+      '<table>'+rows+'</table></section>';
   }).join('');
 
-  const html='<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>'+escapeHtml(plan.set)+' - voorgestelde bundels</title><style>body{font-family:Arial,sans-serif;color:#111;margin:20px}h1{margin:0 0 4px}.sub{margin-bottom:18px;color:#555}.bundle{break-inside:avoid;page-break-inside:avoid;margin:0 0 24px;border-top:2px solid #222;padding-top:8px}.bundle h2{display:flex;justify-content:space-between;margin:0 0 4px;font-size:18px}.meta{font-size:12px;margin-bottom:6px}table{width:100%;border-collapse:collapse;font-size:12px}td{padding:2px 4px;border-bottom:1px solid #ddd}@media print{body{margin:10mm}.bundle{break-inside:avoid}}</style></head><body><h1>'+escapeHtml(plan.set)+'</h1><div class="sub">Voorgestelde bundels · kaarten gesorteerd op kaartnummer · Common/Normaal, Holo en Reverse holo meegerekend</div>'+cards+'</body></html>';
+  let area=document.getElementById('bundlePrintArea');
+  if(area)area.remove();
+  area=document.createElement('div');
+  area.id='bundlePrintArea';
+  area.innerHTML='<h1>'+escapeHtml(plan.set)+'</h1>'+
+    '<div class="pb-sub">Voorgestelde bundels · kaarten op nummer volgorde</div>'+sections;
+  document.body.appendChild(area);
 
-  let frame=document.getElementById('bundlePrintFrame');
-  if(frame)frame.remove();
-  frame=document.createElement('iframe');
-  frame.id='bundlePrintFrame';
-  frame.style.position='fixed';
-  frame.style.right='0';
-  frame.style.bottom='0';
-  frame.style.width='1px';
-  frame.style.height='1px';
-  frame.style.border='0';
-  frame.style.opacity='0';
-  document.body.appendChild(frame);
+  if(!document.getElementById('bundlePrintStyle')){
+    const style=document.createElement('style');
+    style.id='bundlePrintStyle';
+    style.textContent=`
+      #bundlePrintArea{display:none}
+      @media print{
+        body > *:not(#bundlePrintArea){display:none !important}
+        #bundlePrintArea{display:block !important;font-family:Arial,sans-serif;color:#111;background:#fff}
+        #bundlePrintArea h1{margin:0 0 4mm}
+        #bundlePrintArea .pb-sub{margin-bottom:6mm}
+        #bundlePrintArea .pb-bundle{break-inside:avoid;page-break-inside:avoid;border-top:2px solid #222;padding-top:3mm;margin-bottom:7mm}
+        #bundlePrintArea .pb-bundle h2{display:flex;justify-content:space-between;font-size:16pt;margin:0 0 2mm}
+        #bundlePrintArea .pb-meta{font-size:9pt;margin-bottom:2mm}
+        #bundlePrintArea table{width:100%;border-collapse:collapse;font-size:9pt}
+        #bundlePrintArea td{padding:1mm;border-bottom:1px solid #ddd}
+      }`;
+    document.head.appendChild(style);
+  }
 
-  const doc=frame.contentWindow.document;
-  doc.open();doc.write(html);doc.close();
+  markPlanPrinted(planIndex);
+  showBundlePlan(planIndex);
+
+  // Print het huidige document. Dit werkt op Android/Chrome/PWA betrouwbaarder
+  // dan een popup of een verborgen iframe.
   setTimeout(()=>{
-    try{
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
-    }catch(e){
-      console.error(e);
-      alert('Printen kon niet worden geopend. Probeer het opnieuw vanuit je browser.');
-    }
-    setTimeout(()=>frame.remove(),1500);
-  },350);
-  setTimeout(()=>showBundlePlan(planIndex),400);
+    try{ window.print(); }
+    catch(e){ console.error(e); alert('Het afdrukscherm kon niet worden geopend.'); }
+  },100);
 }
-
 function updatePlannedBundleSelection(planIndex){const amount=document.querySelectorAll(`.planned-bundle-check[data-plan-index="${planIndex}"]:checked`).length,button=document.getElementById('createPlannedButton-'+planIndex);if(button)button.textContent=amount?'Maak '+amount+' aangevinkte bundel'+(amount===1?'':'s'):'Maak aangevinkte bundels';}
 async function createPlannedBundles(planIndex){
   const status=document.getElementById('bundleSaveStatus'),button=document.getElementById('createPlannedButton-'+planIndex),plan=bundlePlans[planIndex],chosen=(plan?.bundles||[]).filter(bundle=>bundle?.items?.length===plan?.rules?.total&&bundleWorkflowGet(plan,bundle).sorted);
