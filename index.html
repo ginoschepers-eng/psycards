@@ -1417,7 +1417,6 @@ async function updateEditPrice(card){
   }catch(e){box.classList.add('unavailable');box.textContent='Prijs kon niet worden geladen';}
 }
 function applyEditAdvicePrice(){if(!editingAdvicePrice)return alert('Er is geen adviesprijs beschikbaar.');document.getElementById('editAsk').value=editingAdvicePrice.toFixed(2);}
-async 
 async function openMadeBundles(){
   show('madeBundles');
   await Promise.all([loadCards(),loadBundleData(true)]);
@@ -1465,21 +1464,40 @@ function printMadeBundleSet(setName){
   w.document.close();w.focus();setTimeout(()=>w.print(),300);
 }
 
-function showMadeBundleSet(setName){
+async function showMadeBundleSet(setName){
   const grid=document.getElementById('madeBundleSetGrid'),list=document.getElementById('madeBundleList');
   const groups=madeBundleGroups(),arr=groups[setName]||[];
   grid.innerHTML='';
+  list.innerHTML='<div class="card muted">Actuele kaartenlijsten laden…</div>';
+
+  // Haal de inhoud van juist deze bundels rechtstreeks uit Supabase op.
+  // Hierdoor kan een oude lokale bundle_items-cache nooit een bundel leeg laten lijken.
+  let liveItems=[];
+  if(arr.length){
+    const ids=arr.map(b=>b.id);
+    const {data,error}=await cloud.from('bundle_items').select('*').in('bundle_id',ids).order('id',{ascending:true});
+    if(error){
+      console.error('Actuele bundelinhoud:',error);
+      list.innerHTML='<div class="card"><b>Bundelinhoud kon niet worden geladen.</b><div class="muted">Probeer opnieuw te synchroniseren.</div></div>';
+      return;
+    }
+    liveItems=data||[];
+    // Werk ook de lokale cache bij voor printen en voorraadberekening.
+    const idSet=new Set(ids.map(String));
+    bundleItemsCache=(bundleItemsCache||[]).filter(x=>!idSet.has(String(x.bundle_id))).concat(liveItems);
+    writeJsonCache(BUNDLE_CACHE_KEY,{savedAt:Date.now(),bundles:bundlesCache,items:bundleItemsCache});
+  }
+
   list.innerHTML=`<button class="light" style="width:100%;margin-bottom:10px" onclick="renderMadeBundleSets()">← Terug naar sets</button><div class="card"><h3 style="margin:0">${escapeHtml(setName)}</h3><div class="muted">${arr.length} gemaakte bundel${arr.length===1?'':'s'}</div><button class="green" style="width:100%;margin-top:10px" onclick="printMadeBundleSet(decodeURIComponent('${encodeURIComponent(setName).replace(/'/g,'%27')}'))">🖨️ Print gemaakte bundels</button></div>`+
     arr.map((b,i)=>{
-      const rows=(bundleItemsCache||[]).filter(x=>String(x.bundle_id)===String(b.id))
+      const rows=liveItems.filter(x=>String(x.bundle_id)===String(b.id))
         .map(row=>({row,card:cardsCache.find(c=>String(c.id)===String(row.card_id))}))
         .sort((a,c)=>bundleCardNumber(a.card||{})-bundleCardNumber(c.card||{})||canonicalBundleVariant(a.card?.variant).localeCompare(canonicalBundleVariant(c.card?.variant),'nl'));
       const total=rows.reduce((sum,x)=>sum+(+x.row.quantity||0),0);
       const names=rows.map(({row,card})=>card?bundleCardLabel(card)+(row.quantity>1?' ×'+row.quantity:''):'Onbekende kaart').join('<br>');
-      return `<div class="card"><h3 style="margin:0 0 5px">${escapeHtml(b.name||('Bundel '+(i+1)))}</h3><div class="muted">${total} kaarten · ${b.status||'Samengesteld'}</div><details style="margin-top:10px"><summary>Bekijk kaartenlijst</summary><div class="muted" style="margin-top:10px">${names||'Geen kaartregels gevonden.'}</div></details></div>`;
+      return `<div class="card"><h3 style="margin:0 0 5px">${escapeHtml(b.name||('Bundel '+(i+1)))}</h3><div class="muted">${total} kaarten · ${b.status||'Samengesteld'}</div><details style="margin-top:10px"><summary>Bekijk kaartenlijst</summary><div class="muted" style="margin-top:10px">${names||'Geen kaartregels gevonden in Supabase.'}</div></details></div>`;
     }).join('');
 }
-
 async function renderBundles(){
   await Promise.all([loadCards(),loadBundleData(true)]);
   const host=document.getElementById('bundleExisting');document.getElementById('bundleBuilder').classList.add('hidden');
