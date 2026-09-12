@@ -448,12 +448,38 @@ async function loadCards(forceRefresh=false){
   writeJsonCache(DATA_CACHE_KEY,{savedAt:Date.now(),all:data||[]});
   const all=(data||[]).map(fromDb);expenseCache=all.filter(c=>c.productType==='Kosten');cardsCache=all.filter(c=>c.productType!=='Kosten');cardsCacheLoaded=true;remoteChangesPending=false;updateLastSyncText();return cardsCache;
 }
+function bundleNumberFromName(name){return Number(String(name||'').match(/Bundel\s+(\d+)\s*$/i)?.[1])||0;}
+function bundleStoredContentSignature(bundle){
+  return (bundleItemsCache||[]).filter(x=>String(x.bundle_id)===String(bundle.id))
+    .map(x=>String(x.card_id)+':'+String(+x.quantity||0)).sort().join('|');
+}
+function removeAccidentalRepeatedBundleBatches(){
+  // Herkent alleen een volledige, exact herhaalde reeks (bijv. 1-18 en 19-36
+  // met exact dezelfde kaartinhoud). Losse bundels met gelijke inhoud blijven bestaan.
+  const bySet={};
+  (bundlesCache||[]).forEach(b=>{const set=bundleSetName(b);(bySet[set]||(bySet[set]=[])).push(b);});
+  const duplicateIds=new Set();
+  Object.values(bySet).forEach(arr=>{
+    arr.sort((a,b)=>bundleNumberFromName(a.name)-bundleNumberFromName(b.name)||(+a.id||0)-(+b.id||0));
+    if(arr.length<2||arr.length%2)return;
+    const half=arr.length/2, first=arr.slice(0,half), second=arr.slice(half);
+    const consecutive=first.every((b,i)=>bundleNumberFromName(second[i].name)===bundleNumberFromName(b.name)+half);
+    const identical=consecutive&&first.every((b,i)=>bundleStoredContentSignature(b)&&bundleStoredContentSignature(b)===bundleStoredContentSignature(second[i]));
+    if(identical)second.forEach(b=>duplicateIds.add(String(b.id)));
+  });
+  if(!duplicateIds.size)return;
+  bundlesCache=bundlesCache.filter(b=>!duplicateIds.has(String(b.id)));
+  bundleItemsCache=bundleItemsCache.filter(x=>!duplicateIds.has(String(x.bundle_id)));
+  console.warn('Dubbel opgeslagen bundelreeks genegeerd:',duplicateIds.size);
+}
 async function loadBundleData(forceRefresh=false){
   const cached=readJsonCache(BUNDLE_CACHE_KEY);
-  if(!forceRefresh&&cached&&cacheAgeOk(cached.savedAt)&&Array.isArray(cached.bundles)&&Array.isArray(cached.items)){bundleTablesReady=true;bundlesCache=cached.bundles;bundleItemsCache=cached.items;return true;}
+  if(!forceRefresh&&cached&&cacheAgeOk(cached.savedAt)&&Array.isArray(cached.bundles)&&Array.isArray(cached.items)){bundleTablesReady=true;bundlesCache=cached.bundles;bundleItemsCache=cached.items;removeAccidentalRepeatedBundleBatches();return true;}
   const [bundles,items]=await Promise.all([cloud.from('bundles').select('*').order('id',{ascending:true}),cloud.from('bundle_items').select('*').order('id',{ascending:true})]);
   if(bundles.error||items.error){if(cached&&Array.isArray(cached.bundles)&&Array.isArray(cached.items)){bundleTablesReady=true;bundlesCache=cached.bundles;bundleItemsCache=cached.items;return true;}bundleTablesReady=false;bundlesCache=[];bundleItemsCache=[];console.error('Bundeltabellen:',bundles.error||items.error);return false;}
-  bundleTablesReady=true;bundlesCache=bundles.data||[];bundleItemsCache=items.data||[];writeJsonCache(BUNDLE_CACHE_KEY,{savedAt:Date.now(),bundles:bundlesCache,items:bundleItemsCache});return true;
+  bundleTablesReady=true;bundlesCache=bundles.data||[];bundleItemsCache=items.data||[];
+  removeAccidentalRepeatedBundleBatches();
+  writeJsonCache(BUNDLE_CACHE_KEY,{savedAt:Date.now(),bundles:bundlesCache,items:bundleItemsCache});return true;
 }
 function allocatedQuantity(cardId){return bundleItemsCache.filter(x=>String(x.card_id)===String(cardId)).reduce((sum,x)=>sum+(+x.quantity||0),0);}
 function availableQuantity(c){return Math.max(0,c.quantity-c.soldQuantity-allocatedQuantity(c.id));}
@@ -1394,7 +1420,7 @@ function applyEditAdvicePrice(){if(!editingAdvicePrice)return alert('Er is geen 
 async 
 async function openMadeBundles(){
   show('madeBundles');
-  await Promise.all([loadCards(),loadBundleData()]);
+  await Promise.all([loadCards(),loadBundleData(true)]);
   renderMadeBundleSets();
 }
 function madeBundleGroups(){
@@ -1455,7 +1481,7 @@ function showMadeBundleSet(setName){
 }
 
 async function renderBundles(){
-  await Promise.all([loadCards(),loadBundleData()]);
+  await Promise.all([loadCards(),loadBundleData(true)]);
   const host=document.getElementById('bundleExisting');document.getElementById('bundleBuilder').classList.add('hidden');
   if(!bundleTablesReady){host.innerHTML='<div class="card"><b>Database-uitbreiding nodig</b><div class="muted">Voer eerst het nieuwe bestand supabase-setup.sql uit in de SQL Editor van Supabase.</div></div>';return;}
   if(!bundlesCache.length){host.innerHTML='<div class="card muted">Er zijn nog geen bundels samengesteld.</div>';return;}
@@ -1643,14 +1669,14 @@ async function createPlannedBundles(planIndex){
   if(!confirm(chosen.length+' bundel'+(chosen.length===1?'':'s')+' van '+plan.set+' samenstellen?'))return;
   button.disabled=true;status.textContent='Bundels controleren en opslaan…';
   try{
-    await Promise.all([loadCards(),loadBundleData()]);
+    await Promise.all([loadCards(true),loadBundleData(true)]);
     if(!bundleTablesReady)throw new Error('De tabellen bundles en bundle_items ontbreken. Voer het nieuwe supabase-setup.sql uit.');
 
     // Controleer de actuele voorraad vóórdat er iets wordt opgeslagen.
     const needed={};chosen.forEach(bundle=>bundle.items.forEach(card=>needed[String(card.id)]=(needed[String(card.id)]||0)+1));
     for(const [id,quantity] of Object.entries(needed)){
       const card=cardsCache.find(c=>String(c.id)===String(id));
-      if(!card||availableQuantity(card)<quantity)throw new Error('De voorraad is gewijzigd. Bereken de bundels opnieuw.');
+      if(!card||availableQuantity(card)<quantity)throw new Error('Deze kaarten zijn inmiddels al in een opgeslagen bundel verwerkt. Bereken de bundels opnieuw.');
     }
 
     // Haal ALLE bestaande namen rechtstreeks uit Supabase op.
