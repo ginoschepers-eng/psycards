@@ -1509,12 +1509,64 @@ async function renderBundles(){
 function bundleSetName(bundle){const name=String(bundle?.name||'').trim(),set=name.replace(/\s+Bundel\s+\d+\s*$/i,'').trim();return set&&set!==name?set:'Overige bundels';}
 function showBundleSet(set){
   const host=document.getElementById('bundleExisting'),matching=bundlesCache.filter(bundle=>bundleSetName(bundle)===set).slice().reverse();
-  host.innerHTML=`<nav><button class="light" onclick="renderBundles()">← Alle sets</button></nav><div class="card"><h2 style="margin:0">${escapeHtml(set)}</h2><div class="muted">${matching.length} aangemaakte bundel${matching.length===1?'':'s'}</div></div>`+matching.map(bundle=>{
+  const unsold=matching.filter(b=>b.status!=='Verkocht');
+  host.innerHTML=`<nav><button class="light" onclick="renderBundles()">← Alle sets</button></nav>
+  <div class="card"><h2 style="margin:0">${escapeHtml(set)}</h2><div class="muted">${matching.length} aangemaakte bundel${matching.length===1?'':'s'} · ${unsold.length} nog beschikbaar</div>
+  ${unsold.length?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid #ddd">
+    <div style="font-weight:700;margin-bottom:7px">Verkoop aangevinkte bundels</div>
+    <label>Verkoopwijze</label>
+    <select id="bundleBatchType">
+      <option value="single">Los · €2,99 per bundel</option>
+      <option value="triple">3 voor €7,50 · €2,50 per bundel</option>
+    </select>
+    <label>Betaalwijze</label>
+    <select id="bundleBatchPayment"><option>Contant</option><option>Betaalverzoek</option></select>
+    <button class="green" style="width:100%;margin-top:12px" onclick="sellSelectedBundles(decodeURIComponent('${encodeURIComponent(set).replace(/'/g,'%27')}'))">✅ Aangevinkte bundels verkocht</button>
+  </div>`:''}</div>`+
+  matching.map(bundle=>{
     const items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(bundle.id)),count=items.reduce((s,x)=>s+(+x.quantity||0),0),names=items.map(x=>({row:x,card:cardsCache.find(c=>String(c.id)===String(x.card_id))})).sort((a,b)=>bundleCardNumber(a.card||{})-bundleCardNumber(b.card||{})).map(({row,card})=>card?bundleCardLabel(card)+(row.quantity>1?' ×'+row.quantity:''):'Onbekende kaart').join('<br>');
-    if(bundle.status==='Verkocht')return `<div class="card"><h3 style="margin:0">✅ ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · Verkocht voor <b>€${(+bundle.sold_price||0).toFixed(2)}</b></div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><div class="muted">Inkoopprijs bundel €0,50 (€0,25 kaarten + €0,25 materialen) · ${bundle.sold_date?new Date(bundle.sold_date).toLocaleDateString('nl-NL'):''}</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details></div>`;
-    return `<div class="card"><h3 style="margin:0">🎁 ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · Vraagprijs <b>€${(+bundle.ask>0?+bundle.ask:2.99).toFixed(2)}</b></div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><div class="muted">Inkoopprijs bundel: €0,50 (€0,25 kaarten + €0,25 materialen)</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details><label>Verkocht voor €</label><input id="bundleSalePrice-${bundle.id}" type="number" step="0.01" inputmode="decimal" value="${+bundle.ask>0?+bundle.ask:2.99}"><label>Betaalwijze</label><select id="bundlePayment-${bundle.id}"><option>Contant</option><option>Betaalverzoek</option></select><button class="green" style="width:100%;margin-top:12px" onclick="sellBundle('${bundle.id}')">✅ Bundel verkocht</button><button class="danger" style="width:100%;margin-top:8px" onclick="releaseBundle('${bundle.id}')">Bundel opheffen</button></div>`;
+    if(bundle.status==='Verkocht'){
+      const saleType=String(bundle.payment||'').includes('3 voor €7,50')?'3 voor €7,50':'Los verkocht';
+      const pay=String(bundle.payment||'').split(' · ')[0]||'';
+      return `<div class="card"><h3 style="margin:0;display:flex;align-items:center;gap:9px"><input type="checkbox" checked disabled style="width:22px;height:22px;margin:0"> ✅ ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · <b>${saleType}</b> · €${(+bundle.sold_price||0).toFixed(2)} per bundel</div><div class="muted">${escapeHtml(pay)} · ${bundle.sold_date?new Date(bundle.sold_date).toLocaleDateString('nl-NL'):''}</div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details></div>`;
+    }
+    return `<div class="card"><h3 style="margin:0;display:flex;align-items:center;gap:9px"><input class="bundle-sale-check" type="checkbox" value="${bundle.id}" style="width:22px;height:22px;margin:0"> 🎁 ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · Vraagprijs <b>€${(+bundle.ask>0?+bundle.ask:2.99).toFixed(2)}</b></div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><div class="muted">Inkoopprijs bundel: €0,50 (€0,25 kaarten + €0,25 materialen)</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details><button class="danger" style="width:100%;margin-top:8px" onclick="releaseBundle('${bundle.id}')">Bundel opheffen</button></div>`;
   }).join('');
   updateExistingBundleMarketValues(matching);
+}
+
+async function sellSelectedBundles(set){
+  const ids=[...document.querySelectorAll('.bundle-sale-check:checked')].map(x=>String(x.value));
+  if(!ids.length)return alert('Vink eerst de verkochte bundel(s) aan.');
+  const type=document.getElementById('bundleBatchType')?.value||'single';
+  const payment=document.getElementById('bundleBatchPayment')?.value||'Contant';
+  if(type==='triple' && (ids.length<3 || ids.length%3!==0))return alert('Bij 3 voor €7,50 moet je 3 bundels aanvinken, of een veelvoud van 3.');
+  const perBundle=type==='triple'?2.50:2.99;
+  const saleLabel=type==='triple'?'3 voor €7,50':'Los';
+  const total=perBundle*ids.length;
+
+  for(const id of ids){
+    const items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(id));
+    for(const item of items){
+      const card=cardsCache.find(c=>String(c.id)===String(item.card_id));
+      if(card){const check=collectorCheckCard(card);if(!check.ok)return alert('Bundelverkoop geblokkeerd.\n\n'+check.message+'\n\nWerk eerst de eigen verzameling bij in TCG Collector.');}
+    }
+  }
+  if(!confirm(ids.length+' bundel'+(ids.length===1?'':'s')+' registreren als '+saleLabel+' voor totaal €'+total.toFixed(2).replace('.',',')+'?'))return;
+
+  const stamp=new Date().toISOString();
+  for(const id of ids){
+    const {error}=await cloud.from('bundles').update({
+      status:'Verkocht',
+      sold_price:perBundle,
+      payment:payment+' · '+saleLabel,
+      sold_date:stamp
+    }).eq('id',id);
+    if(error)return alert('Verkoop opslaan is niet gelukt: '+error.message);
+  }
+  await loadBundleData(true);
+  await renderBundles();
+  showBundleSet(set);
 }
 async function bundleCardmarketValue(bundle){
   const items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(bundle.id));
@@ -1762,7 +1814,7 @@ async function sellBundle(id){
   const items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(id));
   for(const item of items){const card=cardsCache.find(c=>String(c.id)===String(item.card_id));if(card){const check=collectorCheckCard(card);if(!check.ok)return alert('Bundelverkoop geblokkeerd.\n\n'+check.message+'\n\nWerk eerst de eigen verzameling bij in TCG Collector.');}}
   if(!confirm('Deze bundel voor €'+price.toFixed(2)+' als verkocht registreren?'))return;
-  const {error}=await cloud.from('bundles').update({status:'Verkocht',sold_price:price,payment,sold_date:new Date().toISOString()}).eq('id',id);if(error)return alert('Verkoop opslaan is niet gelukt: '+error.message);await loadBundleData(true);await renderBundles();
+  const {error}=await cloud.from('bundles').update({status:'Verkocht',sold_price:price,payment:payment+' · Los',sold_date:new Date().toISOString()}).eq('id',id);if(error)return alert('Verkoop opslaan is niet gelukt: '+error.message);await loadBundleData(true);await renderBundles();
 }
 async function releaseBundle(id){if(!confirm('Bundel opheffen? De 25 kaarten komen weer terug in de losse voorraad.'))return;const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle||bundle.status==='Verkocht')return alert('Een verkochte bundel kan niet worden opgeheven.');const {error}=await cloud.from('bundles').delete().eq('id',id);if(error)return alert('Bundel opheffen is niet gelukt: '+error.message);await loadBundleData(true);await renderBundles();}
 function openPhotoViewer(src){if(!src)return;document.getElementById('viewerImage').src=src;document.getElementById('photoViewer').classList.remove('hidden');}
