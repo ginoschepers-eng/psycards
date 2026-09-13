@@ -68,6 +68,34 @@
     .dot{width:8px;height:8px;border-radius:50%;background:#8bd38b}.dot.offline{background:#ffcc66}
     #login{max-width:420px;margin:42px auto}.login-button{width:100%;margin-top:16px}
     @media(max-width:520px){.grid,.row,.stats{grid-template-columns:1fr}.grid button{min-height:88px}.folder-grid{grid-template-columns:1fr 1fr}}
+
+    /* Psycards layout refresh 2026-09-13 */
+    :root{--ink:#14213d;--brand:#1f4e78;--surface:#fff;--line:#e3e8ef;--soft:#f4f7fb}
+    body{background:#eef2f7}
+    header{padding:6px 14px;box-shadow:0 2px 12px rgba(20,33,61,.12)}
+    .brand-logo{height:70px}
+    main{max-width:820px;padding:14px 14px 34px}
+    .card{border:1px solid var(--line);box-shadow:0 4px 16px rgba(20,33,61,.055);border-radius:18px;padding:16px;margin:14px 0}
+    .app-section-title{margin:22px 2px 8px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#667085;font-weight:900}
+    .quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .quick-action{display:flex;align-items:center;gap:11px;min-height:70px;padding:12px 13px;border-radius:16px;text-align:left;font-size:15px;background:#fff;color:var(--ink);border:1px solid var(--line)}
+    .quick-action .ico{font-size:25px;line-height:1;width:32px;text-align:center}
+    .quick-action span:last-child{display:flex;flex-direction:column;gap:2px}
+    .quick-action small{font-size:11px;font-weight:600;color:#667085;line-height:1.25}
+    .quick-action.featured{background:var(--brand);color:#fff;border-color:var(--brand)}
+    .quick-action.featured small{color:#dbe8f4}
+    .home-sync{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin-top:14px;padding:12px 14px;background:#f8fafc;border:1px solid var(--line);border-radius:14px}
+    .home-sync .sync{justify-content:flex-start;margin:0}
+    .home-sync button{padding:9px 12px!important;margin:0!important;width:auto!important}
+    .home-sync #lastSyncText{grid-column:1/-1;text-align:left!important;margin:0!important}
+    #home .dashboard-hero{padding:16px;border-radius:18px;margin-bottom:14px}
+    #home .dashboard-hero h2{font-size:20px}
+    #home .dashboard-hero button{padding:13px;font-size:15px;border-radius:13px}
+    #home .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    #home .stat{border:1px solid var(--line);box-shadow:none}
+    nav{position:sticky;top:84px;z-index:4;background:rgba(238,242,247,.94);backdrop-filter:blur(8px);padding:7px 0;margin:-2px 0 8px}
+    nav button{background:#fff!important}
+    @media(max-width:520px){main{padding:10px 10px 28px}.brand-logo{height:62px}.quick-grid{grid-template-columns:1fr 1fr;gap:8px}.quick-action{min-height:66px;padding:10px;font-size:14px}.quick-action .ico{font-size:22px;width:28px}.quick-action small{display:none}#home .stats{grid-template-columns:1fr 1fr}.card{padding:13px}.home-sync{grid-template-columns:1fr}.home-sync button{width:100%!important}.folder-grid{gap:8px}.set-tile-grid{gap:8px}}
   </style>
 </head>
 <body>
@@ -87,17 +115,40 @@
 
   <section id="home" class="hidden">
     <div class="dashboard-hero">
-      <h2>Kaarten invoeren</h2>
-      <div>Open een set, vink kaartsoorten aan en werk de aantallen bij.</div>
+      <h2>Psycards beheer</h2>
+      <div>Voorraad, bundels en verkoop overzichtelijk op één plek.</div>
       <button onclick="openSetEntry()">🗂️ Kaarten en aantallen invoeren</button>
     </div>
-    <div class="card"><h3 style="margin:0">Regio</h3><div id="dashboardRegions" class="region-grid"></div></div>
+
+    <div class="app-section-title">Snel naar</div>
+    <div class="quick-grid">
+      <button class="quick-action featured" onclick="show('stock');renderStock()"><span class="ico">📦</span><span>Voorraad<small>Bekijk alle losse kaarten</small></span></button>
+      <button class="quick-action" onclick="show('bundles');renderBundles()"><span class="ico">🎁</span><span>Bundels<small>Maken, bekijken en verkopen</small></span></button>
+      <button class="quick-action" onclick="show('sell')"><span class="ico">💰</span><span>Verkoop invoeren<small>Registreer een verkochte kaart</small></span></button>
+      <button class="quick-action" onclick="show('sold');renderSold()"><span class="ico">✅</span><span>Verkoophistorie<small>Bekijk eerdere verkopen</small></span></button>
+    </div>
+
+    <div class="app-section-title">Overzicht</div>
     <div class="stats" id="homeStats"></div>
     <div class="card"><h3 style="margin:0">Mijn sets</h3><div class="muted">Tik op een set om direct aantallen in te voeren.</div><div id="dashboardSets"></div></div>
-    <div class="card">
-      <h3 style="margin:0 0 10px">Overig beheer</h3>
-      <div class="manage-grid"><button class="light" onclick="openNewProduct()">📷 Eén product</button><button class="gold" onclick="openValueCheck()">💶 Kaartwaarde</button><button class="green" onclick="show('sell')">💰 Verkocht</button><button class="light" onclick="show('stock');renderStock()">📦 Voorraad</button><button class="gold" onclick="show('money');renderMoney()">📒 Kasboek</button><button class="light" onclick="show('sold');renderSold()">✅ Verkopen</button><button class="green" onclick="show('bundles');renderBundles()">🎁 Bundels</button><button class="light" onclick="openCollector()">📚 TCG Collector</button><button class="danger" onclick="openMissingCollector()">⚠️ Nog niet in TCG</button></div>
-      <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div><button id="manualSyncButton" class="light" style="width:100%;padding:10px;font-size:13px;margin-top:8px" onclick="manualFullSync()">🔄 Nu synchroniseren</button><div id="lastSyncText" class="muted" style="text-align:center;margin-top:6px"></div>
+    <div class="card"><h3 style="margin:0">Regio</h3><div id="dashboardRegions" class="region-grid"></div></div>
+
+    <div class="app-section-title">Kaarten & collectie</div>
+    <div class="quick-grid">
+      <button class="quick-action" onclick="openNewProduct()"><span class="ico">📷</span><span>Eén product<small>Los product toevoegen</small></span></button>
+      <button class="quick-action" onclick="openValueCheck()"><span class="ico">💶</span><span>Kaartwaarde<small>Cardmarket indicatie</small></span></button>
+      <button class="quick-action" onclick="openCollector()"><span class="ico">📚</span><span>TCG Collector<small>Eigen verzameling</small></span></button>
+      <button class="quick-action" onclick="openMissingCollector()"><span class="ico">⚠️</span><span>Nog niet in TCG<small>Controleren bewaren/verkoop</small></span></button>
+    </div>
+
+    <div class="app-section-title">Financiën & synchronisatie</div>
+    <div class="quick-grid">
+      <button class="quick-action" onclick="show('money');renderMoney()"><span class="ico">📒</span><span>Kasboek<small>Inkomsten en uitgaven</small></span></button>
+    </div>
+    <div class="home-sync">
+      <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
+      <button id="manualSyncButton" class="light" onclick="manualFullSync()">🔄 Synchroniseren</button>
+      <div id="lastSyncText" class="muted"></div>
     </div>
   </section>
 
@@ -638,9 +689,9 @@ async function loadSetEntryCards(){
     const rarity=String(card.rarity||'').trim(),isSir=/special\s+illustration\s+rare|\bSIR\b|\bSRI\b/i.test(rarity),isIr=!isSir&&(/illustration\s+rare|\bIR\b/i.test(rarity)),isUr=/ultra\s+rare|\bUR\b/i.test(rarity),isSr=!isSir&&!isIr&&!isUr&&(/secret\s+rare|\bSR\b/i.test(rarity)),isRare=isEx||isIr||isSir||isSr||isUr||/rare/i.test(rarity);
     const rows=SET_ENTRY_COMMON.concat(SET_ENTRY_SPECIAL).map(v=>existingFor(v)).filter(Boolean),priced=rows.find(x=>Number(x.ask||0)>0)||rows[0],ask=Number(priced?.ask||0),min=Number(priced?.minimum||0);
     const priceHtml=isRare?`<div style="margin:5px 0 2px;font-weight:900">💶 ${ask>0?'€'+ask.toFixed(2).replace('.',','):'Prijs —'}${min>0?' · Min. €'+min.toFixed(2).replace('.',','):''}</div>`:'';
-    return `<div class="set-entry ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}">${image?`<img loading="lazy" src="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(number.split('/')[0])} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(number)}${rarity?' · '+escapeHtml(rarity):''}</div>${priceHtml}<div class="set-entry-options">${common}</div></div></div>`;
+    return `<div class="set-entry ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}">${image?`<img loading="lazy" data-card-image="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(number.split('/')[0])} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(number)}${rarity?' · '+escapeHtml(rarity):''}</div>${priceHtml}<div class="set-entry-options">${common}</div></div></div>`;
   }).join('')+'</div>';
-  setCardsStatus.textContent=set.cards.length+' kaarten geladen uit '+set.name+'.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();
+  hydrateLocalCardImages(setEntryCards);setCardsStatus.textContent=set.cards.length+' kaarten geladen uit '+set.name+'. Afbeeldingen worden lokaal bewaard na de eerste keer.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();
 }
 function toggleSetEntryVariant(box){
   const label=box.closest('.set-variant-option'),amount=label.querySelector('input[type=number]');
@@ -694,6 +745,47 @@ function toDb(c){const storedCondition=c.productType==='Pokémonkaart'?c.conditi
 const PHOTO_LOCAL_CACHE_DB='psycards-photo-cache-v1';
 const PHOTO_LOCAL_CACHE_STORE='setPhotos';
 const PHOTO_LOCAL_CACHE_MAX_AGE=60*24*60*60*1000;
+const CARD_IMAGE_CACHE='psycards-card-images-v1';
+async function localCardImageUrl(remoteUrl){
+  if(!remoteUrl)return '';
+  try{
+    if(!('caches' in window))return remoteUrl;
+    const cache=await caches.open(CARD_IMAGE_CACHE);
+    let response=await cache.match(remoteUrl);
+    if(!response){
+      response=await fetch(remoteUrl,{cache:'force-cache'});
+      if(response&&response.ok)await cache.put(remoteUrl,response.clone());
+    }
+    if(!response||!response.ok)return remoteUrl;
+    return URL.createObjectURL(await response.blob());
+  }catch(e){console.warn('Lokale kaartafbeelding mislukt:',e);return remoteUrl;}
+}
+async function hydrateOneLocalCardImage(img){
+  if(!img||img.dataset.cardImageLoaded==='1')return;
+  const remote=img.dataset.cardImage;
+  if(!remote)return;
+  img.dataset.cardImageLoaded='1';
+  const local=await localCardImageUrl(remote);
+  if(img.isConnected)img.src=local;
+}
+function hydrateLocalCardImages(root=document){
+  const imgs=[...root.querySelectorAll('img[data-card-image]')];
+  // Datazuinig: laad alleen afbeeldingen die in/near beeld komen.
+  // Een eenmaal opgehaalde afbeelding blijft in de lokale Cache Storage staan.
+  if('IntersectionObserver' in window){
+    const observer=new IntersectionObserver(entries=>{
+      entries.forEach(entry=>{
+        if(!entry.isIntersecting)return;
+        observer.unobserve(entry.target);
+        hydrateOneLocalCardImage(entry.target);
+      });
+    },{rootMargin:'250px 0px'});
+    imgs.forEach(img=>observer.observe(img));
+    return;
+  }
+  // Oudere browsers: bewust één voor één om piekverbruik te beperken.
+  (async()=>{for(const img of imgs)await hydrateOneLocalCardImage(img);})();
+}
 
 function openPhotoLocalCache(){
   return new Promise((resolve,reject)=>{
@@ -1380,7 +1472,7 @@ function bundleSetName(bundle){const name=String(bundle?.name||'').trim(),set=na
 function showBundleSet(set){
   const host=document.getElementById('bundleExisting'),matching=bundlesCache.filter(bundle=>bundleSetName(bundle)===set).slice().reverse();
   host.innerHTML=`<nav><button class="light" onclick="renderBundles()">← Alle sets</button></nav><div class="card"><h2 style="margin:0">${escapeHtml(set)}</h2><div class="muted">${matching.length} aangemaakte bundel${matching.length===1?'':'s'}</div></div>`+matching.map(bundle=>{
-    const items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(bundle.id)),count=items.reduce((s,x)=>s+(+x.quantity||0),0),names=items.map(x=>({row:x,card:cardsCache.find(c=>String(c.id)===String(x.card_id))})).sort((a,b)=>bundleCardNumber(a.card||{})-bundleCardNumber(b.card||{})).map(({row,card})=>card?bundleCardLabel(card)+(row.quantity>1?' ×'+row.quantity:''):'Onbekende kaart').join('<br>');
+    let items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(bundle.id)),count=items.reduce((s,x)=>s+(+x.quantity||0),0),names=items.map(x=>({row:x,card:cardsCache.find(c=>String(c.id)===String(x.card_id))})).sort((a,b)=>bundleCardNumber(a.card||{})-bundleCardNumber(b.card||{})).map(({row,card})=>card?bundleCardLabel(card)+(row.quantity>1?' ×'+row.quantity:''):'Onbekende kaart').join('<br>'); if(!count&&['pitchblack','blackbolt'].includes(normalizeSetName(set))){const n=Number(String(bundle.name||'').match(/Bundel\s+(\d+)\s*$/i)?.[1]||0),spec=(typeof PITCH_BLACK_EXISTING_1_30!=='undefined'&&PITCH_BLACK_EXISTING_1_30[n])||[];if(spec.length){names=spec.map(x=>escapeHtml(x.number)+' – '+escapeHtml(x.name)+' – '+escapeHtml(x.variant)).join('<br>')+'<br><b>⚠️ Nog niet aan de voorraad gekoppeld</b>';}}
     if(bundle.status==='Verkocht')return `<div class="card"><h3 style="margin:0">✅ ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · Verkocht voor <b>€${(+bundle.sold_price||0).toFixed(2)}</b></div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><div class="muted">Inkoopprijs bundel €0,50 (€0,25 kaarten + €0,25 materialen) · ${bundle.sold_date?new Date(bundle.sold_date).toLocaleDateString('nl-NL'):''}</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details></div>`;
     return `<div class="card"><h3 style="margin:0">🎁 ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · Vraagprijs <b>€${(+bundle.ask||0).toFixed(2)}</b></div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><div class="muted">Inkoopprijs bundel: €0,50 (€0,25 kaarten + €0,25 materialen)</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details><label>Verkocht voor €</label><input id="bundleSalePrice-${bundle.id}" type="number" step="0.01" inputmode="decimal" value="${+bundle.ask||0}"><label>Betaalwijze</label><select id="bundlePayment-${bundle.id}"><option>Contant</option><option>Betaalverzoek</option></select><button class="green" style="width:100%;margin-top:12px" onclick="sellBundle('${bundle.id}')">✅ Bundel verkocht</button><button class="danger" style="width:100%;margin-top:8px" onclick="releaseBundle('${bundle.id}')">Bundel opheffen</button></div>`;
   }).join('');
@@ -1496,12 +1588,12 @@ async function repairPitchBlackBundles(){
       const resolved=[];
       for(const item of spec){
         const wantedNum=String(item.number||'').split('/')[0].replace(/^0+(?=\d)/,'');
-        const card=cardsCache.find(c=>{const p=splitStoredName(c.name),num=String(p.number||'').split('/')[0].replace(/^0+(?=\d)/,'');return normalizeSetName(stockFolderName(c))==='pitchblack'&&num===wantedNum&&normalizeSetName(p.name)===normalizeSetName(item.name)&&canonicalBundleVariant(c.variant)===item.variant;});
+        const card=cardsCache.find(c=>{const p=splitStoredName(c.name),num=String(p.number||'').split('/')[0].replace(/^0+(?=\d)/,'');return ['pitchblack','blackbolt'].includes(normalizeSetName(stockFolderName(c)))&&num===wantedNum&&normalizeSetName(p.name)===normalizeSetName(item.name)&&canonicalBundleVariant(c.variant)===item.variant;});
         if(!card){missing.push('Bundel '+n+': '+item.number+' '+item.name+' '+item.variant);continue;}
         resolved.push(card);
       }
       if(resolved.length!==30)continue;
-      const name='Pitch Black Bundel '+n;let bundle=bundlesCache.find(b=>String(b.name).trim().toLowerCase()===name.toLowerCase());
+      const name='Pitch Black Bundel '+n;let bundle=bundlesCache.find(b=>{const m=String(b.name||'').match(/Bundel\s+(\d+)\s*$/i);if(!m||Number(m[1])!==n)return false;const setNorm=normalizeSetName(bundleSetName(b));return setNorm==='pitchblack'||setNorm==='blackbolt';});
       if(!bundle){const {data,error}=await cloud.from('bundles').insert({name,status:'Samengesteld',ask:2.99}).select().single();if(error)throw error;bundle=data;bundlesCache.push(bundle);created++;}
       const existing=bundleItemsCache.filter(x=>String(x.bundle_id)===String(bundle.id));
       if(existing.reduce((sum,x)=>sum+(+x.quantity||0),0)>=30){skipped++;continue;}
