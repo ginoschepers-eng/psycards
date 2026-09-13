@@ -1460,7 +1460,7 @@ function printMadeBundleSet(setName){
   }).join('');
   const w=window.open('','_blank');
   if(!w)return alert('Sta pop-ups toe om de gemaakte bundels te printen.');
-  w.document.write('<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>'+escapeHtml(setName)+' - gemaakte bundels</title><style>body{font-family:Arial,sans-serif;color:#111;margin:20px}h1{margin:0 0 18px}.bundle{break-inside:avoid;page-break-inside:avoid;margin:0 0 24px;border-top:2px solid #222;padding-top:8px}.bundle h2{margin:0 0 4px;font-size:18px}.meta{font-size:12px;margin-bottom:7px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:3px 4px;border-bottom:1px solid #ddd}th:last-child,td:last-child{width:55px;text-align:center}@page{size:A4 portrait;margin:8mm}@media print{body{margin:0}h1{font-size:18px;margin:0 0 5mm}.bundle{box-sizing:border-box;height:128mm;overflow:hidden;break-inside:avoid;page-break-inside:avoid;margin:0;padding:4mm 0 2mm;border-top:2px solid #222}.bundle:nth-of-type(2n){page-break-after:always}.bundle h2{font-size:15px;margin:0 0 2mm}.meta{font-size:10px;margin-bottom:2mm}table{font-size:9px;line-height:1.05}th,td{padding:1px 3px}}</style></head><body><h1>'+escapeHtml(setName)+' · Gemaakte bundels</h1>'+sections+'</body></html>');
+  w.document.write('<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>'+escapeHtml(setName)+' - gemaakte bundels</title><style>body{font-family:Arial,sans-serif;color:#111;margin:20px}h1{margin:0 0 18px}.bundle{break-inside:avoid;page-break-inside:avoid;margin:0 0 24px;border-top:2px solid #222;padding-top:8px}.bundle h2{margin:0 0 4px;font-size:18px}.meta{font-size:12px;margin-bottom:7px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:3px 4px;border-bottom:1px solid #ddd}th:last-child,td:last-child{width:55px;text-align:center}@media print{body{margin:10mm}.bundle{break-inside:avoid}}</style></head><body><h1>'+escapeHtml(setName)+' · Gemaakte bundels</h1>'+sections+'</body></html>');
   w.document.close();w.focus();setTimeout(()=>w.print(),300);
 }
 
@@ -1592,7 +1592,7 @@ async function startBundleBuilder(){
   await Promise.all([loadCards(),loadBundleData()]);if(!bundleTablesReady)return alert('Voer eerst het nieuwe bestand supabase-setup.sql uit in Supabase.');
   bundlePlanMinPrice=Math.max(0,+document.getElementById('bundleMinCardPrice').value||3.00);bundlePlanMaxPrice=Math.max(bundlePlanMinPrice,+document.getElementById('bundleMaxCardPrice').value||3.75);const allowed=new Set(['Normaal','Holo','Reverse holo']),groups={};
   cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad').forEach(card=>{const set=stockFolderName(card);if(set!=='Kaarten zonder set')(groups[set]??=[]).push(card);});
-  bundlePlans=Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0],'nl')).map(([set,cards])=>{const eligible=cards.filter(c=>allowed.has(canonicalBundleVariant(c.variant))).map(card=>({card,quantity:availableQuantity(card)})).filter(x=>x.quantity>0),available=eligible.reduce((sum,x)=>sum+x.quantity,0),rules=bundleRulesForSet(set),count=maxMixedBundleCount(eligible,rules);return {set,available,rules,count,bundles:buildBalancedBundlePlan(eligible,count,rules,bundlePlanMinPrice,bundlePlanMaxPrice)};});
+  bundlePlans=Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0],'nl')).map(([set,cards])=>{const eligible=cards.filter(c=>allowed.has(canonicalBundleVariant(c.variant))).map(card=>({card,quantity:Math.max(0,availableQuantity(card)-1)})).filter(x=>x.quantity>0),available=eligible.reduce((sum,x)=>sum+x.quantity,0),rules=bundleRulesForSet(set),count=maxMixedBundleCount(eligible,rules);return {set,available,rules,count,bundles:buildBalancedBundlePlan(eligible,count,rules,bundlePlanMinPrice,bundlePlanMaxPrice)};});
   if(!bundlePlans.length)return alert('Er staan nog geen kaarten per set in de voorraad.');
   document.getElementById('bundleExisting').innerHTML='';document.getElementById('bundleBuilder').classList.remove('hidden');renderBundlePlanOverview();
 }
@@ -1746,7 +1746,7 @@ async function createPlannedBundles(planIndex){
     const needed={};chosen.forEach(bundle=>bundle.items.forEach(card=>needed[String(card.id)]=(needed[String(card.id)]||0)+1));
     for(const [id,quantity] of Object.entries(needed)){
       const card=cardsCache.find(c=>String(c.id)===String(id));
-      if(!card||availableQuantity(card)<quantity)throw new Error('Deze kaarten zijn inmiddels al in een opgeslagen bundel verwerkt. Bereken de bundels opnieuw.');
+      if(!card||Math.max(0,availableQuantity(card)-1)<quantity)throw new Error('Van iedere kaart/variant moet minimaal 1 exemplaar in de losse voorraad blijven. Bereken de bundels opnieuw.');
     }
 
     // Haal ALLE bestaande namen rechtstreeks uit Supabase op.
