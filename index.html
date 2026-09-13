@@ -388,7 +388,7 @@ const cloud=window.supabase.createClient(PROJECT_URL,PUBLISHABLE_KEY);
 let cardsCache=[],expenseCache=[];
 let cardsCacheLoaded=false;
 const DATA_CACHE_KEY='psycards-data-cache-v2';
-const BUNDLE_CACHE_KEY='psycards-bundle-cache-v3';
+const BUNDLE_CACHE_KEY='psycards-bundle-cache-v6';
 const DATA_SYNC_MAX_AGE=4*24*60*60*1000;
 let remoteChangesPending=false;
 let bundlesCache=[],bundleItemsCache=[],bundleTablesReady=true,bundlePlans=[],bundlePlanMinPrice=3.00,bundlePlanMaxPrice=3.75;
@@ -487,10 +487,23 @@ async function loadCards(forceRefresh=false){
   writeJsonCache(DATA_CACHE_KEY,{savedAt:Date.now(),all:data||[]});
   const all=(data||[]).map(fromDb);expenseCache=all.filter(c=>c.productType==='Kosten');cardsCache=all.filter(c=>c.productType!=='Kosten');cardsCacheLoaded=true;remoteChangesPending=false;updateLastSyncText();return cardsCache;
 }
+async function fetchAllTableRows(table,orderColumn='id'){
+  const pageSize=1000,all=[];
+  for(let from=0;;from+=pageSize){
+    const result=await cloud.from(table).select('*').order(orderColumn,{ascending:true}).range(from,from+pageSize-1);
+    if(result.error)return {data:null,error:result.error};
+    const rows=result.data||[];all.push(...rows);
+    if(rows.length<pageSize)break;
+  }
+  return {data:all,error:null};
+}
 async function loadBundleData(forceRefresh=false){
   const cached=readJsonCache(BUNDLE_CACHE_KEY);
   if(!forceRefresh&&cached&&cacheAgeOk(cached.savedAt)&&Array.isArray(cached.bundles)&&Array.isArray(cached.items)){bundleTablesReady=true;bundlesCache=cached.bundles;bundleItemsCache=cached.items;return true;}
-  const [bundles,items]=await Promise.all([cloud.from('bundles').select('*').order('id',{ascending:true}),cloud.from('bundle_items').select('*').order('id',{ascending:true})]);
+  // Supabase geeft standaard maximaal 1000 rijen per request terug. Met veel bundels
+  // zijn er meer bundle_items; haal daarom alle pagina's op zodat aantallen, inhoud,
+  // Cardmarket-waarde en voorraadreservering dezelfde complete gegevens gebruiken.
+  const [bundles,items]=await Promise.all([fetchAllTableRows('bundles'),fetchAllTableRows('bundle_items')]);
   if(bundles.error||items.error){if(cached&&Array.isArray(cached.bundles)&&Array.isArray(cached.items)){bundleTablesReady=true;bundlesCache=cached.bundles;bundleItemsCache=cached.items;return true;}bundleTablesReady=false;bundlesCache=[];bundleItemsCache=[];console.error('Bundeltabellen:',bundles.error||items.error);return false;}
   bundleTablesReady=true;bundlesCache=bundles.data||[];bundleItemsCache=items.data||[];writeJsonCache(BUNDLE_CACHE_KEY,{savedAt:Date.now(),bundles:bundlesCache,items:bundleItemsCache});return true;
 }
