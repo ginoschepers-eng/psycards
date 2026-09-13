@@ -1596,12 +1596,15 @@ async function repairPitchBlackBundles(){
       const name='Pitch Black Bundel '+n;let bundle=bundlesCache.find(b=>{const m=String(b.name||'').match(/Bundel\s+(\d+)\s*$/i);if(!m||Number(m[1])!==n)return false;const setNorm=normalizeSetName(bundleSetName(b));return setNorm==='pitchblack'||setNorm==='blackbolt';});
       if(!bundle){const {data,error}=await cloud.from('bundles').insert({name,status:'Samengesteld',ask:2.99}).select().single();if(error)throw error;bundle=data;bundlesCache.push(bundle);created++;}
       const existing=bundleItemsCache.filter(x=>String(x.bundle_id)===String(bundle.id));
-      if(existing.reduce((sum,x)=>sum+(+x.quantity||0),0)>=30){skipped++;continue;}
-      if(existing.length){const {error}=await cloud.from('bundle_items').delete().eq('bundle_id',bundle.id);if(error)throw error;bundleItemsCache=bundleItemsCache.filter(x=>String(x.bundle_id)!==String(bundle.id));}
+      const existingTotal=existing.reduce((sum,x)=>sum+(+x.quantity||0),0);
+      // De database kan al bundle_items bevatten terwijl de lokale cache leeg/verouderd is.
+      // Daarom de koppelingen voor Pitch Black 1-30 altijd opnieuw exact opbouwen.
+      const {error:deleteError}=await cloud.from('bundle_items').delete().eq('bundle_id',bundle.id);if(deleteError)throw deleteError;
+      bundleItemsCache=bundleItemsCache.filter(x=>String(x.bundle_id)!==String(bundle.id));
       const counts={};resolved.forEach(card=>counts[String(card.id)]=(counts[String(card.id)]||0)+1);
       const rows=Object.entries(counts).map(([card_id,quantity])=>({bundle_id:bundle.id,card_id,quantity}));
       const {error}=await cloud.from('bundle_items').insert(rows);if(error)throw error;
-      bundleItemsCache.push(...rows);repaired++;
+      bundleItemsCache.push(...rows);repaired++;if(existingTotal===30)skipped++;
     }
     await loadBundleData(true);await renderBundles();await renderHomeDashboard();
     localStorage.removeItem(DATA_CACHE_KEY);
