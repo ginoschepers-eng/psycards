@@ -27,7 +27,7 @@
     .thumb{width:72px;height:96px;object-fit:cover;border-radius:8px;background:#edf1f6}
     .muted{color:#667085;font-size:13px}.money{font-weight:800}
     .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .stat{background:white;padding:14px;border-radius:14px}.stat b{display:block;font-size:22px;margin-top:4px}
+    .stat{background:white;padding:14px;border-radius:14px}.stat b{display:block;font-size:22px;margin-top:4px}.stat-button{width:100%;color:#14213d;text-align:left;font-size:16px;font-weight:400;border:1px solid var(--line);box-shadow:none}.stat-button b{font-weight:800}.stat-button:active{transform:scale(.99)}
     nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
     nav button{padding:10px 12px;font-size:14px;border-radius:12px}
     .danger{background:#ffe1e1;color:#8a1c1c}
@@ -131,7 +131,6 @@
 
     <div class="app-section-title">Overzicht</div>
     <div class="stats" id="homeStats"></div>
-    <div class="card"><h3 style="margin:0">Mijn sets</h3><div class="muted">Tik op een set om direct aantallen in te voeren.</div><div id="dashboardSets"></div></div>
     <div class="card"><h3 style="margin:0">Regio</h3><div id="dashboardRegions" class="region-grid"></div></div>
 
     <div class="app-section-title">Kaarten & collectie</div>
@@ -151,6 +150,15 @@
       <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
       <button id="manualSyncButton" class="light" onclick="manualFullSync()">🔄 Synchroniseren</button>
       <div id="lastSyncText" class="muted"></div>
+    </div>
+  </section>
+
+  <section id="mysets" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">Mijn sets</h2>
+      <div class="muted">Tik op een set om direct kaarten en aantallen in te voeren.</div>
+      <div id="dashboardSets"></div>
     </div>
   </section>
 
@@ -491,9 +499,10 @@ async function renderHomeDashboard(){
   const regions=[['en','🌍','Internationaal'],['ja','🇯🇵','Japan'],['ko','🇰🇷','Korea'],['zh','🇨🇳','China']];
   dashboardRegions.innerHTML=regions.map(([code,icon,label])=>{const count=saved.filter(s=>code==='zh'?String(s.language).startsWith('zh'):s.language===code).length;return `<button class="region-button" onclick="openSetEntryByLanguage('${code}')"><span>${icon}</span>${label}<small class="muted">${count} sets</small></button>`;}).join('');
   const stockAmount=open.reduce((sum,c)=>sum+availableQuantity(c),0),uniqueCards=new Set(open.filter(c=>c.productType==='Pokémonkaart').map(c=>c.name)).size;
-  homeStats.innerHTML=[['Kaarten op voorraad',stockAmount],['Unieke kaarten',uniqueCards],['Kaartvarianten',open.filter(c=>c.productType==='Pokémonkaart').length],['Mijn sets',saved.length]].map(([label,value])=>`<div class="stat">${label}<b>${value}</b></div>`).join('');
+  homeStats.innerHTML=[['Kaarten op voorraad',stockAmount],['Unieke kaarten',uniqueCards],['Kaartvarianten',open.filter(c=>c.productType==='Pokémonkaart').length]].map(([label,value])=>`<div class="stat">${label}<b>${value}</b></div>`).join('')+`<button class="stat stat-button" onclick="openMySets()">Mijn sets<b>${saved.length} ›</b></button>`;
   dashboardSets.innerHTML=saved.length?saved.map(set=>{const matching=open.filter(c=>c.productType==='Pokémonkaart'&&normalizeSetName(stockFolderName(c))===normalizeSetName(set.name)),amount=matching.reduce((sum,c)=>sum+availableQuantity(c),0);return `<button class="dashboard-set" onclick="openSetEntryForSavedSet('${set.id}')"><span><b>${escapeHtml(set.name)}</b><small class="muted" style="display:block">${escapeHtml(SET_LANGUAGES[set.language]||set.language)}${set.set_code?' · '+escapeHtml(set.set_code):''}</small></span><span class="dashboard-set-count">${amount} kaarten</span></button>`;}).join(''):'<div class="muted" style="margin-top:10px">Nog geen sets toegevoegd.</div>';
 }
+async function openMySets(){await renderHomeDashboard();show('mysets');}
 async function openSetEntryByLanguage(language){
   await openSetEntry();const found=savedSetsCache.find(s=>language==='zh'?String(s.language).startsWith('zh'):s.language===language);if(found){setEntrySelect.value=String(found.id);return loadSetEntryCards();}
   addSetLanguage.value=language==='zh'?'zh-tw':language;toggleAddSet(true);addSetStatus.textContent='Er staat nog geen set uit deze regio in Mijn sets. Kies hieronder een set.';
