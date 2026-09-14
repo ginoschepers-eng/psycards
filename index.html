@@ -27,7 +27,7 @@
     .thumb{width:72px;height:96px;object-fit:cover;border-radius:8px;background:#edf1f6}
     .muted{color:#667085;font-size:13px}.money{font-weight:800}
     .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .stat{background:white;padding:14px;border-radius:14px}.stat b{display:block;font-size:22px;margin-top:4px}
+    .stat{background:white;padding:14px;border-radius:14px}.stat b{display:block;font-size:22px;margin-top:4px}.stat-button{width:100%;color:#14213d;text-align:left;font-size:16px;font-weight:400;border:1px solid var(--line);box-shadow:none}.stat-button b{font-weight:800}.stat-button:active{transform:scale(.99)}
     nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
     nav button{padding:10px 12px;font-size:14px;border-radius:12px}
     .danger{background:#ffe1e1;color:#8a1c1c}
@@ -60,6 +60,7 @@
     .folder{background:white;border:1px solid #d6deea;border-radius:16px;padding:16px;text-align:left;color:#14213d;min-height:108px}
     .folder-visual{height:54px;display:flex;align-items:center;margin-bottom:8px}.folder-logo{display:block;max-width:100%;max-height:50px;object-fit:contain;object-position:left center}.folder-icon{font-size:30px;display:block}.folder-name{font-size:17px;font-weight:800;display:block}.folder-count{font-size:13px;color:#667085;margin-top:4px;display:block}
     .market-price{margin-top:7px;padding:8px 10px;border-radius:9px;background:#eef7ee;color:#285b2b;font-size:12px;line-height:1.4}.market-price.unavailable{background:#f3f4f6;color:#667085}
+    .trend-toolbar{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}.trend-card{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.trend-value{text-align:right;font-weight:900}.trend-up{color:#18794e}.trend-down{color:#b42318}.trend-flat{color:#667085}.trend-badge{display:inline-block;margin-top:5px;padding:4px 8px;border-radius:999px;background:#eef2f7;font-size:11px;font-weight:800}
     .stock-variant-normal{border-left:5px solid #98a2b3}.stock-variant-holo{border-left:5px solid #e0a800;background:linear-gradient(90deg,#fff9df 0,#fff 34%)}.stock-variant-reverse{border-left:5px solid #7656c9;background:linear-gradient(90deg,#f2ecff 0,#fff 34%)}.stock-variant-special{border-left:5px solid #d94f70;background:linear-gradient(90deg,#fff0f4 0,#fff 34%)}.variant-badge{display:inline-block;margin-top:5px;padding:4px 9px;border-radius:999px;font-size:11px;font-weight:800}.variant-badge.normal{background:#edf0f4;color:#475467}.variant-badge.holo{background:#fff0ad;color:#765500}.variant-badge.reverse{background:#e8ddff;color:#56359c}.variant-badge.special{background:#ffdce5;color:#9e2443}
     .bundle-line{display:grid;grid-template-columns:30px 58px 1fr;gap:9px;align-items:center;padding:9px 0;border-bottom:1px solid #edf0f4}.bundle-check{width:23px;height:23px;margin:0}.bundle-thumb{width:54px;height:72px;object-fit:cover;border-radius:6px;background:#edf1f6}.bundle-progress{position:sticky;top:108px;z-index:4;background:#fff0bf;border-radius:13px;padding:12px;font-weight:800;text-align:center}
     .set-entry{display:grid;grid-template-columns:78px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid #edf0f4}.set-entry.no-stock{opacity:.42;filter:grayscale(.9)}.set-entry.no-stock:focus-within{opacity:.82;filter:grayscale(.25)}.set-entry-target{scroll-margin-top:90px;outline:3px solid #f2c94c;outline-offset:3px;border-radius:10px}.set-jumpbar{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin:10px 0}.set-jumpbar input{margin:0}.set-star{font-size:12px;font-weight:800}.set-star.active{background:#fff3bf;border-color:#e0b400}.set-entry img{width:78px;height:109px;object-fit:contain;background:#edf1f6;border-radius:8px}.set-entry-options{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}.set-variant-option{display:grid;grid-template-columns:22px 1fr;gap:6px;align-items:center;margin:0;padding:7px;border:1px solid #d6deea;border-radius:9px;font-size:12px}.set-variant-option.active{grid-template-columns:22px 1fr 54px;background:#eef7ee;border-color:#8bd38b}.set-variant-option input[type=checkbox]{width:20px;height:20px;margin:0}.set-variant-option input[type=number]{width:54px;padding:7px 3px;text-align:center}.set-variant-stock{display:block;color:#28702e;font-size:10px;font-weight:800;margin-top:2px}.set-entry-more{margin-top:7px}.set-entry-more>summary{color:#1f4e78;font-size:12px;font-weight:800;cursor:pointer}.set-savebar{position:sticky;bottom:8px;z-index:4;background:white;border:1px solid #d6deea;border-radius:14px;padding:10px;box-shadow:0 3px 16px rgba(0,0,0,.14)}
@@ -130,13 +131,13 @@
 
     <div class="app-section-title">Overzicht</div>
     <div class="stats" id="homeStats"></div>
-    <div class="card"><h3 style="margin:0">Mijn sets</h3><div class="muted">Tik op een set om direct aantallen in te voeren.</div><div id="dashboardSets"></div></div>
     <div class="card"><h3 style="margin:0">Regio</h3><div id="dashboardRegions" class="region-grid"></div></div>
 
     <div class="app-section-title">Kaarten & collectie</div>
     <div class="quick-grid">
       <button class="quick-action" onclick="openNewProduct()"><span class="ico">📷</span><span>Eén product<small>Los product toevoegen</small></span></button>
       <button class="quick-action" onclick="openValueCheck()"><span class="ico">💶</span><span>Kaartwaarde<small>Cardmarket indicatie</small></span></button>
+      <button class="quick-action" onclick="openMarketTrends()"><span class="ico">📈</span><span>Live Markttrends<small>Kaarten vanaf €1,00</small></span></button>
       <button class="quick-action" onclick="openCollector()"><span class="ico">📚</span><span>TCG Collector<small>Eigen verzameling</small></span></button>
       <button class="quick-action" onclick="openMissingCollector()"><span class="ico">⚠️</span><span>Nog niet in TCG<small>Controleren bewaren/verkoop</small></span></button>
     </div>
@@ -149,6 +150,15 @@
       <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
       <button id="manualSyncButton" class="light" onclick="manualFullSync()">🔄 Synchroniseren</button>
       <div id="lastSyncText" class="muted"></div>
+    </div>
+  </section>
+
+  <section id="mysets" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">Mijn sets</h2>
+      <div class="muted">Tik op een set om direct kaarten en aantallen in te voeren.</div>
+      <div id="dashboardSets"></div>
     </div>
   </section>
 
@@ -309,6 +319,22 @@
     </div>
   </section>
 
+  <section id="markettrends" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">📈 Live Markttrends</h2>
+      <div class="muted">Alleen voorraadkaarten met een waarde vanaf €1,00. Prijzen worden maximaal één keer per dag gecontroleerd; afbeeldingen worden niet geladen.</div>
+      <div class="trend-toolbar">
+        <div><label>Set</label><select id="marketTrendSet" onchange="renderMarketTrendList()"><option value="">Alle sets</option></select></div>
+        <div><label>Trend</label><select id="marketTrendDirection" onchange="renderMarketTrendList()"><option value="">Alles</option><option value="up">Stijgers</option><option value="down">Dalers</option><option value="flat">Ongewijzigd</option></select></div>
+      </div>
+      <button id="marketTrendRefresh" class="primary" style="width:100%;margin-top:12px;padding:13px;font-size:15px" onclick="loadMarketTrends()">Prijscontrole starten</button>
+      <div id="marketTrendStatus" class="scan-status"></div>
+    </div>
+    <div id="marketTrendSummary" class="stats"></div>
+    <div id="marketTrendList"></div>
+  </section>
+
   <section id="stock" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug</button><button class="light" onclick="exportCSV()">⬇️ Export Excel/CSV</button></nav>
     <div id="stockList"></div>
@@ -390,6 +416,10 @@ let cardsCacheLoaded=false;
 const DATA_CACHE_KEY='psycards-data-cache-v2';
 const BUNDLE_CACHE_KEY='psycards-bundle-cache-v6';
 const DATA_SYNC_MAX_AGE=4*24*60*60*1000;
+const MARKET_TRENDS_CACHE_KEY='psycards-market-trends-v1';
+const MARKET_TRENDS_MIN_PRICE=1;
+const MARKET_TRENDS_MAX_AGE=24*60*60*1000;
+let marketTrendRows=[];
 let remoteChangesPending=false;
 let bundlesCache=[],bundleItemsCache=[],bundleTablesReady=true,bundlePlans=[],bundlePlanMinPrice=3.00,bundlePlanMaxPrice=3.75;
 let scanCandidates=[];
@@ -413,6 +443,7 @@ window.addEventListener('popstate',event=>{
   if(target==='money')renderMoney();
   if(target==='sold')renderSold();
   if(target==='missingCollector')renderMissingCollector();
+  if(target==='markettrends')loadMarketTrends();
 });
 
 function login(){
@@ -468,9 +499,10 @@ async function renderHomeDashboard(){
   const regions=[['en','🌍','Internationaal'],['ja','🇯🇵','Japan'],['ko','🇰🇷','Korea'],['zh','🇨🇳','China']];
   dashboardRegions.innerHTML=regions.map(([code,icon,label])=>{const count=saved.filter(s=>code==='zh'?String(s.language).startsWith('zh'):s.language===code).length;return `<button class="region-button" onclick="openSetEntryByLanguage('${code}')"><span>${icon}</span>${label}<small class="muted">${count} sets</small></button>`;}).join('');
   const stockAmount=open.reduce((sum,c)=>sum+availableQuantity(c),0),uniqueCards=new Set(open.filter(c=>c.productType==='Pokémonkaart').map(c=>c.name)).size;
-  homeStats.innerHTML=[['Kaarten op voorraad',stockAmount],['Unieke kaarten',uniqueCards],['Kaartvarianten',open.filter(c=>c.productType==='Pokémonkaart').length],['Mijn sets',saved.length]].map(([label,value])=>`<div class="stat">${label}<b>${value}</b></div>`).join('');
+  homeStats.innerHTML=[['Kaarten op voorraad',stockAmount],['Unieke kaarten',uniqueCards],['Kaartvarianten',open.filter(c=>c.productType==='Pokémonkaart').length]].map(([label,value])=>`<div class="stat">${label}<b>${value}</b></div>`).join('')+`<button class="stat stat-button" onclick="openMySets()">Mijn sets<b>${saved.length} ›</b></button>`;
   dashboardSets.innerHTML=saved.length?saved.map(set=>{const matching=open.filter(c=>c.productType==='Pokémonkaart'&&normalizeSetName(stockFolderName(c))===normalizeSetName(set.name)),amount=matching.reduce((sum,c)=>sum+availableQuantity(c),0);return `<button class="dashboard-set" onclick="openSetEntryForSavedSet('${set.id}')"><span><b>${escapeHtml(set.name)}</b><small class="muted" style="display:block">${escapeHtml(SET_LANGUAGES[set.language]||set.language)}${set.set_code?' · '+escapeHtml(set.set_code):''}</small></span><span class="dashboard-set-count">${amount} kaarten</span></button>`;}).join(''):'<div class="muted" style="margin-top:10px">Nog geen sets toegevoegd.</div>';
 }
+async function openMySets(){await renderHomeDashboard();show('mysets');}
 async function openSetEntryByLanguage(language){
   await openSetEntry();const found=savedSetsCache.find(s=>language==='zh'?String(s.language).startsWith('zh'):s.language===language);if(found){setEntrySelect.value=String(found.id);return loadSetEntryCards();}
   addSetLanguage.value=language==='zh'?'zh-tw':language;toggleAddSet(true);addSetStatus.textContent='Er staat nog geen set uit deze regio in Mijn sets. Kies hieronder een set.';
@@ -521,6 +553,7 @@ function show(id,fromHistory=false){
   if(id==='home') renderHomeDashboard();
   if(id==='collector') renderCollector();
   if(id==='missingCollector') renderMissingCollector();
+  if(id==='markettrends') loadMarketTrends();
 }
 function goBackInApp(){
   const current=document.querySelector('main>section:not(.hidden)')?.id;
@@ -1372,19 +1405,9 @@ function collectorRegistryCheck(card){
 function collectorCheckCard(card){const registered=collectorRegistryCheck(card);if(registered.ok)return registered;if(getCollectorDecision(card)==='verkopen')return {ok:true,overridden:true};return registered;}
 async function renderMissingCollector(){
   loadCollectorCards();await loadCards();await loadBundleData();
-  // Alleen sets die in 'Mijn sets' expliciet als sparen zijn aangevinkt,
-  // mogen in de TCG Collector-controle verschijnen.
-  const savedResult=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
-  const savedSets=savedResult.data||[];
-  const collectedNames=new Set(savedSets.filter(isSetCollected).map(s=>normalizeSetName(s.name)));
-  const missing=cardsCache.filter(c=>{
-    if(c.productType!=='Pokémonkaart'||availableQuantity(c)<=0)return false;
-    const setName=normalizeSetName(splitStoredName(c.name).set);
-    if(!collectedNames.has(setName))return false;
-    return !collectorRegistryCheck(c).ok;
-  }).sort((a,b)=>{const x=splitStoredName(a.name),y=splitStoredName(b.name);return x.set.localeCompare(y.set,'nl',{numeric:true})||Number(collectorNumber(x.number))-Number(collectorNumber(y.number))||(a.variant||'').localeCompare(b.variant||'','nl');});
+  const missing=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&availableQuantity(c)>0&&!collectorRegistryCheck(c).ok).sort((a,b)=>{const x=splitStoredName(a.name),y=splitStoredName(b.name);return x.set.localeCompare(y.set,'nl',{numeric:true})||Number(collectorNumber(x.number))-Number(collectorNumber(y.number))||(a.variant||'').localeCompare(b.variant||'','nl');});
   missingCollectorRows.textContent=missing.length.toLocaleString('nl-NL');missingCollectorQuantity.textContent=missing.reduce((sum,c)=>sum+availableQuantity(c),0).toLocaleString('nl-NL');
-  missingCollectorList.innerHTML=missing.length?missing.map(c=>{const p=splitStoredName(c.name),decision=getCollectorDecision(c),key=encodeURIComponent(collectorCardKey(c)),status=decision==='bewaren'?'📚 Bewaren – nog toevoegen aan TCG Collector':decision==='verkopen'?'💰 Verkopen – vrijgegeven voor verkoop':'Nog geen keuze gemaakt';return `<div class="card ${decision==='bewaren'?'stock-variant-holo':decision==='verkopen'?'stock-variant-normal':'stock-variant-special'}"><b>${escapeHtml(p.name)}</b><div class="muted">${escapeHtml(p.set||'Set onbekend')} · ${escapeHtml(p.number||'Nummer onbekend')} · ${escapeHtml(c.variant||'Normaal')}</div><div><b>${availableQuantity(c)}× beschikbaar</b></div><div class="scan-status">${status}</div><div class="row" style="margin-top:10px"><button class="gold" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','bewaren')">📚 Bewaren</button><button class="green" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','verkopen')">💰 Verkopen</button></div></div>`;}).join(''):'<div class="card"><b>✓ Alles gecontroleerd</b><div class="muted">Alle kaarten uit de sets die je spaart staan in TCG Collector.</div></div>';
+  missingCollectorList.innerHTML=missing.length?missing.map(c=>{const p=splitStoredName(c.name),decision=getCollectorDecision(c),key=encodeURIComponent(collectorCardKey(c)),status=decision==='bewaren'?'📚 Bewaren – nog toevoegen aan TCG Collector':decision==='verkopen'?'💰 Verkopen – vrijgegeven voor verkoop':'Nog geen keuze gemaakt';return `<div class="card ${decision==='bewaren'?'stock-variant-holo':decision==='verkopen'?'stock-variant-normal':'stock-variant-special'}"><b>${escapeHtml(p.name)}</b><div class="muted">${escapeHtml(p.set||'Set onbekend')} · ${escapeHtml(p.number||'Nummer onbekend')} · ${escapeHtml(c.variant||'Normaal')}</div><div><b>${availableQuantity(c)}× beschikbaar</b></div><div class="scan-status">${status}</div><div class="row" style="margin-top:10px"><button class="gold" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','bewaren')">📚 Bewaren</button><button class="green" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','verkopen')">💰 Verkopen</button></div></div>`;}).join(''):'<div class="card"><b>✓ Alles gecontroleerd</b><div class="muted">Alle kaarten uit de verkoopvoorraad staan in TCG Collector.</div></div>';
 }
 function openMissingCollector(){show('missingCollector');renderMissingCollector();}
 function loadSetCatalog(){if(!setCatalogPromise)setCatalogPromise=fetch('https://api.tcgdex.net/v2/en/sets').then(r=>{if(!r.ok)throw new Error('Sets niet beschikbaar');return r.json();}).catch(()=>[]);return setCatalogPromise;}
@@ -1446,6 +1469,46 @@ async function getCardmarketPrice(c){
   return null;
 }
 function cardmarketAdvicePrice(pricing,variant){if(!pricing)return 0;const holo=['Holo','Reverse holo'].includes(canonicalBundleVariant(variant)),keys=holo?['trend-holo','avg7-holo','avg-holo','low-holo','trend','avg7','avg30','low']:['trend','avg7','avg30','avg','low'];const raw=keys.map(key=>+pricing[key]).find(value=>Number.isFinite(value)&&value>0);return raw?Math.max(.10,Math.ceil(raw*20)/20):0;}
+function openMarketTrends(){show('markettrends');}
+function marketTrendDay(){return new Date().toISOString().slice(0,10);}
+function readMarketTrendHistory(){const saved=readJsonCache(MARKET_TRENDS_CACHE_KEY);return Array.isArray(saved?.days)?saved.days:[];}
+function marketTrendPrevious(days,current){
+  const earlier=days.filter(day=>day.date<current.date).sort((a,b)=>b.date.localeCompare(a.date))[0];
+  return new Map((earlier?.items||[]).map(item=>[String(item.id),item]));
+}
+async function loadMarketTrends(){
+  const status=document.getElementById('marketTrendStatus'),button=document.getElementById('marketTrendRefresh');
+  if(!status||!button)return;
+  let days=readMarketTrendHistory(),today=marketTrendDay(),current=days.find(day=>day.date===today);
+  if(current){marketTrendRows=current.items||[];status.textContent='Laatste prijscontrole: '+new Date(current.savedAt).toLocaleString('nl-NL')+' · vandaag niet opnieuw opgehaald.';prepareMarketTrendView(days,current);return;}
+  if(!navigator.onLine){status.textContent='Geen internetverbinding. De laatst opgeslagen meting wordt getoond.';current=days.slice().sort((a,b)=>b.date.localeCompare(a.date))[0];marketTrendRows=current?.items||[];prepareMarketTrendView(days,current);return;}
+  button.disabled=true;button.textContent='Prijzen controleren…';status.textContent='Cardmarket-prijzen van kaarten vanaf €1,00 worden opgehaald…';
+  try{
+    const all=await getAll(),candidates=all.filter(card=>card.productType==='Pokémonkaart'&&card.status==='Op voorraad'&&availableQuantity(card)>0&&Math.max(+card.ask||0,+card.min||0)>=MARKET_TRENDS_MIN_PRICE),items=[];
+    let completed=0;
+    for(let i=0;i<candidates.length;i+=4){
+      const found=await Promise.all(candidates.slice(i,i+4).map(async card=>{
+        try{const pricing=await getCardmarketPrice(card),price=cardmarketAdvicePrice(pricing,card.variant);if(price<MARKET_TRENDS_MIN_PRICE)return null;const parts=splitStoredName(card.name);return {id:String(card.id),name:parts.name||card.name,set:parts.set||stockFolderName(card),number:parts.number||'',variant:card.variant||'',price:+price.toFixed(2)};}catch(e){return null;}
+      }));
+      items.push(...found.filter(Boolean));completed=Math.min(candidates.length,i+4);status.textContent=completed+' van '+candidates.length+' kaarten gecontroleerd…';
+    }
+    current={date:today,savedAt:Date.now(),items};days=days.filter(day=>day.date!==today&&Date.now()-Number(day.savedAt)<31*24*60*60*1000);days.push(current);writeJsonCache(MARKET_TRENDS_CACHE_KEY,{days});marketTrendRows=items;status.textContent='Prijscontrole voltooid: '+items.length+' kaarten vanaf €1,00 · '+new Date(current.savedAt).toLocaleString('nl-NL');prepareMarketTrendView(days,current);
+  }finally{button.disabled=false;button.textContent='Prijscontrole starten';}
+}
+function prepareMarketTrendView(days,current){
+  const setSelect=document.getElementById('marketTrendSet');if(!setSelect)return;
+  const selected=setSelect.value,sets=[...new Set(marketTrendRows.map(row=>row.set).filter(Boolean))].sort((a,b)=>a.localeCompare(b));setSelect.innerHTML='<option value="">Alle sets</option>'+sets.map(set=>`<option value="${escapeHtml(set)}">${escapeHtml(set)}</option>`).join('');if(sets.includes(selected))setSelect.value=selected;
+  const previous=marketTrendPrevious(days,current||{date:''});marketTrendRows=marketTrendRows.map(row=>{const old=previous.get(String(row.id)),change=old?+(row.price-old.price).toFixed(2):null;return {...row,change};});renderMarketTrendList();
+}
+function renderMarketTrendList(){
+  const host=document.getElementById('marketTrendList'),summary=document.getElementById('marketTrendSummary');if(!host||!summary)return;
+  const set=document.getElementById('marketTrendSet')?.value||'',direction=document.getElementById('marketTrendDirection')?.value||'';
+  let rows=marketTrendRows.filter(row=>!set||row.set===set).filter(row=>!direction||(direction==='up'?row.change>0:direction==='down'?row.change<0:row.change===0));rows.sort((a,b)=>(Math.abs(b.change||0)-Math.abs(a.change||0))||b.price-a.price);
+  const up=marketTrendRows.filter(row=>row.change>0).length,down=marketTrendRows.filter(row=>row.change<0).length;summary.innerHTML=`<div class="stat">Gevolgde kaarten<b>${marketTrendRows.length}</b></div><div class="stat">Stijgers / dalers<b><span class="trend-up">${up}</span> / <span class="trend-down">${down}</span></b></div>`;
+  if(!marketTrendRows.length){host.innerHTML='<div class="card"><b>Nog geen kaarten gevonden</b><div class="muted">Alleen kaarten in de losse voorraad met een opgeslagen prijs vanaf €1,00 worden gecontroleerd.</div></div>';return;}
+  if(!rows.length){host.innerHTML='<div class="card muted">Geen kaarten binnen dit filter.</div>';return;}
+  host.innerHTML=rows.map(row=>{const has=row.change!==null,cls=!has||row.change===0?'trend-flat':row.change>0?'trend-up':'trend-down',arrow=!has?'Nieuw':row.change>0?'▲':row.change<0?'▼':'●',change=!has?'Eerste meting':arrow+' '+(row.change>0?'+':'')+'€'+row.change.toFixed(2);return `<div class="card trend-card"><div><b>${escapeHtml(String(row.name))}</b><div class="muted">${escapeHtml(String(row.set))}${row.number?' · '+escapeHtml(String(row.number)):''}${row.variant?' · '+escapeHtml(String(row.variant)):''}</div><span class="trend-badge ${cls}">${change}</span></div><div class="trend-value">€${row.price.toFixed(2)}<div class="muted">Cardmarket</div></div></div>`;}).join('');
+}
 async function updateFolderPrices(cards){
   const queue=cards.filter(c=>c.productType==='Pokémonkaart');
   for(let i=0;i<queue.length;i+=4)await Promise.all(queue.slice(i,i+4).map(async c=>{
