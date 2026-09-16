@@ -159,6 +159,8 @@
     <div class="card">
       <h2 style="margin:0 0 5px">Mijn sets</h2>
       <div class="muted">Tik op een set om direct kaarten en aantallen in te voeren.</div>
+      <button id="downloadMySetsButton" class="primary" style="width:100%;margin-top:12px" onclick="downloadAllMySets()">⬇️ Mijn sets lokaal opslaan</button>
+      <div id="downloadMySetsStatus" class="scan-status">Kaartgegevens worden lokaal opgeslagen. Afbeeldingen laden alleen wanneer ze in beeld komen.</div>
       <div id="dashboardSets"></div>
     </div>
   </section>
@@ -497,6 +499,7 @@ function updateConnection(){
 }
 async function renderHomeDashboard(){
   const cards=await getAll(),open=cards.filter(c=>c.status==='Op voorraad'&&availableQuantity(c)>0),{data:sets}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true}),saved=sets||[];
+  savedSetsCache=saved;
   const regions=[['en','🌍','Internationaal'],['ja','🇯🇵','Japan'],['ko','🇰🇷','Korea'],['zh','🇨🇳','China']];
   dashboardRegions.innerHTML=regions.map(([code,icon,label])=>{const count=saved.filter(s=>code==='zh'?String(s.language).startsWith('zh'):s.language===code).length;return `<button class="region-button" onclick="openSetEntryByLanguage('${code}')"><span>${icon}</span>${label}<small class="muted">${count} sets</small></button>`;}).join('');
   const stockAmount=open.reduce((sum,c)=>sum+availableQuantity(c),0),uniqueCards=new Set(open.filter(c=>c.productType==='Pokémonkaart').map(c=>c.name)).size;
@@ -662,7 +665,7 @@ function setEntryStoredName(card,set,official){return card.name+' — '+set.name
 
 const SET_LOCAL_CACHE_DB='psycards-set-cache-v1';
 const SET_LOCAL_CACHE_STORE='sets';
-const SET_LOCAL_CACHE_MAX_AGE=60*24*60*60*1000;
+const SET_LOCAL_CACHE_MAX_AGE=365*24*60*60*1000;
 
 function openSetLocalCache(){
   return new Promise((resolve,reject)=>{
@@ -699,6 +702,33 @@ async function writeSetLocalCache(saved,set){
     });
     db.close();
   }catch(e){console.warn('Lokale setcache opslaan overgeslagen:',e);}
+}
+
+async function downloadAllMySets(){
+  const button=document.getElementById('downloadMySetsButton'),status=document.getElementById('downloadMySetsStatus');
+  if(!button||!status)return;
+  if(!navigator.onLine){status.textContent='Geen internetverbinding. Probeer het opnieuw zodra je online bent.';return;}
+  button.disabled=true;button.textContent='Sets lokaal opslaan…';
+  try{
+    if(!savedSetsCache.length){
+      const {data,error}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
+      if(error)throw error;savedSetsCache=data||[];
+    }
+    if(!savedSetsCache.length){status.textContent='Er staan nog geen sets in Mijn sets.';return;}
+    let stored=0,already=0,failed=0;
+    for(let i=0;i<savedSetsCache.length;i++){
+      const saved=savedSetsCache[i];status.textContent=(i+1)+' van '+savedSetsCache.length+': '+saved.name+' controleren…';
+      const cached=await readSetLocalCache(saved);
+      if(cached){already++;continue;}
+      try{
+        let set=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/sets/'+encodeURIComponent(saved.tcgdex_id));
+        if(!set?.cards?.length)throw new Error('Geen kaarten ontvangen');
+        set=await enrichSetCardVariants(saved,set);await writeSetLocalCache(saved,set);stored++;
+      }catch(e){console.warn('Set lokaal opslaan mislukt:',saved.name,e);failed++;}
+    }
+    status.textContent='✓ Klaar: '+stored+' set'+(stored===1?'':'s')+' gedownload · '+already+' al lokaal'+(failed?' · '+failed+' niet gelukt':'')+'. Afbeeldingen worden alleen geladen wanneer je ze bekijkt.';
+  }catch(e){status.textContent='Lokaal opslaan is niet gelukt: '+(e.message||e);}
+  finally{button.disabled=false;button.textContent='⬇️ Mijn sets lokaal opslaan';}
 }
 
 async function loadSetEntryCards(){
@@ -1574,7 +1604,7 @@ function searchCardsInBundles(value,selectedSet=''){
 function openBundleFromSearch(id){const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle)return;showBundleSet(bundleSetName(bundle));requestAnimationFrame(()=>{const card=document.getElementById('bundle-card-'+String(id));if(card){card.open=true;card.classList.add('bundle-search-hit');card.scrollIntoView({behavior:'smooth',block:'start'});setTimeout(()=>card.classList.remove('bundle-search-hit'),2500);}});}
 function showBundleSet(set){
   const host=document.getElementById('bundleExisting'),matching=bundlesCache.filter(bundle=>bundleSetName(bundle)===set).slice().reverse(),encodedSet=encodeURIComponent(set).replace(/\'/g,'%27');
-  host.innerHTML=`<nav><button class="light" onclick="renderBundles()">← Alle sets</button></nav><div class="card"><h2 style="margin:0">${escapeHtml(set)}</h2><div class="muted">${matching.length} aangemaakte bundel${matching.length===1?'':'s'}</div><label>Kaart zoeken in deze set</label><input id="bundleSearchInput" type="search" placeholder="Bijvoorbeeld Psyduck, 025 of bundel 12" oninput="searchCardsInBundles(this.value,decodeURIComponent('${encodedSet}'))"><div id="bundleSearchResults"></div></div>`+matching.map(bundle=>{
+  host.innerHTML=`<nav><button class="light" onclick="renderBundles()">← Alle sets</button></nav><div class="card"><h2 style="margin:0">${escapeHtml(set)}</h2><div class="muted">${matching.length} aangemaakte bundel${matching.length===1?'':'s'}</div><label>Kaart zoeken in alle bundels van deze set</label><input id="bundleSearchInput" type="search" placeholder="Bijvoorbeeld Psyduck, 025 of bundel 12" oninput="searchCardsInBundles(this.value,decodeURIComponent('${encodedSet}'))"><div id="bundleSearchResults"></div></div>`+matching.map(bundle=>{
     let items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(bundle.id)),count=items.reduce((s,x)=>s+(+x.quantity||0),0),names=items.map(x=>({row:x,card:cardsCache.find(c=>String(c.id)===String(x.card_id))})).sort((a,b)=>bundleCardNumber(a.card||{})-bundleCardNumber(b.card||{})).map(({row,card})=>card?bundleCardLabel(card)+(row.quantity>1?' ×'+row.quantity:''):'Onbekende kaart').join('<br>'); if(!count&&['pitchblack','blackbolt'].includes(normalizeSetName(set))){const n=Number(String(bundle.name||'').match(/Bundel\s+(\d+)\s*$/i)?.[1]||0),spec=(typeof PITCH_BLACK_EXISTING_1_30!=='undefined'&&PITCH_BLACK_EXISTING_1_30[n])||[];if(spec.length){names=spec.map(x=>escapeHtml(x.number)+' – '+escapeHtml(x.name)+' – '+escapeHtml(x.variant)).join('<br>')+'<br><b>⚠️ Nog niet aan de voorraad gekoppeld</b>';}}
     if(bundle.status==='Verkocht')return `<div class="card" id="bundle-card-${bundle.id}"><h3 style="margin:0">✅ ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · Verkocht voor <b>€${(+bundle.sold_price||0).toFixed(2)}</b></div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><div class="muted">Inkoopprijs bundel €0,50 (€0,25 kaarten + €0,25 materialen) · ${bundle.sold_date?new Date(bundle.sold_date).toLocaleDateString('nl-NL'):''}</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details></div>`;
     return `<div class="card" id="bundle-card-${bundle.id}"><h3 style="margin:0">🎁 ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · Vraagprijs <b>€${(+bundle.ask||0).toFixed(2)}</b></div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><div class="muted">Inkoopprijs bundel: €0,50 (€0,25 kaarten + €0,25 materialen)</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details><label>Verkocht voor €</label><input id="bundleSalePrice-${bundle.id}" type="number" step="0.01" inputmode="decimal" value="${+bundle.ask||0}"><label>Betaalwijze</label><select id="bundlePayment-${bundle.id}"><option>Contant</option><option>Betaalverzoek</option></select><button class="green" style="width:100%;margin-top:12px" onclick="sellBundle('${bundle.id}')">✅ Bundel verkocht</button><button class="danger" style="width:100%;margin-top:8px" onclick="releaseBundle('${bundle.id}')">Bundel opheffen</button></div>`;
