@@ -68,6 +68,7 @@
     .dashboard-hero{background:linear-gradient(135deg,#173d60,#2873a8);color:white;border-radius:18px;padding:18px;margin-bottom:14px}.dashboard-hero h2{margin:0 0 5px}.dashboard-hero button{width:100%;margin-top:14px;background:#fff;color:#1f4e78}.region-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:10px}.region-button{background:white;border:1px solid #d6deea;color:#14213d;padding:12px 8px;border-radius:13px;font-size:14px}.region-button span{display:block;font-size:22px;margin-bottom:3px}.dashboard-set{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;width:100%;background:white;color:#14213d;border:1px solid #d6deea;border-radius:13px;padding:12px;text-align:left;margin-top:8px}.dashboard-set-count{font-size:12px;color:#28702e;font-weight:800}.manage-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.manage-grid button{font-size:14px;padding:13px 8px;min-height:58px}
     .set-tile-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}.set-tile{min-height:120px;background:white;color:#14213d;border:1px solid #d6deea;border-radius:14px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.set-tile img{width:100%;height:64px;object-fit:contain;margin-bottom:7px}.set-tile b{font-size:13px}.set-tile small{display:block;font-size:11px;color:#667085;margin-top:3px}
     .dot{width:8px;height:8px;border-radius:50%;background:#8bd38b}.dot.offline{background:#ffcc66}
+    .fair-active{background:#e9f7ec;border:2px solid #79bf84}.fair-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.fair-kpi{background:#f8fafc;border:1px solid var(--line);border-radius:13px;padding:12px}.fair-kpi b{display:block;font-size:21px;margin-top:3px}.fair-log{padding:9px 0;border-bottom:1px solid #edf0f4}.fair-log:last-child{border-bottom:0}
     #login{max-width:420px;margin:42px auto}.login-button{width:100%;margin-top:16px}
     @media(max-width:520px){.grid,.row,.stats{grid-template-columns:1fr}.grid button{min-height:88px}.folder-grid{grid-template-columns:1fr 1fr}}
 
@@ -147,6 +148,7 @@
     <div class="app-section-title">Financiën & synchronisatie</div>
     <div class="quick-grid">
       <button class="quick-action" onclick="show('money');renderMoney()"><span class="ico">📒</span><span>Kasboek<small>Inkomsten en uitgaven</small></span></button>
+      <button class="quick-action" onclick="openFairMode()"><span class="ico">🏪</span><span>Beursmodus<small>Start, verkoop en dagrapport</small></span></button>
     </div>
     <div class="home-sync">
       <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
@@ -393,6 +395,26 @@
     <div id="bundleBuilder" class="hidden"><div id="bundleProgress" class="bundle-progress">Mogelijke bundels per set</div><div id="bundleCardList"></div><button class="light" style="width:100%;margin:12px 0 18px" onclick="cancelBundleBuilder()">Terug naar bundels</button></div>
   </section>
 
+  <section id="fair" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div id="fairSetup" class="card">
+      <h2 style="margin:0 0 5px">🏪 Beurs starten</h2>
+      <div class="muted">Maak één beurs-sessie. Verkopen die je tijdens deze sessie invoert worden automatisch in het beursrapport meegenomen.</div>
+      <label>Naam beurs</label><input id="fairName" placeholder="Bijv. Pokémon beurs Heerlen">
+      <div class="row"><div><label>Locatie</label><input id="fairLocation" placeholder="Heerlen"></div><div><label>Datum</label><input id="fairDate" type="date"></div></div>
+      <label>Beginkas €</label><input id="fairOpeningCash" type="number" min="0" step="0.01" inputmode="decimal" value="0">
+      <button class="green" style="width:100%;margin-top:14px" onclick="startFair()">▶️ Beurs starten</button>
+    </div>
+    <div id="fairActive" class="hidden">
+      <div class="card fair-active"><h2 id="fairTitle" style="margin:0 0 4px">🏪 Actieve beurs</h2><div id="fairMeta" class="muted"></div><button class="primary" style="width:100%;margin-top:12px" onclick="show('sell')">💰 Nieuwe verkoop</button><button class="gold" style="width:100%;margin-top:8px" onclick="show('bundles');renderBundles()">🎁 Bundel verkopen</button></div>
+      <div id="fairStats" class="fair-kpis"></div>
+      <div class="card"><h3 style="margin:0 0 5px">💸 Beurskosten</h3><div class="row"><div><label>Omschrijving</label><input id="fairExpenseDesc" placeholder="Bijv. tafelhuur"></div><div><label>Bedrag €</label><input id="fairExpenseAmount" type="number" min="0" step="0.01" inputmode="decimal"></div></div><button class="light" style="width:100%;margin-top:10px" onclick="addFairExpense()">Kosten toevoegen</button></div>
+      <div class="card"><h3 style="margin:0 0 5px">📋 Transacties</h3><div id="fairTransactions" class="muted"></div></div>
+      <button class="danger" style="width:100%;margin-top:8px" onclick="closeFair()">⏹️ Beurs afsluiten</button>
+    </div>
+    <div id="fairReport" class="hidden"></div>
+  </section>
+
   <section id="money" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug</button><button class="light" onclick="exportKasboekCSV()">⬇️ Kasboek exporteren</button></nav>
     <div class="stats" id="stats"></div>
@@ -598,6 +620,7 @@ function show(id,fromHistory=false){
   if(id==='collector') renderCollector();
   if(id==='missingCollector') renderMissingCollector();
   if(id==='markettrends') loadMarketTrends();
+  if(id==='fair') renderFairMode();
 }
 function goBackInApp(){
   const current=document.querySelector('main>section:not(.hidden)')?.id;
@@ -1266,6 +1289,21 @@ async function findSellCard(){
   status.textContent=found.length===1?'✓ Gevonden: '+found[0].name:'✓ '+found.length+' resultaten gevonden. Kies hieronder de juiste kaart.';
 }
 
+
+const FAIR_KEY='psycards-fair-sessions-v1';
+function fairData(){try{return JSON.parse(localStorage.getItem(FAIR_KEY)||'{"sessions":[],"activeId":null}')||{sessions:[],activeId:null};}catch(e){return {sessions:[],activeId:null};}}
+function saveFairData(d){localStorage.setItem(FAIR_KEY,JSON.stringify(d));}
+function activeFair(){const d=fairData();return d.sessions.find(x=>x.id===d.activeId&&!x.closedAt)||null;}
+function openFairMode(){show('fair');renderFairMode();}
+function euro(n){return '€'+Number(n||0).toFixed(2).replace('.',',');}
+function startFair(){const name=document.getElementById('fairName').value.trim(),date=document.getElementById('fairDate').value||new Date().toISOString().slice(0,10);if(!name)return alert('Vul de naam van de beurs in.');const d=fairData();if(d.activeId&&!confirm('Er staat al een actieve beurs open. Deze eerst afsluiten?'))return;const old=d.sessions.find(x=>x.id===d.activeId);if(old&&!old.closedAt)old.closedAt=new Date().toISOString();const f={id:'fair-'+Date.now(),name,location:fairLocation.value.trim(),date,openingCash:+fairOpeningCash.value||0,startedAt:new Date().toISOString(),closedAt:null,transactions:[],expenses:[]};d.sessions.push(f);d.activeId=f.id;saveFairData(d);renderFairMode();}
+function recordFairTransaction(t){const d=fairData(),f=d.sessions.find(x=>x.id===d.activeId&&!x.closedAt);if(!f)return;f.transactions.push({id:'tx-'+Date.now()+'-'+Math.random().toString(36).slice(2,6),at:new Date().toISOString(),...t});saveFairData(d);}
+function addFairExpense(){const desc=fairExpenseDesc.value.trim(),amount=+fairExpenseAmount.value||0;if(!desc||amount<=0)return alert('Vul een omschrijving en bedrag in.');const d=fairData(),f=d.sessions.find(x=>x.id===d.activeId&&!x.closedAt);if(!f)return;f.expenses.push({id:'ex-'+Date.now(),at:new Date().toISOString(),description:desc,amount});saveFairData(d);fairExpenseDesc.value='';fairExpenseAmount.value='';renderFairMode();}
+function fairTotals(f){const sales=f.transactions.reduce((s,x)=>s+(+x.amount||0),0),cost=f.transactions.reduce((s,x)=>s+(+x.cost||0),0),expenses=f.expenses.reduce((s,x)=>s+(+x.amount||0),0),cash=f.transactions.filter(x=>String(x.payment).toLowerCase()==='contant').reduce((s,x)=>s+(+x.amount||0),0);return {sales,cost,expenses,profit:sales-cost-expenses,cash,expectedCash:(+f.openingCash||0)+cash,count:f.transactions.length,items:f.transactions.reduce((s,x)=>s+(+x.quantity||1),0)};}
+function renderFairMode(){const setup=document.getElementById('fairSetup'),active=document.getElementById('fairActive'),report=document.getElementById('fairReport');if(!setup)return;const f=activeFair();fairDate.value=fairDate.value||new Date().toISOString().slice(0,10);setup.classList.toggle('hidden',!!f);active.classList.toggle('hidden',!f);report.classList.add('hidden');if(!f)return;const t=fairTotals(f);fairTitle.textContent='🏪 '+f.name;fairMeta.textContent=[f.location,new Date(f.date+'T12:00:00').toLocaleDateString('nl-NL')].filter(Boolean).join(' · ');fairStats.innerHTML=`<div class="fair-kpi">Omzet<b>${euro(t.sales)}</b></div><div class="fair-kpi">Resultaat<b>${euro(t.profit)}</b></div><div class="fair-kpi">Verkopen<b>${t.count}</b></div><div class="fair-kpi">Items<b>${t.items}</b></div><div class="fair-kpi">Contant ontvangen<b>${euro(t.cash)}</b></div><div class="fair-kpi">Verwachte kas<b>${euro(t.expectedCash)}</b></div>`;const rows=[...f.transactions.map(x=>({at:x.at,text:(x.type==='bundle'?'🎁 ':'🃏 ')+(x.description||'Verkoop'),amount:+x.amount||0})),...f.expenses.map(x=>({at:x.at,text:'💸 '+x.description,amount:-(+x.amount||0)}))].sort((a,b)=>String(b.at).localeCompare(String(a.at)));fairTransactions.innerHTML=rows.length?rows.map(x=>`<div class="fair-log"><b>${escapeHtml(x.text)}</b><span style="float:right">${x.amount<0?'-':''}${euro(Math.abs(x.amount))}</span><div class="muted">${new Date(x.at).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</div></div>`).join(''):'Nog geen transacties.';}
+function closeFair(){const d=fairData(),f=d.sessions.find(x=>x.id===d.activeId&&!x.closedAt);if(!f)return;if(!confirm('Beurs afsluiten en het eindrapport tonen?'))return;f.closedAt=new Date().toISOString();d.activeId=null;saveFairData(d);renderClosedFair(f);}
+function renderClosedFair(f){fairSetup.classList.add('hidden');fairActive.classList.add('hidden');fairReport.classList.remove('hidden');const t=fairTotals(f);fairReport.innerHTML=`<div class="card"><h2 style="margin:0 0 5px">📊 Eindrapport ${escapeHtml(f.name)}</h2><div class="muted">${escapeHtml(f.location||'')} · ${new Date(f.date+'T12:00:00').toLocaleDateString('nl-NL')}</div><div class="fair-kpis" style="margin-top:12px"><div class="fair-kpi">Omzet<b>${euro(t.sales)}</b></div><div class="fair-kpi">Inkoopwaarde<b>${euro(t.cost)}</b></div><div class="fair-kpi">Beurskosten<b>${euro(t.expenses)}</b></div><div class="fair-kpi">Resultaat<b>${euro(t.profit)}</b></div><div class="fair-kpi">Transacties<b>${t.count}</b></div><div class="fair-kpi">Items verkocht<b>${t.items}</b></div><div class="fair-kpi">Beginkas<b>${euro(f.openingCash)}</b></div><div class="fair-kpi">Verwachte eindkas<b>${euro(t.expectedCash)}</b></div></div><button class="primary" style="width:100%;margin-top:14px" onclick="fairReport.classList.add('hidden');fairSetup.classList.remove('hidden')">Nieuwe beurs starten</button></div>`;}
+
 let sellCart=[];
 async function addSelectedCardToSale(){
   const id=document.getElementById('sellCard').value,amount=Math.max(1,parseInt(document.getElementById('sellQuantity').value)||1);
@@ -1323,6 +1361,7 @@ async function sellCard(){
   });
   const rows=items.map(item=>({id:item.card.id,...toDb(item.card)})),{error}=await cloud.from('cards').upsert(rows,{onConflict:'id'});if(error)return alert('De gezamenlijke verkoop is niet opgeslagen: '+error.message);
   const totalCost=items.reduce((sum,item)=>sum+(item.card.buy*item.quantity),0),cardCount=items.reduce((sum,item)=>sum+item.quantity,0);
+  recordFairTransaction({type:'cards',description:items.map(x=>x.quantity+'× '+splitStoredName(x.card.name).name).join(', '),amount:totalPrice,cost:totalCost,quantity:cardCount,payment:payment.value,channel:document.getElementById('saleChannel')?.value||'',note:document.getElementById('saleNote')?.value||''});
   await loadCards(true);sellCart=[];renderSellCart();soldPrice.value='';if(document.getElementById('saleNote'))saleNote.value='';updateSaleProfitPreview();sellQuantity.value='1';sellCardNumber.value='';if(document.getElementById('sellCardName'))sellCardName.value='';sellSearchStatus.textContent='';alert(cardCount+' kaarten zijn samen als één verkoop opgeslagen. Winst op deze verkoop: €'+(totalPrice-totalCost).toFixed(2));show('sold');renderSold();
 }
 async function renderSold(){
@@ -1934,7 +1973,7 @@ async function sellBundle(id){
   const items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(id));
   for(const item of items){const card=cardsCache.find(c=>String(c.id)===String(item.card_id));if(card){const check=collectorCheckCard(card);if(!check.ok)return alert('Bundelverkoop geblokkeerd.\n\n'+check.message+'\n\nWerk eerst de eigen verzameling bij in TCG Collector.');}}
   if(!confirm('Deze bundel voor €'+price.toFixed(2)+' als verkocht registreren?'))return;
-  const {error}=await cloud.from('bundles').update({status:'Verkocht',sold_price:price,payment,sold_date:new Date().toISOString()}).eq('id',id);if(error)return alert('Verkoop opslaan is niet gelukt: '+error.message);await loadBundleData(true);await renderBundles();
+  const {error}=await cloud.from('bundles').update({status:'Verkocht',sold_price:price,payment,sold_date:new Date().toISOString()}).eq('id',id);if(error)return alert('Verkoop opslaan is niet gelukt: '+error.message);recordFairTransaction({type:'bundle',description:bundle.name,amount:price,cost:0.50,quantity:1,payment});await loadBundleData(true);await renderBundles();
 }
 async function releaseBundle(id){if(!confirm('Bundel opheffen? De 25 kaarten komen weer terug in de losse voorraad.'))return;const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle||bundle.status==='Verkocht')return alert('Een verkochte bundel kan niet worden opgeheven.');const {error}=await cloud.from('bundles').delete().eq('id',id);if(error)return alert('Bundel opheffen is niet gelukt: '+error.message);await loadBundleData(true);await renderBundles();}
 function openPhotoViewer(src){if(!src)return;document.getElementById('viewerImage').src=src;document.getElementById('photoViewer').classList.remove('hidden');}
