@@ -284,10 +284,25 @@
         <div id="sellCartList" class="muted" style="margin-top:8px">Nog geen kaarten geselecteerd.</div>
         <div id="sellCartSummary" style="margin-top:9px;font-weight:700"></div>
       </div>
+      <div class="scanbox" style="margin-top:14px">
+        <b>💶 Verkoopbedrag</b>
+        <div class="muted">De adviesprijs is de som van de ingestelde verkoopprijzen. Je kunt het totaal altijd aanpassen.</div>
+        <div id="sellAdviceTotal" style="font-size:20px;font-weight:900;margin-top:8px">Advies: €0,00</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px">
+          <button class="light" style="padding:9px 4px;font-size:12px" type="button" onclick="applySaleDiscount(0)">Advies</button>
+          <button class="light" style="padding:9px 4px;font-size:12px" type="button" onclick="applySaleDiscount(5)">-5%</button>
+          <button class="light" style="padding:9px 4px;font-size:12px" type="button" onclick="applySaleDiscount(10)">-10%</button>
+          <button class="light" style="padding:9px 4px;font-size:12px" type="button" onclick="applySaleDiscount(15)">-15%</button>
+        </div>
+      </div>
       <label>Totale verkoopprijs €</label>
       <input id="soldPrice" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Totaal voor alle geselecteerde kaarten">
-      <label>Betaalwijze</label>
-      <select id="payment"><option>Contant</option><option>Betaalverzoek</option></select>
+      <div class="row">
+        <div><label>Verkoopkanaal</label><select id="saleChannel"><option>Beurs</option><option>Vinted</option><option>Instagram</option><option>TikTok</option><option>Particulier</option><option>Overig</option></select></div>
+        <div><label>Betaalwijze</label><select id="payment"><option>Contant</option><option>Betaalverzoek</option><option>Pin</option><option>Bank</option><option>Vinted</option><option>Overig</option></select></div>
+      </div>
+      <label>Notitie (optioneel)</label><input id="saleNote" placeholder="Bijv. beurs Heerlen of klantbestelling">
+      <div id="saleProfitPreview" class="scan-status"></div>
       <button class="green" style="width:100%;margin-top:16px" onclick="sellCard()">✅ Alles als één verkoop opslaan</button>
     </div>
   </section>
@@ -428,7 +443,10 @@
     <div class="camera-bottom"><button id="captureButton" class="capture" type="button" onclick="captureCard()" aria-label="Foto maken" disabled></button></div>
 </section>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+// Verkoopprijs-preview direct bijwerken wanneer het totaal handmatig wordt aangepast.
+document.addEventListener('input',e=>{if(e.target&&e.target.id==='soldPrice')updateSaleProfitPreview();});
+</script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 const BUDGET=310;
@@ -1266,7 +1284,27 @@ function renderSellCart(){
   if(!rows.length){host.className='muted';host.textContent='Nog geen kaarten geselecteerd.';summary.textContent='';return;}
   host.className='';host.innerHTML=rows.map(({item,card})=>{const p=splitStoredName(card.name);return `<div class="sale-cart-item"><div><b>${escapeHtml(p.name||card.name)}</b><div class="muted">${escapeHtml(p.set||'Set onbekend')} · ${escapeHtml(p.number||'')} · ${escapeHtml(card.variant||'Normaal')} · ${item.quantity}×</div></div><button class="danger" onclick="removeCardFromSale('${card.id}')">Verwijder</button></div>`;}).join('');
   const quantity=rows.reduce((sum,row)=>sum+row.item.quantity,0),sets=new Set(rows.map(row=>splitStoredName(row.card.name).set).filter(Boolean));
+  const advice=rows.reduce((sum,row)=>sum+(Math.max(0,+row.card.ask||0)*row.item.quantity),0);
+  const cost=rows.reduce((sum,row)=>sum+(Math.max(0,+row.card.buy||0)*row.item.quantity),0);
   summary.textContent=quantity+' kaart'+(quantity===1?'':'en')+' uit '+sets.size+' set'+(sets.size===1?'':'s')+' geselecteerd';
+  const adviceBox=document.getElementById('sellAdviceTotal');if(adviceBox)adviceBox.textContent='Advies: €'+advice.toFixed(2).replace('.',',');
+  const priceInput=document.getElementById('soldPrice');if(priceInput&&!priceInput.value)priceInput.value=advice.toFixed(2);
+  updateSaleProfitPreview(cost);
+}
+function saleCartAdvice(){
+  const cards=cardsCache||[];return sellCart.reduce((sum,item)=>{const c=cards.find(x=>String(x.id)===String(item.id));return sum+(c?Math.max(0,+c.ask||0)*item.quantity:0);},0);
+}
+function saleCartCost(){
+  const cards=cardsCache||[];return sellCart.reduce((sum,item)=>{const c=cards.find(x=>String(x.id)===String(item.id));return sum+(c?Math.max(0,+c.buy||0)*item.quantity:0);},0);
+}
+function applySaleDiscount(percent){
+  const advice=saleCartAdvice();document.getElementById('soldPrice').value=(advice*(1-percent/100)).toFixed(2);updateSaleProfitPreview();
+}
+function updateSaleProfitPreview(forcedCost){
+  const box=document.getElementById('saleProfitPreview');if(!box)return;
+  if(!sellCart.length){box.textContent='';return;}
+  const price=Number(document.getElementById('soldPrice')?.value||0),cost=forcedCost==null?saleCartCost():forcedCost;
+  box.textContent='Inkoopwaarde: €'+cost.toFixed(2).replace('.',',')+' · Verwachte brutowinst: €'+(price-cost).toFixed(2).replace('.',',');
 }
 async function sellCard(){
   if(!sellCart.length)return alert('Voeg eerst één of meerdere kaarten toe aan de verkoop.');
@@ -1285,7 +1323,7 @@ async function sellCard(){
   });
   const rows=items.map(item=>({id:item.card.id,...toDb(item.card)})),{error}=await cloud.from('cards').upsert(rows,{onConflict:'id'});if(error)return alert('De gezamenlijke verkoop is niet opgeslagen: '+error.message);
   const totalCost=items.reduce((sum,item)=>sum+(item.card.buy*item.quantity),0),cardCount=items.reduce((sum,item)=>sum+item.quantity,0);
-  await loadCards(true);sellCart=[];renderSellCart();soldPrice.value='';sellQuantity.value='1';sellCardNumber.value='';if(document.getElementById('sellCardName'))sellCardName.value='';sellSearchStatus.textContent='';alert(cardCount+' kaarten zijn samen als één verkoop opgeslagen. Winst op deze verkoop: €'+(totalPrice-totalCost).toFixed(2));show('sold');renderSold();
+  await loadCards(true);sellCart=[];renderSellCart();soldPrice.value='';if(document.getElementById('saleNote'))saleNote.value='';updateSaleProfitPreview();sellQuantity.value='1';sellCardNumber.value='';if(document.getElementById('sellCardName'))sellCardName.value='';sellSearchStatus.textContent='';alert(cardCount+' kaarten zijn samen als één verkoop opgeslagen. Winst op deze verkoop: €'+(totalPrice-totalCost).toFixed(2));show('sold');renderSold();
 }
 async function renderSold(){
   const sold=(await getAll()).filter(c=>c.soldQuantity>0).sort((a,b)=>String(b.soldDate).localeCompare(String(a.soldDate)));await loadBundleData();const soldBundles=bundlesCache.filter(b=>b.status==='Verkocht');
