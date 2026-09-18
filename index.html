@@ -138,6 +138,7 @@
     <div class="quick-grid">
       <button class="quick-action" onclick="openNewProduct()"><span class="ico">📷</span><span>Eén product<small>Los product toevoegen</small></span></button>
       <button class="quick-action" onclick="openValueCheck()"><span class="ico">💶</span><span>Kaartwaarde<small>Cardmarket indicatie</small></span></button>
+       <button class="quick-action" onclick="openSetValueCheck()"><span class="ico">🏆</span><span>Duurste kaarten<small>Normal · Holo · Reverse</small></span></button>
       <button class="quick-action" onclick="openMarketTrends()"><span class="ico">📈</span><span>Live Markttrends<small>Kaarten vanaf €1,00</small></span></button>
       <button class="quick-action" onclick="openCollector()"><span class="ico">📚</span><span>TCG Collector<small>Eigen verzameling</small></span></button>
       <button class="quick-action" onclick="openMissingCollector()"><span class="ico">⚠️</span><span>Nog niet in TCG<small>Controleren bewaren/verkoop</small></span></button>
@@ -326,6 +327,21 @@
       <button class="primary" style="width:100%;margin-top:12px" onclick="checkCardValue()">Zoek kaart en prijs</button>
       <div id="valueResult" class="scan-status" style="margin-top:12px"></div>
     </div>
+  </section>
+
+  <section id="setvaluecheck" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">🏆 Duurste kaarten per set</h2>
+      <div class="muted">Controleer de hoogste Cardmarket-prijzen voor Normaal, Holo en Reverse holo. De resultaten worden lokaal bewaard om extra dataverbruik te beperken.</div>
+      <label>Set</label>
+      <select id="setValueSelect"></select>
+      <label>Aantal per kaartsoort</label>
+      <select id="setValueLimit"><option value="5">Top 5</option><option value="10" selected>Top 10</option><option value="20">Top 20</option></select>
+      <button id="setValueButton" class="primary" style="width:100%;margin-top:12px" onclick="checkSetValues()">🔎 Controleer set</button>
+      <div id="setValueStatus" class="scan-status"></div>
+    </div>
+    <div id="setValueResults"></div>
   </section>
 
   <section id="markettrends" class="hidden">
@@ -1413,6 +1429,85 @@ async function checkCardValue(){
   const trade=market*.80,cash=market*.70;
   valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(displaySet)} · ${escapeHtml(numberInput)}</div><div style="margin-top:10px"><b>Cardmarket waarde: ${valueMoney(market)}</b></div><div style="margin-top:7px">🔄 Inruilwaarde 80%: <b>${valueMoney(trade)}</b></div><div>💵 Inkoop contant 70%: <b>${valueMoney(cash)}</b></div>`;
  }catch(e){valueResult.textContent='Prijs kon niet worden opgehaald. Probeer het opnieuw.';}
+}
+
+
+const SET_VALUE_CACHE_KEY='psycards-set-valuecheck-v1';
+const SET_VALUE_MAX_AGE=24*60*60*1000;
+function setValueCache(){try{return JSON.parse(localStorage.getItem(SET_VALUE_CACHE_KEY)||'{}')||{};}catch(e){return {};}}
+function saveSetValueCache(cache){try{localStorage.setItem(SET_VALUE_CACHE_KEY,JSON.stringify(cache));}catch(e){}}
+function setValuePrice(pricing,variant){
+  if(!pricing)return 0;
+  const v=canonicalBundleVariant(variant);
+  const keys=v==='Normaal'?['trend','avg7','avg30','avg','low']:
+    v==='Holo'?['trend-holo','avg7-holo','avg-holo','low-holo']:
+    ['trend-reverse','avg7-reverse','avg-reverse','low-reverse','trend-holo','avg7-holo','avg-holo','low-holo'];
+  const raw=keys.map(k=>+pricing[k]).find(x=>Number.isFinite(x)&&x>0);
+  return raw||0;
+}
+function cardAvailableVariants(card){
+  const variants=[];
+  const pricing=card?.pricing?.cardmarket||{};
+  // TCGdex exposes variant availability where available; pricing keys are used as a fallback.
+  const av=card?.variants||{};
+  if(av.normal!==false && (av.normal===true || setValuePrice(pricing,'Normaal')>0))variants.push('Normaal');
+  if(av.holo===true || setValuePrice(pricing,'Holo')>0)variants.push('Holo');
+  if(av.reverse===true || av.reverseHolo===true || setValuePrice(pricing,'Reverse holo')>0)variants.push('Reverse holo');
+  return [...new Set(variants)];
+}
+async function openSetValueCheck(){
+  show('setvaluecheck');
+  setValueResults.innerHTML='';
+  setValueStatus.textContent='Sets laden…';
+  let saved=savedSetsCache;
+  if(!saved.length){
+    const {data}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
+    saved=data||[];savedSetsCache=saved;
+  }
+  setValueSelect.innerHTML=saved.length?saved.map(s=>`<option value="${escapeHtml(String(s.id))}">${escapeHtml(s.name)}${s.set_code?' ('+escapeHtml(s.set_code)+')':''}</option>`).join(''):'<option value="">Geen sets toegevoegd</option>';
+  setValueStatus.textContent=saved.length?'Kies een set en start de controle.':'Voeg eerst een set toe aan Mijn sets.';
+}
+function renderSetValueResults(payload,limit){
+  const groups=['Normaal','Holo','Reverse holo'];
+  setValueResults.innerHTML=groups.map(v=>{
+    const rows=(payload.rows||[]).filter(x=>x.variant===v).sort((a,b)=>b.price-a.price).slice(0,limit);
+    return `<div class="card"><h3 style="margin:0 0 8px">${v==='Normaal'?'⚪':v==='Holo'?'✨':'🟣'} ${escapeHtml(v)}</h3>`+
+      (rows.length?rows.map((r,i)=>`<div style="display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #edf0f4"><b>#${i+1}</b><div><b>${escapeHtml(r.name)}</b><div class="muted">Kaart ${escapeHtml(String(r.number||''))}</div></div><b>${valueMoney(r.price)}</b></div>`).join(''):'<div class="muted">Geen prijs voor deze kaartsoort gevonden.</div>')+
+      `</div>`;
+  }).join('');
+}
+async function checkSetValues(){
+  const saved=savedSetsCache.find(s=>String(s.id)===String(setValueSelect.value));
+  if(!saved)return alert('Kies eerst een set.');
+  const limit=Math.max(1,parseInt(setValueLimit.value)||10),cache=setValueCache(),key=String(saved.language||'en')+'|'+String(saved.tcgdex_id||saved.name),cached=cache[key];
+  if(cached&&Date.now()-Number(cached.savedAt||0)<SET_VALUE_MAX_AGE&&Array.isArray(cached.rows)){
+    renderSetValueResults(cached,limit);
+    setValueStatus.textContent='✓ Lokale prijscontrole gebruikt · '+new Date(cached.savedAt).toLocaleString('nl-NL')+'. Vernieuwt maximaal 1× per 24 uur.';
+    return;
+  }
+  setValueButton.disabled=true;setValueStatus.textContent='Set en prijzen ophalen… Dit kan bij een grote set even duren.';
+  try{
+    const lang=String(saved.language||'en'),setId=saved.tcgdex_id||saved.id;
+    const full=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(lang)+'/sets/'+encodeURIComponent(setId));
+    const briefs=Array.isArray(full?.cards)?full.cards:[];
+    const rows=[];
+    // Details in kleine groepen; geen afbeeldingen worden geladen.
+    for(let i=0;i<briefs.length;i+=8){
+      setValueStatus.textContent='Prijzen controleren… '+Math.min(i+8,briefs.length)+' / '+briefs.length;
+      const details=await Promise.all(briefs.slice(i,i+8).map(b=>fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(lang)+'/cards/'+encodeURIComponent(b.id))));
+      for(const card of details.filter(Boolean)){
+        for(const variant of cardAvailableVariants(card)){
+          const price=setValuePrice(card?.pricing?.cardmarket,variant);
+          if(price>0)rows.push({id:card.id,name:card.name||'Kaart',number:card.localId||'',variant,price});
+        }
+      }
+    }
+    const payload={savedAt:Date.now(),setName:saved.name,rows};
+    cache[key]=payload;saveSetValueCache(cache);renderSetValueResults(payload,limit);
+    setValueStatus.textContent='✓ '+briefs.length+' kaarten gecontroleerd · resultaten 24 uur lokaal bewaard.';
+  }catch(e){
+    console.error(e);setValueStatus.textContent='De setprijzen konden niet volledig worden opgehaald. Probeer het later opnieuw.';
+  }finally{setValueButton.disabled=false;}
 }
 
 async function renderStock(){
