@@ -147,9 +147,7 @@
 
     <div class="app-section-title">Financiën & synchronisatie</div>
     <div class="quick-grid">
-      <button class="quick-action" onclick="show('money');renderMoney()"><span class="ico">📒</span><span>Kasboek<small>Inkomsten en uitgaven</small></span></button>
-      <button class="quick-action" onclick="openReports()"><span class="ico">📊</span><span>Rapportages<small>Verkoop, winst en balans</small></span></button>
-      <button class="quick-action" onclick="openFairMode()"><span class="ico">🏪</span><span>Beursmodus<small>Start, verkoop en dagrapport</small></span></button>
+      <button class="quick-action" onclick="openFinance()"><span class="ico">💶</span><span>Financiën<small>Kasboek, beurs, winst, balans en voorraadrapport</small></span></button>
     </div>
     <div class="home-sync">
       <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
@@ -394,6 +392,21 @@
     <div id="bundleSaveStatus" class="scan-status"></div>
     <div id="bundleExisting"></div>
     <div id="bundleBuilder" class="hidden"><div id="bundleProgress" class="bundle-progress">Mogelijke bundels per set</div><div id="bundleCardList"></div><button class="light" style="width:100%;margin:12px 0 18px" onclick="cancelBundleBuilder()">Terug naar bundels</button></div>
+  </section>
+
+  <section id="finance" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">💶 Financiën</h2>
+      <div class="muted">Alle financiële onderdelen van Psycards op één plek.</div>
+      <div class="quick-grid" style="margin-top:14px">
+        <button class="quick-action featured" onclick="show('money');renderMoney()"><span class="ico">📒</span><span>Kasboek<small>Inkomsten, uitgaven en saldo</small></span></button>
+        <button class="quick-action" onclick="openFairMode()"><span class="ico">🏪</span><span>Beursmodus<small>Start, afsluiten en beursrapport</small></span></button>
+        <button class="quick-action" onclick="openReports()"><span class="ico">📊</span><span>Verkoop & winst<small>Omzet, kosten en resultaat</small></span></button>
+        <button class="quick-action" onclick="openReports();setTimeout(()=>document.getElementById('balanceDate')?.scrollIntoView({behavior:'smooth'}),100)"><span class="ico">🧾</span><span>Balans<small>Overzicht voor administratie</small></span></button>
+        <button class="quick-action" onclick="openReports();setTimeout(()=>document.getElementById('inventoryReportStats')?.scrollIntoView({behavior:'smooth'}),100)"><span class="ico">📦</span><span>Voorraadrapport<small>Excel en printoverzicht</small></span></button>
+      </div>
+    </div>
   </section>
 
   <section id="fair" class="hidden">
@@ -1328,6 +1341,7 @@ const FAIR_KEY='psycards-fair-sessions-v1';
 function fairData(){try{return JSON.parse(localStorage.getItem(FAIR_KEY)||'{"sessions":[],"activeId":null}')||{sessions:[],activeId:null};}catch(e){return {sessions:[],activeId:null};}}
 function saveFairData(d){localStorage.setItem(FAIR_KEY,JSON.stringify(d));}
 function activeFair(){const d=fairData();return d.sessions.find(x=>x.id===d.activeId&&!x.closedAt)||null;}
+function openFinance(){show('finance');}
 function openFairMode(){show('fair');renderFairMode();}
 function euro(n){return '€'+Number(n||0).toFixed(2).replace('.',',');}
 function startFair(){const name=document.getElementById('fairName').value.trim(),date=document.getElementById('fairDate').value||new Date().toISOString().slice(0,10);if(!name)return alert('Vul de naam van de beurs in.');const d=fairData();if(d.activeId&&!confirm('Er staat al een actieve beurs open. Deze eerst afsluiten?'))return;const old=d.sessions.find(x=>x.id===d.activeId);if(old&&!old.closedAt)old.closedAt=new Date().toISOString();const f={id:'fair-'+Date.now(),name,location:fairLocation.value.trim(),date,openingCash:+fairOpeningCash.value||0,startedAt:new Date().toISOString(),closedAt:null,transactions:[],expenses:[]};d.sessions.push(f);d.activeId=f.id;saveFairData(d);renderFairMode();}
