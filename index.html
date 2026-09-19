@@ -175,6 +175,17 @@
       <h2 style="margin:0 0 5px">🏠 Eigen gebruik</h2>
       <div class="muted">Producten die uit de voorraad zijn gehaald voor gebruik door Psycards. Deze tellen niet mee als verkoop of omzet.</div>
       <div id="ownUseSummary" class="stats" style="margin-top:12px"></div>
+      <div class="scanbox" style="margin-top:12px"><b>➕ Nieuw eigen gebruik</b><div class="muted">Vul hieronder direct het materiaal in dat Psycards zelf gebruikt.</div></div>
+    </div>
+    <div id="ownUseEntry" class="card">
+      <h3 style="margin:0 0 5px">Eigen materiaal registreren</h3>
+      <div class="muted">Voor materiaal dat Psycards zelf gebruikt en niet als verkoopvoorraad hoeft te worden ingevoerd.</div>
+      <label>Soort</label><select id="ownUseType"><option>Sleeves</option><option>Toploaders</option><option>Stickers</option><option>Verpakkingsmateriaal</option><option>Binder</option><option>Presentatiemateriaal</option><option>Overig</option></select>
+      <label>Omschrijving</label><input id="ownUseName" placeholder="Bijv. sleeves voor bundels">
+      <div class="row"><div><label>Aantal</label><input id="ownUseDirectQty" type="number" min="1" step="1" inputmode="numeric" value="1"></div><div><label>Totale kosten €</label><input id="ownUseDirectCost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></div></div>
+      <label>Waarvoor gebruikt?</label><input id="ownUseDirectReason" placeholder="Bijv. Psycards bundels">
+      <button class="green" style="width:100%;margin-top:12px" onclick="saveDirectOwnUse()">✓ Eigen gebruik opslaan</button>
+
     </div>
     <div id="ownUseList"></div>
   </section>
@@ -1983,14 +1994,21 @@ async function processOwnUse(){
   await loadCards(true);alert('✓ '+qty+' × '+editingCard.name+' verwerkt als eigen gebruik. Niet als verkoop geboekt.');show('stock');renderStock();
 }
 function openOwnUse(){show('ownuse');renderOwnUse();}
+function toggleOwnUseEntry(open){const el=document.getElementById('ownUseEntry');if(!el)return;el.classList.toggle('hidden',!open);if(open)setTimeout(()=>document.getElementById('ownUseName').focus(),50);}
+function saveDirectOwnUse(){
+  const type=document.getElementById('ownUseType').value,name=document.getElementById('ownUseName').value.trim(),qty=Math.max(1,parseInt(document.getElementById('ownUseDirectQty').value)||1),cost=Math.max(0,parseFloat(String(document.getElementById('ownUseDirectCost').value||'0').replace(',','.'))||0),reason=document.getElementById('ownUseDirectReason').value.trim();
+  if(!name)return alert('Vul een omschrijving in.');
+  const history=getOwnUseHistory();history.unshift({id:'own-direct-'+Date.now(),cardId:null,name,productType:type,quantity:qty,buy:qty?cost/qty:0,totalCost:cost,date:new Date().toISOString(),reason:reason||'Eigen gebruik',direct:true});saveOwnUseHistory(history);
+  document.getElementById('ownUseName').value='';document.getElementById('ownUseDirectQty').value=1;document.getElementById('ownUseDirectCost').value='';document.getElementById('ownUseDirectReason').value='';toggleOwnUseEntry(false);renderOwnUse();alert('✓ Eigen gebruik opgeslagen. Dit is niet als verkoop geboekt.');
+}
 function renderOwnUse(){
   const rows=getOwnUseHistory();
-  const qty=rows.reduce((a,r)=>a+(+r.quantity||0),0), value=rows.reduce((a,r)=>a+((+r.buy||0)*(+r.quantity||0)),0);
+  const qty=rows.reduce((a,r)=>a+(+r.quantity||0),0), value=rows.reduce((a,r)=>a+(r.totalCost!=null?(+r.totalCost||0):((+r.buy||0)*(+r.quantity||0))),0);
   const sum=document.getElementById('ownUseSummary');
   if(sum)sum.innerHTML='<div class="stat">Producten gebruikt<b>'+qty+'</b></div><div class="stat">Inkoopwaarde<b>€ '+value.toFixed(2).replace('.',',')+'</b></div>';
   const host=document.getElementById('ownUseList');if(!host)return;
   if(!rows.length){host.innerHTML='<div class="card muted">Nog niets als eigen gebruik verwerkt.</div>';return;}
-  host.innerHTML=rows.map(r=>'<div class="card"><b>'+escapeHtml(r.name||'Product')+'</b><div class="muted">'+escapeHtml(r.productType||'Product')+' · '+(+r.quantity||0)+' stuks · '+new Date(r.date).toLocaleDateString('nl-NL')+'</div><div style="margin-top:6px">Inkoopwaarde: <b>€ '+(((+r.buy||0)*(+r.quantity||0))).toFixed(2).replace('.',',')+'</b></div></div>').join('');
+  host.innerHTML=rows.map(r=>'<div class="card"><b>'+escapeHtml(r.name||'Product')+'</b><div class="muted">'+escapeHtml(r.productType||'Product')+' · '+(+r.quantity||0)+' stuks · '+new Date(r.date).toLocaleDateString('nl-NL')+'</div><div style="margin-top:6px">Kosten: <b>€ '+((r.totalCost!=null?(+r.totalCost||0):((+r.buy||0)*(+r.quantity||0)))).toFixed(2).replace('.',',')+'</b></div></div>').join('');
 }
 async function renderBundles(){
   await Promise.all([loadCards(),loadBundleData()]);
