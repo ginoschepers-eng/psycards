@@ -419,6 +419,11 @@
     <nav><button class="light" onclick="goBackInApp()">← Terug</button><button class="light" onclick="exportKasboekCSV()">⬇️ Kasboek exporteren</button></nav>
     <div class="stats" id="stats"></div>
     <div class="card">
+      <h2 style="margin:0 0 5px">📊 Kasboek overzicht</h2>
+      <div class="row"><div><label>Periode</label><select id="moneyPeriod" onchange="renderMoney()"><option value="all">Alles</option><option value="month">Deze maand</option><option value="year">Dit jaar</option></select></div><div><label>Type</label><select id="moneyType" onchange="renderMoney()"><option value="all">Inkomsten + uitgaven</option><option value="income">Alleen inkomsten</option><option value="expense">Alleen uitgaven</option></select></div></div>
+      <div id="moneyPeriodSummary" class="scanbox" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
       <h2 style="margin:0 0 5px">Nieuwe uitgave</h2>
       <div class="muted">Verkopen worden automatisch als inkomsten verwerkt.</div>
       <label>Datum</label><input id="expenseDate" type="date">
@@ -428,7 +433,8 @@
       <label>Betaalwijze</label><select id="expensePayment"><option>Bank</option><option>iDEAL</option><option>Wero</option><option>Contant</option><option>Overig</option></select>
       <button class="primary" style="width:100%;margin-top:14px" onclick="saveExpense()">Uitgave opslaan</button>
     </div>
-    <div id="expenseList"></div>
+    <div id="moneyTransactions"></div>
+    <div id="expenseList" class="hidden"></div>
   </section>
 
   <section id="edit" class="hidden">
@@ -1993,21 +1999,23 @@ async function removeCard(id){
 }
 async function renderMoney(){
   const cards=await getAll();await loadBundleData();
-  const open=cards.filter(c=>c.status==='Op voorraad'),soldBundles=bundlesCache.filter(b=>b.status==='Verkocht'),openBundles=bundlesCache.filter(b=>b.status==='Samengesteld');
-  const spent=expenseCache.reduce((a,c)=>a+c.buy,0);
-  const bundleRevenue=soldBundles.reduce((s,b)=>s+(+b.sold_price||0),0);
-  const revenue=cards.reduce((a,c)=>a+c.soldPrice,0)+bundleRevenue;
-  const result=revenue-spent;
+  const soldBundles=bundlesCache.filter(b=>b.status==='Verkocht'),open=cards.filter(c=>c.status==='Op voorraad'),openBundles=bundlesCache.filter(b=>b.status==='Samengesteld');
+  const transactions=[];
+  expenseCache.forEach(e=>transactions.push({id:e.id,date:e.soldDate,type:'expense',category:String(e.condition||'Kosten').replace(/^Kosten\s*\|\s*/i,''),description:e.name,amount:+e.buy||0,payment:e.payment||'',source:'expense'}));
+  cards.filter(c=>c.soldQuantity>0).forEach(c=>transactions.push({id:c.id,date:c.soldDate,type:'income',category:c.productType||'Kaart',description:c.name,amount:+c.soldPrice||0,payment:c.payment||'',source:'card'}));
+  soldBundles.forEach(b=>transactions.push({id:b.id,date:b.sold_date,type:'income',category:'Bundel',description:b.name,amount:+b.sold_price||0,payment:b.payment||'',source:'bundle'}));
+  const now=new Date(),period=document.getElementById('moneyPeriod')?.value||'all',type=document.getElementById('moneyType')?.value||'all';
+  const inPeriod=t=>{if(period==='all')return true;const d=new Date(t.date);if(isNaN(d))return false;if(period==='month')return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();return d.getFullYear()===now.getFullYear();};
+  const periodRows=transactions.filter(inPeriod),filtered=periodRows.filter(t=>type==='all'||(type==='income'?t.type==='income':t.type==='expense'));
+  const income=periodRows.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0),expenses=periodRows.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0),balance=income-expenses;
+  const allIncome=transactions.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0),allExpenses=transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
   const stockValue=open.reduce((a,c)=>a+c.ask*availableQuantity(c),0)+openBundles.reduce((s,b)=>s+(+b.ask||0),0);
-  const data=[
-    ['Startbudget',BUDGET],['Totale uitgaven',spent],['Totale omzet',revenue],
-    ['Resultaat',result],['Nog terug te verdienen',Math.max(0,spent-revenue)],['Voorraad verkoopwaarde',stockValue]
-  ];
-  stats.innerHTML=data.map(([k,v])=>`<div class="stat">${k}<b>€${v.toFixed(2)}</b></div>`).join('');
+  stats.innerHTML=[['Totale omzet',allIncome],['Totale uitgaven',allExpenses],['Saldo',allIncome-allExpenses],['Voorraad verkoopwaarde',stockValue]].map(([k,v])=>`<div class="stat">${k}<b>${euro(v)}</b></div>`).join('');
+  const label=period==='month'?'Deze maand':period==='year'?'Dit jaar':'Alle periodes';
+  moneyPeriodSummary.innerHTML=`<b>${label}</b><div style="margin-top:7px">Inkomsten: <b>${euro(income)}</b> · Uitgaven: <b>${euro(expenses)}</b> · Saldo: <b>${euro(balance)}</b></div><div class="muted" style="margin-top:5px">${periodRows.length} boeking${periodRows.length===1?'':'en'}</div>`;
   expenseDate.value=expenseDate.value||new Date().toISOString().slice(0,10);
-  const ordered=expenseCache.slice().sort((a,b)=>String(b.soldDate).localeCompare(String(a.soldDate)));
-  expenseList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Uitgaven</h2><div class="muted">'+ordered.length+' kostenregels · totaal €'+spent.toFixed(2)+'</div></div>'+
-    (ordered.length?ordered.map(e=>`<div class="card"><b>${escapeHtml(e.name)}</b><div>${escapeHtml(e.condition)} · <span class="money">€${e.buy.toFixed(2)}</span></div><div class="muted">${e.soldDate?new Date(e.soldDate).toLocaleDateString('nl-NL'):''}${e.payment?' · '+escapeHtml(e.payment):''}</div><button class="danger" style="width:100%;margin-top:9px" onclick="deleteExpense('${e.id}')">Uitgave verwijderen</button></div>`).join(''):'<div class="card">Nog geen uitgaven vastgelegd.</div>');
+  filtered.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  moneyTransactions.innerHTML='<div class="card"><h2 style="margin:0 0 5px">📒 Boekingen</h2><div class="muted">Verkopen worden automatisch toegevoegd. Uitgaven kun je hieronder invoeren.</div></div>'+ (filtered.length?filtered.map(t=>`<div class="card"><div style="display:flex;justify-content:space-between;gap:10px"><div><b>${t.type==='income'?'➕':'➖'} ${escapeHtml(t.description)}</b><div class="muted">${escapeHtml(t.category)}${t.payment?' · '+escapeHtml(t.payment):''}</div></div><div class="money" style="white-space:nowrap">${t.type==='income'?'+':'-'}${euro(t.amount)}</div></div><div class="muted" style="margin-top:7px">${t.date?new Date(t.date).toLocaleDateString('nl-NL'):''}</div>${t.source==='expense'?`<button class="danger" style="width:100%;margin-top:9px;padding:9px;font-size:13px" onclick="deleteExpense('${t.id}')">Uitgave verwijderen</button>`:''}</div>`).join(''):'<div class="card">Geen boekingen binnen dit filter.</div>');
 }
 async function seedKnownExpenses(){
   if(expenseCache.length)return;
