@@ -1701,6 +1701,21 @@ function collectorCardKey(card){const p=splitStoredName(card.name);return normal
 function getCollectorDecisions(){try{return JSON.parse(localStorage.getItem(COLLECTOR_DECISIONS_KEY)||'{}')||{};}catch(e){return {};}}
 function getCollectorDecision(card){return getCollectorDecisions()[collectorCardKey(card)]||'';}
 function setCollectorDecision(encodedKey,decision){const all=getCollectorDecisions();all[decodeURIComponent(encodedKey)]=decision;localStorage.setItem(COLLECTOR_DECISIONS_KEY,JSON.stringify(all));renderMissingCollector();}
+async function processAllMissingCollectorChoices(){
+  loadCollectorCards();await loadCards();await loadBundleData();
+  const all=getCollectorDecisions();
+  const missing=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&availableQuantity(c)>0&&!collectorRegistryCheck(c).ok&&!['bewaren','verkopen'].includes(all[collectorCardKey(c)]));
+  if(!missing.length){await renderMissingCollector();return;}
+  let keep=0,sell=0;
+  // Neem ook reeds aangevinkte Bewaren-keuzes mee; alle nog openstaande kaarten gaan naar Verkoop.
+  const current=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&availableQuantity(c)>0&&!collectorRegistryCheck(c).ok);
+  current.forEach(c=>{const key=collectorCardKey(c);if(all[key]==='bewaren'){keep++;}else if(all[key]!=='verkopen'){all[key]='verkopen';sell++;}});
+  const msg='Alles verwerken?\n\n📚 Bewaren: '+keep+' kaartregels\n💰 Naar verkoop: '+sell+' kaartregels\n\nNa verwerking verdwijnt alles uit deze controlelijst.';
+  if(!confirm(msg))return;
+  localStorage.setItem(COLLECTOR_DECISIONS_KEY,JSON.stringify(all));
+  await renderMissingCollector();
+  alert('Verwerkt: '+keep+' bewaren en '+sell+' vrijgegeven voor verkoop.');
+}
 async function approveAllMissingCollectorForSale(){
   loadCollectorCards();await loadCards();await loadBundleData();
   const all=getCollectorDecisions();
@@ -1728,9 +1743,9 @@ function collectorRegistryCheck(card){
 function collectorCheckCard(card){const registered=collectorRegistryCheck(card);if(registered.ok)return registered;if(getCollectorDecision(card)==='verkopen')return {ok:true,overridden:true};return registered;}
 async function renderMissingCollector(){
   loadCollectorCards();await loadCards();await loadBundleData();
-  const missing=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&availableQuantity(c)>0&&!collectorRegistryCheck(c).ok).sort((a,b)=>{const x=splitStoredName(a.name),y=splitStoredName(b.name);return x.set.localeCompare(y.set,'nl',{numeric:true})||Number(collectorNumber(x.number))-Number(collectorNumber(y.number))||(a.variant||'').localeCompare(b.variant||'','nl');});
+  const decisions=getCollectorDecisions(); const missing=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&availableQuantity(c)>0&&!collectorRegistryCheck(c).ok&&!['bewaren','verkopen'].includes(decisions[collectorCardKey(c)])).sort((a,b)=>{const x=splitStoredName(a.name),y=splitStoredName(b.name);return x.set.localeCompare(y.set,'nl',{numeric:true})||Number(collectorNumber(x.number))-Number(collectorNumber(y.number))||(a.variant||'').localeCompare(b.variant||'','nl');});
   missingCollectorRows.textContent=missing.length.toLocaleString('nl-NL');missingCollectorQuantity.textContent=missing.reduce((sum,c)=>sum+availableQuantity(c),0).toLocaleString('nl-NL');
-  missingCollectorList.innerHTML=missing.length?missing.map(c=>{const p=splitStoredName(c.name),decision=getCollectorDecision(c),key=encodeURIComponent(collectorCardKey(c)),status=decision==='bewaren'?'📚 Bewaren – nog toevoegen aan TCG Collector':decision==='verkopen'?'💰 Verkopen – vrijgegeven voor verkoop':'Nog geen keuze gemaakt';return `<div class="card ${decision==='bewaren'?'stock-variant-holo':decision==='verkopen'?'stock-variant-normal':'stock-variant-special'}"><b>${escapeHtml(p.name)}</b><div class="muted">${escapeHtml(p.set||'Set onbekend')} · ${escapeHtml(p.number||'Nummer onbekend')} · ${escapeHtml(c.variant||'Normaal')}</div><div><b>${availableQuantity(c)}× beschikbaar</b></div><div class="scan-status">${status}</div><div class="row" style="margin-top:10px"><button class="gold" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','bewaren')">📚 Bewaren</button><button class="green" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','verkopen')">💰 Verkopen</button></div></div>`;}).join(''):'<div class="card"><b>✓ Alles gecontroleerd</b><div class="muted">Alle kaarten uit de verkoopvoorraad staan in TCG Collector.</div></div>';
+  missingCollectorList.innerHTML=missing.length?missing.map(c=>{const p=splitStoredName(c.name),decision=getCollectorDecision(c),key=encodeURIComponent(collectorCardKey(c)),status=decision==='bewaren'?'📚 Bewaren – nog toevoegen aan TCG Collector':decision==='verkopen'?'💰 Verkopen – vrijgegeven voor verkoop':'Nog geen keuze gemaakt';return `<div class="card ${decision==='bewaren'?'stock-variant-holo':decision==='verkopen'?'stock-variant-normal':'stock-variant-special'}"><b>${escapeHtml(p.name)}</b><div class="muted">${escapeHtml(p.set||'Set onbekend')} · ${escapeHtml(p.number||'Nummer onbekend')} · ${escapeHtml(c.variant||'Normaal')}</div><div><b>${availableQuantity(c)}× beschikbaar</b></div><div class="scan-status">${status}</div><div class="row" style="margin-top:10px"><button class="gold" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','bewaren')">📚 Bewaren</button><button class="green" style="padding:11px 8px;font-size:14px" onclick="setCollectorDecision('${key}','verkopen')">💰 Verkopen</button></div></div>`;}).join(''):'<div class="card"><b>✓ Alles gecontroleerd</b><div class="muted">Alle kaarten zijn verwerkt: bewaarde kaarten zijn vastgelegd en de overige kaarten zijn vrijgegeven voor verkoop.</div></div>';
 }
 function openMissingCollector(){show('missingCollector');renderMissingCollector();}
 function loadSetCatalog(){if(!setCatalogPromise)setCatalogPromise=fetch('https://api.tcgdex.net/v2/en/sets').then(r=>{if(!r.ok)throw new Error('Sets niet beschikbaar');return r.json();}).catch(()=>[]);return setCatalogPromise;}
