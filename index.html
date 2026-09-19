@@ -1001,7 +1001,7 @@ async function saveSetEntry(){
     const storedName=setEntryStoredName(item.card,setEntrySet,official),photo=item.card.image?item.card.image+'/high.webp':'',identity=bundleCardIdentity({name:storedName}),advice=cardmarketAdvicePrice(priceCards.get(String(item.card.id))?.pricing?.cardmarket,item.variant);
     const matches=current.filter(c=>bundleCardIdentity(c)===identity&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&canonicalBundleVariant(c.variant)===canonicalBundleVariant(item.variant)).sort((a,b)=>(b.soldQuantity+allocatedQuantity(b.id))-(a.soldQuantity+allocatedQuantity(a.id))),existing=matches[0];
     if(existing){const removable=matches.slice(1).filter(c=>c.soldQuantity===0&&allocatedQuantity(c.id)===0);if(removable.length){const {error:deleteError}=await cloud.from('cards').delete().in('id',removable.map(c=>c.id));if(deleteError){setEntrySaveButton.disabled=false;return alert('Dubbele regel samenvoegen is niet gelukt: '+deleteError.message);}}existing.name=storedName;existing.variant=canonicalBundleVariant(item.variant);existing.quantity=existing.soldQuantity+allocatedQuantity(existing.id)+item.quantity;existing.status='Op voorraad';if(existing.ask<=0&&advice>0)existing.ask=advice;const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);if(error){setEntrySaveButton.disabled=false;return alert('Opslaan stopte bij '+item.card.name+': '+error.message);}updated++;}
-    else inserts.push(toDb({name:storedName,productType:'Pokémonkaart',condition:'NM',variant:item.variant,buy:0,ask:advice,min:0,quantity:item.quantity,soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''}));
+    else inserts.push(toDb({name:storedName,productType:'Pokémonkaart',condition:'NM',variant:item.variant,buy:0,ask:advice,min:advice,quantity:item.quantity,soldQuantity:0,status:'Op voorraad',photo,soldPrice:0,payment:'',soldDate:''}));
   }
   if(inserts.length){const {error}=await cloud.from('cards').insert(inserts);if(error){setEntrySaveButton.disabled=false;return alert('Nieuwe kaarten opslaan is niet gelukt: '+error.message);}}
   await loadCards(true);setEntrySaveButton.disabled=false;alert('Klaar: '+inserts.length+' nieuwe kaartsoorten toegevoegd en '+updated+' bestaande aantallen bijgewerkt.');await loadSetEntryCards();
@@ -1490,6 +1490,9 @@ function renderSellCart(){
 function saleCartAdvice(){
   const cards=cardsCache||[];return sellCart.reduce((sum,item)=>{const c=cards.find(x=>String(x.id)===String(item.id));return sum+(c?Math.max(0,+c.ask||0)*item.quantity:0);},0);
 }
+function saleCartMinimum(){
+  const cards=cardsCache||[];return sellCart.reduce((sum,item)=>{const c=cards.find(x=>String(x.id)===String(item.id));return sum+(c?Math.max(0,+c.min||0)*item.quantity:0);},0);
+}
 function saleCartCost(){
   const cards=cardsCache||[];return sellCart.reduce((sum,item)=>{const c=cards.find(x=>String(x.id)===String(item.id));return sum+(c?Math.max(0,+c.buy||0)*item.quantity:0);},0);
 }
@@ -1500,11 +1503,12 @@ function updateSaleProfitPreview(forcedCost){
   const box=document.getElementById('saleProfitPreview');if(!box)return;
   if(!sellCart.length){box.textContent='';return;}
   const price=Number(document.getElementById('soldPrice')?.value||0),cost=forcedCost==null?saleCartCost():forcedCost;
-  box.textContent='Inkoopwaarde: €'+cost.toFixed(2).replace('.',',')+' · Verwachte brutowinst: €'+(price-cost).toFixed(2).replace('.',',');
+  const minimum=saleCartMinimum();box.textContent='Minimum Cardmarket: €'+minimum.toFixed(2).replace('.',',')+' · Inkoopwaarde: €'+cost.toFixed(2).replace('.',',')+' · Verwachte brutowinst: €'+(price-cost).toFixed(2).replace('.',',')+(minimum>0&&price<minimum?' · ⚠️ Onder minimumprijs':'');
 }
 async function sellCard(){
   if(!sellCart.length)return alert('Voeg eerst één of meerdere kaarten toe aan de verkoop.');
   const totalPrice=+soldPrice.value||0;if(totalPrice<0)return alert('Vul een geldige totale verkoopprijs in.');
+  const minimumPrice=saleCartMinimum();const belowCardmarket=minimumPrice>0&&totalPrice+0.0001<minimumPrice;if(belowCardmarket){const difference=minimumPrice-totalPrice;const ok=confirm('⚠️ De gekozen verkoopprijs ligt €'+difference.toFixed(2).replace('.',',')+' onder de Cardmarket-indicatie van €'+minimumPrice.toFixed(2).replace('.',',')+'.\n\nSem bepaalt uiteindelijk de verkoopprijs. Wil je deze verkoop voor €'+totalPrice.toFixed(2).replace('.',',')+' toch verwerken?');if(!ok)return;}
   await loadBundleData();const cards=await getAll(),items=[];
   for(const selected of sellCart){
     const card=cards.find(c=>String(c.id)===String(selected.id));if(!card)return alert('Een geselecteerde kaart kon niet meer worden gevonden. Vernieuw de verkoop en probeer opnieuw.');
@@ -1519,7 +1523,7 @@ async function sellCard(){
   });
   const rows=items.map(item=>({id:item.card.id,...toDb(item.card)})),{error}=await cloud.from('cards').upsert(rows,{onConflict:'id'});if(error)return alert('De gezamenlijke verkoop is niet opgeslagen: '+error.message);
   const totalCost=items.reduce((sum,item)=>sum+(item.card.buy*item.quantity),0),cardCount=items.reduce((sum,item)=>sum+item.quantity,0);
-  recordFairTransaction({type:'cards',description:items.map(x=>x.quantity+'× '+splitStoredName(x.card.name).name).join(', '),amount:totalPrice,cost:totalCost,quantity:cardCount,payment:payment.value,channel:document.getElementById('saleChannel')?.value||'',note:document.getElementById('saleNote')?.value||''});
+  recordFairTransaction({type:'cards',description:items.map(x=>x.quantity+'× '+splitStoredName(x.card.name).name).join(', '),amount:totalPrice,cost:totalCost,quantity:cardCount,payment:payment.value,channel:document.getElementById('saleChannel')?.value||'',note:document.getElementById('saleNote')?.value||'',cardmarketMinimum:minimumPrice,belowCardmarket:belowCardmarket,belowCardmarketAmount:belowCardmarket?minimumPrice-totalPrice:0});
   await loadCards(true);sellCart=[];renderSellCart();soldPrice.value='';if(document.getElementById('saleNote'))saleNote.value='';updateSaleProfitPreview();sellQuantity.value='1';sellCardNumber.value='';if(document.getElementById('sellCardName'))sellCardName.value='';sellSearchStatus.textContent='';alert(cardCount+' kaarten zijn samen als één verkoop opgeslagen. Winst op deze verkoop: €'+(totalPrice-totalCost).toFixed(2));show('sold');renderSold();
 }
 async function renderSold(){
