@@ -156,6 +156,7 @@
       <div class="muted">Alle functies voor kaarten, sets en je eigen verzameling op één plek.</div>
       <div class="quick-grid" style="margin-top:14px">
         <button class="quick-action featured" onclick="openSetEntry()"><span class="ico">🗂️</span><span>Mijn sets<small>Sets beheren en aantallen invoeren</small></span></button>
+        <button class="quick-action" onclick="openAllCardSearch()"><span class="ico">🔎</span><span>Alle kaarten zoeken<small>Zoek bijvoorbeeld Pikachu in alle sets</small></span></button>
         <button class="quick-action" onclick="openNewProduct()"><span class="ico">📷</span><span>Eén product<small>Los product toevoegen</small></span></button>
         <button class="quick-action" onclick="openValueCheck()"><span class="ico">💶</span><span>Kaartwaarde<small>Cardmarket indicatie</small></span></button>
         <button class="quick-action" onclick="openSetValueCheck()"><span class="ico">🏆</span><span>Duurste kaarten<small>Normal · Holo · Reverse</small></span></button>
@@ -344,6 +345,19 @@
       <button class="light" style="width:100%;margin-top:10px;padding:12px;font-size:15px" onclick="openCollector()">📚 TCG Collector-CSV bijwerken</button>
     </div>
     <div id="missingCollectorList"></div>
+  </section>
+
+  <section id="allcardsearch" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">🔎 Alle kaarten zoeken</h2>
+      <div class="muted">Zoek op Pokémon-/kaartnaam in je volledige voorraad, ongeacht de set.</div>
+      <label>Naam</label>
+      <input id="allCardSearchInput" placeholder="Bijv. Pikachu" autocomplete="off" oninput="searchAllCards()" onkeydown="if(event.key==='Enter')searchAllCards()">
+      <button class="primary" style="width:100%;margin-top:10px;padding:13px;font-size:16px" onclick="searchAllCards()">🔎 Zoeken</button>
+      <div id="allCardSearchStatus" class="scan-status"></div>
+    </div>
+    <div id="allCardSearchResults"></div>
   </section>
 
   <section id="valuecheck" class="hidden">
@@ -720,18 +734,37 @@ function jumpToSetCard(){const input=document.getElementById('setCardJump');if(!
 let currentSetCardFilter='all';
 function filterSetCards(mode){
  currentSetCardFilter=['ex','ir','sir','sr','ur','rares'].includes(mode)?mode:'all';
- document.querySelectorAll('#setEntryCards .set-entry').forEach(el=>{
+ document.querySelectorAll('#setEntryCards .set-card-compact').forEach(el=>{
   const show=currentSetCardFilter==='all'||(currentSetCardFilter==='ex'&&el.dataset.isEx==='1')||(currentSetCardFilter==='ir'&&el.dataset.isIr==='1')||(currentSetCardFilter==='sir'&&el.dataset.isSir==='1')||(currentSetCardFilter==='sr'&&el.dataset.isSr==='1')||(currentSetCardFilter==='ur'&&el.dataset.isUr==='1')||(currentSetCardFilter==='rares'&&el.dataset.isRare==='1');
   el.style.display=show?'':'none';
  });
  const ids={all:'setShowAllButton',ex:'setShowExButton',ir:'setShowIrButton',sir:'setShowSirButton',sr:'setShowSrButton',ur:'setShowUrButton',rares:'setShowRaresButton'};
  Object.entries(ids).forEach(([k,id])=>{const x=document.getElementById(id);if(x)x.className=currentSetCardFilter===k?'primary':'light';});
  if(currentSetCardFilter!=='all'){
-   const first=[...document.querySelectorAll('#setEntryCards .set-entry')].find(el=>el.style.display!=='none');
+   const first=[...document.querySelectorAll('#setEntryCards .set-card-compact')].find(el=>el.style.display!=='none');
    if(first)setTimeout(()=>first.scrollIntoView({behavior:'smooth',block:'start'}),50);
  }
 }
 
+
+function loadSetCardOnOpen(details){
+  if(!details.open)return;
+  const img=details.querySelector('img[data-detail-image]');
+  if(img&&!img.src){img.src=img.dataset.detailImage;img.removeAttribute('data-detail-image');}
+}
+
+function openAllCardSearch(){show('allcardsearch');const input=document.getElementById('allCardSearchInput');if(input){input.value='';setTimeout(()=>input.focus(),50);}const r=document.getElementById('allCardSearchResults');if(r)r.innerHTML='';const st=document.getElementById('allCardSearchStatus');if(st)st.textContent='Typ een naam om alle sets tegelijk te doorzoeken.';}
+async function searchAllCards(){
+  const input=document.getElementById('allCardSearchInput'),status=document.getElementById('allCardSearchStatus'),out=document.getElementById('allCardSearchResults');
+  const q=String(input?.value||'').trim().toLowerCase();if(!out||!status)return;
+  if(q.length<2){out.innerHTML='';status.textContent='Typ minimaal 2 letters.';return;}
+  await loadBundleData();const all=await getAll();
+  const rows=all.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad').filter(c=>{const p=splitStoredName(c.name);return String(p.name||c.name||'').toLowerCase().includes(q);});
+  rows.sort((a,b)=>{const pa=splitStoredName(a.name),pb=splitStoredName(b.name);return String(pa.name).localeCompare(String(pb.name))||String(pa.set).localeCompare(String(pb.set))||String(pa.number).localeCompare(String(pb.number),undefined,{numeric:true});});
+  const total=rows.reduce((n,c)=>n+(+c.quantity||0)-(+c.soldQuantity||0),0),available=rows.reduce((n,c)=>n+availableQuantity(c),0),bundled=rows.reduce((n,c)=>n+allocatedQuantity(c.id),0);
+  status.textContent=rows.length?rows.length+' kaartvarianten gevonden · '+available+' direct beschikbaar'+(bundled?' · '+bundled+' in bundels':''):'Geen kaarten gevonden voor “'+input.value.trim()+'”.';
+  out.innerHTML=rows.map(c=>{const p=splitStoredName(c.name),variant=canonicalBundleVariant(c.variant),av=availableQuantity(c),inBundle=allocatedQuantity(c.id);return `<div class="card"><b>${escapeHtml(p.name||c.name)}</b><div class="muted">${escapeHtml(p.set||'Set onbekend')} · ${escapeHtml(p.number||'nummer onbekend')} · ${escapeHtml(variant)}</div><div style="margin-top:6px"><b>${av} beschikbaar</b>${inBundle?` · ${inBundle} in bundel(s)`:''}</div><button class="green" style="padding:8px 10px;font-size:13px;margin-top:9px" onclick="startSale('${c.id}')">💰 Verkopen</button><button class="light" style="padding:8px 10px;font-size:13px;margin-top:9px" onclick="openEdit('${c.id}')">Bekijken</button></div>`;}).join('');
+}
 async function openSetEntry(){
   show('setEntry');setEntryStatus.textContent='Mijn sets laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');toggleAddSet(false);
   const {data,error}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
@@ -906,9 +939,9 @@ async function loadSetEntryCards(){
     const rarity=String(card.rarity||'').trim(),isSir=/special\s+illustration\s+rare|\bSIR\b|\bSRI\b/i.test(rarity),isIr=!isSir&&(/illustration\s+rare|\bIR\b/i.test(rarity)),isUr=/ultra\s+rare|\bUR\b/i.test(rarity),isSr=!isSir&&!isIr&&!isUr&&(/secret\s+rare|\bSR\b/i.test(rarity)),isRare=isEx||isIr||isSir||isSr||isUr||/rare/i.test(rarity);
     const rows=SET_ENTRY_COMMON.concat(SET_ENTRY_SPECIAL).map(v=>existingFor(v)).filter(Boolean),priced=rows.find(x=>Number(x.ask||0)>0)||rows[0],ask=Number(priced?.ask||0),min=Number(priced?.minimum||0);
     const priceHtml=isRare?`<div style="margin:5px 0 2px;font-weight:900">💶 ${ask>0?'€'+ask.toFixed(2).replace('.',','):'Prijs —'}${min>0?' · Min. €'+min.toFixed(2).replace('.',','):''}</div>`:'';
-    return `<div class="set-entry ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}">${image?`<img loading="lazy" data-card-image="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><b>${escapeHtml(number.split('/')[0])} – ${escapeHtml(card.name)}</b><div class="muted">${escapeHtml(set.name)} · ${escapeHtml(number)}${rarity?' · '+escapeHtml(rarity):''}</div>${priceHtml}<div class="set-entry-options">${common}</div></div></div>`;
+    return `<details class="card set-card-compact ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}" ontoggle="loadSetCardOnOpen(this)"><summary style="cursor:pointer;font-size:16px;font-weight:800;padding:3px 0">${escapeHtml(number)} · ${escapeHtml(card.name)}</summary><div class="set-entry" style="margin-top:10px">${image?`<img class="set-detail-image" data-detail-image="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><div class="muted">${escapeHtml(set.name)}${rarity?' · '+escapeHtml(rarity):''}</div>${priceHtml}<div class="set-entry-options">${common}</div></div></div></details>`;
   }).join('')+'</div>';
-  hydrateLocalCardImages(setEntryCards);setCardsStatus.textContent=set.cards.length+' kaarten geladen uit '+set.name+'. Afbeeldingen worden lokaal bewaard na de eerste keer.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();
+  setCardsStatus.textContent=set.cards.length+' kaarten beschikbaar. Tik op een kaart om details en de afbeelding te laden.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();
 }
 function toggleSetEntryVariant(box){
   const label=box.closest('.set-variant-option'),amount=label.querySelector('input[type=number]');
