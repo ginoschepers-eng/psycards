@@ -163,9 +163,20 @@
         <button class="quick-action" onclick="openMarketTrends()"><span class="ico">📈</span><span>Live Markttrends<small>Kaarten vanaf €1,00</small></span></button>
         <button class="quick-action" onclick="openCollector()"><span class="ico">📚</span><span>TCG Collector<small>Eigen verzameling</small></span></button>
         <button class="quick-action" onclick="openMissingCollector()"><span class="ico">⚠️</span><span>Nog niet in TCG<small>Bewaren of verkoop verwerken</small></span></button>
+        <button class="quick-action" onclick="openOwnUse()"><span class="ico">🏠</span><span>Eigen gebruik<small>Sleeves, toploaders en eigen materiaal</small></span></button>
       </div>
     </div>
     <div class="card"><h3 style="margin:0 0 5px">Regio</h3><div class="muted">Open je sets per taal/regio.</div><div id="dashboardRegions" class="region-grid"></div></div>
+  </section>
+
+  <section id="ownuse" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">🏠 Eigen gebruik</h2>
+      <div class="muted">Producten die uit de voorraad zijn gehaald voor gebruik door Psycards. Deze tellen niet mee als verkoop of omzet.</div>
+      <div id="ownUseSummary" class="stats" style="margin-top:12px"></div>
+    </div>
+    <div id="ownUseList"></div>
   </section>
 
   <section id="mysets" class="hidden">
@@ -1970,6 +1981,16 @@ async function processOwnUse(){
     editingCard.quantity=newQuantity;editingCard.status='Op voorraad';const {error}=await cloud.from('cards').update(toDb(editingCard)).eq('id',editingCard.id);if(error)return alert('Eigen gebruik verwerken is niet gelukt: '+error.message);
   }
   await loadCards(true);alert('✓ '+qty+' × '+editingCard.name+' verwerkt als eigen gebruik. Niet als verkoop geboekt.');show('stock');renderStock();
+}
+function openOwnUse(){show('ownuse');renderOwnUse();}
+function renderOwnUse(){
+  const rows=getOwnUseHistory();
+  const qty=rows.reduce((a,r)=>a+(+r.quantity||0),0), value=rows.reduce((a,r)=>a+((+r.buy||0)*(+r.quantity||0)),0);
+  const sum=document.getElementById('ownUseSummary');
+  if(sum)sum.innerHTML='<div class="stat">Producten gebruikt<b>'+qty+'</b></div><div class="stat">Inkoopwaarde<b>€ '+value.toFixed(2).replace('.',',')+'</b></div>';
+  const host=document.getElementById('ownUseList');if(!host)return;
+  if(!rows.length){host.innerHTML='<div class="card muted">Nog niets als eigen gebruik verwerkt.</div>';return;}
+  host.innerHTML=rows.map(r=>'<div class="card"><b>'+escapeHtml(r.name||'Product')+'</b><div class="muted">'+escapeHtml(r.productType||'Product')+' · '+(+r.quantity||0)+' stuks · '+new Date(r.date).toLocaleDateString('nl-NL')+'</div><div style="margin-top:6px">Inkoopwaarde: <b>€ '+(((+r.buy||0)*(+r.quantity||0))).toFixed(2).replace('.',',')+'</b></div></div>').join('');
 }
 async function renderBundles(){
   await Promise.all([loadCards(),loadBundleData()]);
