@@ -120,7 +120,7 @@
     <div class="dashboard-hero">
       <h2>Psycards beheer</h2>
       <div>Voorraad, bundels en verkoop overzichtelijk op één plek.</div>
-      <button onclick="openSetEntry()">🗂️ Kaarten en aantallen invoeren</button>
+      <button onclick="openCollection()">🃏 Kaarten & collectie openen</button>
     </div>
 
     <div class="app-section-title">Snel naar</div>
@@ -133,20 +133,10 @@
 
     <div class="app-section-title">Overzicht</div>
     <div class="stats" id="homeStats"></div>
-    <div class="card"><h3 style="margin:0">Regio</h3><div id="dashboardRegions" class="region-grid"></div></div>
 
-    <div class="app-section-title">Kaarten & collectie</div>
+    <div class="app-section-title">Beheer</div>
     <div class="quick-grid">
-      <button class="quick-action" onclick="openNewProduct()"><span class="ico">📷</span><span>Eén product<small>Los product toevoegen</small></span></button>
-      <button class="quick-action" onclick="openValueCheck()"><span class="ico">💶</span><span>Kaartwaarde<small>Cardmarket indicatie</small></span></button>
-       <button class="quick-action" onclick="openSetValueCheck()"><span class="ico">🏆</span><span>Duurste kaarten<small>Normal · Holo · Reverse</small></span></button>
-      <button class="quick-action" onclick="openMarketTrends()"><span class="ico">📈</span><span>Live Markttrends<small>Kaarten vanaf €1,00</small></span></button>
-      <button class="quick-action" onclick="openCollector()"><span class="ico">📚</span><span>TCG Collector<small>Eigen verzameling</small></span></button>
-      <button class="quick-action" onclick="openMissingCollector()"><span class="ico">⚠️</span><span>Nog niet in TCG<small>Controleren bewaren/verkoop</small></span></button>
-    </div>
-
-    <div class="app-section-title">Financiën & synchronisatie</div>
-    <div class="quick-grid">
+      <button class="quick-action" onclick="openCollection()"><span class="ico">🃏</span><span>Kaarten & collectie<small>Sets, regio, kaartwaarde en TCG Collector</small></span></button>
       <button class="quick-action" onclick="openFinance()"><span class="ico">💶</span><span>Financiën<small>Kasboek, beurs, winst, balans en voorraadrapport</small></span></button>
     </div>
     <div class="home-sync">
@@ -154,6 +144,24 @@
       <button id="manualSyncButton" class="light" onclick="manualFullSync()">🔄 Synchroniseren</button>
       <div id="lastSyncText" class="muted"></div>
     </div>
+  </section>
+
+  <section id="collection" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">🃏 Kaarten & collectie</h2>
+      <div class="muted">Alle functies voor kaarten, sets en je eigen verzameling op één plek.</div>
+      <div class="quick-grid" style="margin-top:14px">
+        <button class="quick-action featured" onclick="openSetEntry()"><span class="ico">🗂️</span><span>Mijn sets<small>Sets beheren en aantallen invoeren</small></span></button>
+        <button class="quick-action" onclick="openNewProduct()"><span class="ico">📷</span><span>Eén product<small>Los product toevoegen</small></span></button>
+        <button class="quick-action" onclick="openValueCheck()"><span class="ico">💶</span><span>Kaartwaarde<small>Cardmarket indicatie</small></span></button>
+        <button class="quick-action" onclick="openSetValueCheck()"><span class="ico">🏆</span><span>Duurste kaarten<small>Normal · Holo · Reverse</small></span></button>
+        <button class="quick-action" onclick="openMarketTrends()"><span class="ico">📈</span><span>Live Markttrends<small>Kaarten vanaf €1,00</small></span></button>
+        <button class="quick-action" onclick="openCollector()"><span class="ico">📚</span><span>TCG Collector<small>Eigen verzameling</small></span></button>
+        <button class="quick-action" onclick="openMissingCollector()"><span class="ico">⚠️</span><span>Nog niet in TCG<small>Bewaren of verkoop verwerken</small></span></button>
+      </div>
+    </div>
+    <div class="card"><h3 style="margin:0 0 5px">Regio</h3><div class="muted">Open je sets per taal/regio.</div><div id="dashboardRegions" class="region-grid"></div></div>
   </section>
 
   <section id="mysets" class="hidden">
@@ -685,6 +693,7 @@ function show(id,fromHistory=false){
   if(id==='missingCollector') renderMissingCollector();
   if(id==='markettrends') loadMarketTrends();
   if(id==='fair') renderFairMode();
+  if(id==='collection') renderHomeDashboard();
 }
 function goBackInApp(){
   const current=document.querySelector('main>section:not(.hidden)')?.id;
@@ -1358,6 +1367,7 @@ const FAIR_KEY='psycards-fair-sessions-v1';
 function fairData(){try{return JSON.parse(localStorage.getItem(FAIR_KEY)||'{"sessions":[],"activeId":null}')||{sessions:[],activeId:null};}catch(e){return {sessions:[],activeId:null};}}
 function saveFairData(d){localStorage.setItem(FAIR_KEY,JSON.stringify(d));}
 function activeFair(){const d=fairData();return d.sessions.find(x=>x.id===d.activeId&&!x.closedAt)||null;}
+function openCollection(){show('collection');renderHomeDashboard();}
 function openFinance(){show('finance');}
 function openFairMode(){show('fair');renderFairMode();}
 function euro(n){return '€'+Number(n||0).toFixed(2).replace('.',',');}
