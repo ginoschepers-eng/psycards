@@ -328,7 +328,9 @@
       <h2 style="margin:0 0 5px">⚠️ Nog niet in TCG Collector</h2>
       <div class="muted">Alle kaarten uit de verkoopvoorraad die nog niet overeenkomen met de eigen binderregistratie.</div>
       <div class="stats" style="margin-top:12px"><div class="stat">Kaartregels<b id="missingCollectorRows">0</b></div><div class="stat">Kaarten totaal<b id="missingCollectorQuantity">0</b></div></div>
-      <button class="light" style="width:100%;margin-top:12px;padding:12px;font-size:15px" onclick="openCollector()">📚 TCG Collector-CSV bijwerken</button>
+      <button class="green" style="width:100%;margin-top:12px;padding:12px;font-size:15px" onclick="approveAllMissingCollectorForSale()">💰 Alles goedkeuren voor verkoop</button>
+      <div class="muted" style="margin-top:6px">Geeft alle kaarten in deze lijst in één keer vrij voor verkoop. Keuzes die al op Bewaren staan worden niet overschreven.</div>
+      <button class="light" style="width:100%;margin-top:10px;padding:12px;font-size:15px" onclick="openCollector()">📚 TCG Collector-CSV bijwerken</button>
     </div>
     <div id="missingCollectorList"></div>
   </section>
@@ -1699,6 +1701,19 @@ function collectorCardKey(card){const p=splitStoredName(card.name);return normal
 function getCollectorDecisions(){try{return JSON.parse(localStorage.getItem(COLLECTOR_DECISIONS_KEY)||'{}')||{};}catch(e){return {};}}
 function getCollectorDecision(card){return getCollectorDecisions()[collectorCardKey(card)]||'';}
 function setCollectorDecision(encodedKey,decision){const all=getCollectorDecisions();all[decodeURIComponent(encodedKey)]=decision;localStorage.setItem(COLLECTOR_DECISIONS_KEY,JSON.stringify(all));renderMissingCollector();}
+async function approveAllMissingCollectorForSale(){
+  loadCollectorCards();await loadCards();await loadBundleData();
+  const all=getCollectorDecisions();
+  const missing=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&availableQuantity(c)>0&&!collectorRegistryCheck(c).ok);
+  let changed=0,kept=0;
+  missing.forEach(c=>{const key=collectorCardKey(c);if(all[key]==='bewaren'){kept++;return;}if(all[key]!=='verkopen'){all[key]='verkopen';changed++;}});
+  if(!missing.length){alert('Er zijn geen kaarten om vrij te geven.');return;}
+  const msg='Alle '+(missing.length-kept)+' kaartregels vrijgeven voor verkoop?'+(kept?'\n\n'+kept+' kaartregels met de keuze Bewaren blijven behouden.':'');
+  if(!confirm(msg))return;
+  localStorage.setItem(COLLECTOR_DECISIONS_KEY,JSON.stringify(all));
+  await renderMissingCollector();
+  alert(changed+' kaartregels zijn goedgekeurd voor verkoop.'+(kept?' '+kept+' keuzes op Bewaren zijn niet gewijzigd.':''));
+}
 function collectorRegistryCheck(card){
   if(!collectorCards.length)loadCollectorCards();
   if(!collectorCards.length)return {ok:false,message:'Er is nog geen TCG Collector-binderlijst geladen.'};
