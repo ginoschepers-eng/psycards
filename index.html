@@ -536,6 +536,13 @@
       <label>Minimaal €</label><input id="editMin" type="number" step="0.01" inputmode="decimal">
       <div id="editMarketPrice" class="market-price">Cardmarket-prijs laden…</div>
       <button id="applyAdvicePrice" class="green hidden" style="width:100%;margin-top:10px" type="button" onclick="applyEditAdvicePrice()">Cardmarket als minimumprijs</button>
+      <div id="ownUsePanel" class="scanbox hidden" style="margin-top:14px">
+        <b>🏠 Eigen gebruik</b>
+        <div class="muted">Bijvoorbeeld sleeves, toploaders, stickers of ander materiaal dat Psycards zelf gebruikt. Dit wordt uit de voorraad gehaald, maar niet als verkoop geregistreerd.</div>
+        <label>Aantal voor eigen gebruik</label>
+        <input id="ownUseQuantity" type="number" min="1" step="1" inputmode="numeric" value="1">
+        <button class="gold" style="width:100%;margin-top:10px;padding:12px;font-size:15px" type="button" onclick="processOwnUse()">🏠 Verwerken als eigen gebruik</button>
+      </div>
       <button class="primary" style="width:100%;margin-top:16px" onclick="saveEdit()">Wijzigingen opslaan</button>
     </div>
   </section>
@@ -1932,7 +1939,7 @@ async function openEdit(id){
   const cards=await getAll();editingCard=cards.find(c=>String(c.id)===String(id));if(!editingCard)return alert('Dit product kon niet worden geladen.');
   if(typeof editingCard.photo==='undefined')editingCard.photo=await loadCardPhoto(editingCard.id);
   const parts=splitStoredName(editingCard.name),preview=document.getElementById('editPreview');
-  editName.value=parts.name;editSet.value=parts.set;editNumber.value=parts.number;editCondition.value=editingCard.condition;editVariant.value=editingCard.variant||'Normaal';document.getElementById('editVariantFields').classList.toggle('hidden',editingCard.productType!=='Pokémonkaart');editQuantity.value=editingCard.quantity;editBuy.value=editingCard.buy;editAsk.value=editingCard.ask;editMin.value=editingCard.min;editPhoto.value='';
+  editName.value=parts.name;editSet.value=parts.set;editNumber.value=parts.number;editCondition.value=editingCard.condition;editVariant.value=editingCard.variant||'Normaal';document.getElementById('editVariantFields').classList.toggle('hidden',editingCard.productType!=='Pokémonkaart');document.getElementById('ownUsePanel').classList.toggle('hidden',editingCard.productType==='Pokémonkaart'||editingCard.productType==='Kosten');document.getElementById('ownUseQuantity').value=1;editQuantity.value=editingCard.quantity;editBuy.value=editingCard.buy;editAsk.value=editingCard.ask;editMin.value=editingCard.min;editPhoto.value='';
   if(editingCard.photo){preview.src=editingCard.photo;preview.classList.remove('hidden');}else{preview.removeAttribute('src');preview.classList.add('hidden');}
   show('edit');
   updateEditPrice(editingCard);
@@ -1946,6 +1953,24 @@ async function updateEditPrice(card){
   }catch(e){box.classList.add('unavailable');box.textContent='Prijs kon niet worden geladen';}
 }
 function applyEditAdvicePrice(){if(!editingAdvicePrice)return alert('Er is geen adviesprijs beschikbaar.');document.getElementById('editAsk').value=editingAdvicePrice.toFixed(2);}
+const OWN_USE_KEY='psycards-own-use-v1';
+function getOwnUseHistory(){try{return JSON.parse(localStorage.getItem(OWN_USE_KEY)||'[]')||[];}catch(e){return [];}}
+function saveOwnUseHistory(rows){localStorage.setItem(OWN_USE_KEY,JSON.stringify(rows));}
+async function processOwnUse(){
+  if(!editingCard||editingCard.productType==='Pokémonkaart'||editingCard.productType==='Kosten')return;
+  await loadBundleData();
+  const available=availableQuantity(editingCard),qty=Math.max(1,parseInt(document.getElementById('ownUseQuantity').value)||1);
+  if(qty>available)return alert('Er zijn maar '+available+' stuks beschikbaar voor eigen gebruik.');
+  if(!confirm(qty+' × '+editingCard.name+' verwerken als eigen gebruik?\n\nDit wordt uit de voorraad gehaald en niet als verkoop geregistreerd.'))return;
+  const history=getOwnUseHistory();history.unshift({id:'own-'+Date.now(),cardId:editingCard.id,name:editingCard.name,productType:editingCard.productType,quantity:qty,buy:+editingCard.buy||0,date:new Date().toISOString(),reason:'Eigen gebruik'});saveOwnUseHistory(history);
+  const newQuantity=Math.max(0,(+editingCard.quantity||0)-qty);
+  if(newQuantity===0){
+    const {error}=await cloud.from('cards').delete().eq('id',editingCard.id);if(error)return alert('Eigen gebruik verwerken is niet gelukt: '+error.message);
+  }else{
+    editingCard.quantity=newQuantity;editingCard.status='Op voorraad';const {error}=await cloud.from('cards').update(toDb(editingCard)).eq('id',editingCard.id);if(error)return alert('Eigen gebruik verwerken is niet gelukt: '+error.message);
+  }
+  await loadCards(true);alert('✓ '+qty+' × '+editingCard.name+' verwerkt als eigen gebruik. Niet als verkoop geboekt.');show('stock');renderStock();
+}
 async function renderBundles(){
   await Promise.all([loadCards(),loadBundleData()]);
   const host=document.getElementById('bundleExisting');document.getElementById('bundleBuilder').classList.add('hidden');
@@ -2141,7 +2166,7 @@ async function saveEdit(){
   if(!name)return alert('Vul een naam in.');
   await loadBundleData();const unavailable=editingCard.soldQuantity+allocatedQuantity(editingCard.id);if(quantityValue<unavailable)return alert('Het aantal totaal kan niet lager zijn dan het aantal dat verkocht of in bundels gereserveerd is ('+unavailable+').');
   const replacement=editPhoto.files[0];if(replacement)editingCard.photo=await fileToDataURL(replacement);
-  editingCard.name=setName&&number?name+' — '+setName+' '+number:name;editingCard.condition=editCondition.value;editingCard.productType=['Doosje','Losse sleeve'].includes(editingCard.condition)?editingCard.condition:'Pokémonkaart';editingCard.variant=editingCard.productType==='Pokémonkaart'?editVariant.value:'';editingCard.quantity=quantityValue;editingCard.buy=+editBuy.value||0;editingCard.ask=+editAsk.value||0;editingCard.min=+editMin.value||0;editingCard.status=editingCard.soldQuantity>=editingCard.quantity?'Verkocht':'Op voorraad';
+  editingCard.name=setName&&number?name+' — '+setName+' '+number:name;editingCard.condition=editCondition.value;const nonCardTypes=['Knuffel','Doosje','Losse sleeve','Toploader','Binder','Sticker','Figuur','Sleutelhanger','Overig Pokémon-product'];editingCard.productType=nonCardTypes.includes(editingCard.condition)?editingCard.condition:(editingCard.productType!=='Pokémonkaart'&&nonCardTypes.includes(editingCard.productType)?editingCard.productType:'Pokémonkaart');editingCard.variant=editingCard.productType==='Pokémonkaart'?editVariant.value:'';editingCard.quantity=quantityValue;editingCard.buy=+editBuy.value||0;editingCard.ask=+editAsk.value||0;editingCard.min=+editMin.value||0;editingCard.status=editingCard.soldQuantity>=editingCard.quantity?'Verkocht':'Op voorraad';
   const {error}=await cloud.from('cards').update(toDb(editingCard)).eq('id',editingCard.id);if(error)return alert('Wijzigen is niet gelukt: '+error.message);
   await loadCards(true);alert('Wijzigingen opgeslagen.');show('stock');renderStock();
 }
