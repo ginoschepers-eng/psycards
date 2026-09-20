@@ -1968,7 +1968,23 @@ async function getCardmarketPrice(c){
   for(const id of ids){const card=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(set.id)+'/'+encodeURIComponent(id));if(card?.pricing?.cardmarket)return card.pricing.cardmarket;}
   return null;
 }
-function cardmarketAdvicePrice(pricing,variant){if(!pricing)return 0;const holo=['Holo','Reverse holo'].includes(canonicalBundleVariant(variant)),keys=holo?['trend-holo','avg7-holo','avg-holo','low-holo','trend','avg7','avg30','low']:['trend','avg7','avg30','avg','low'];const raw=keys.map(key=>+pricing[key]).find(value=>Number.isFinite(value)&&value>0);return raw?Math.max(.10,Math.ceil(raw*20)/20):0;}
+function cardmarketVariantRawPrice(pricing,variant){
+  if(!pricing)return 0;
+  const v=canonicalBundleVariant(variant);
+  const keys=v==='Reverse holo'
+    ?['trend-reverse','avg7-reverse','avg30-reverse','avg-reverse','low-reverse']
+    :v==='Holo'
+      ?['trend-holo','avg7-holo','avg30-holo','avg-holo','low-holo']
+      :['trend','avg7','avg30','avg','low'];
+  return keys.map(key=>+pricing[key]).find(value=>Number.isFinite(value)&&value>0)||0;
+}
+function cardmarketAdvicePrice(pricing,variant){const raw=cardmarketVariantRawPrice(pricing,variant);return raw?Math.max(.10,Math.ceil(raw*20)/20):0;}
+function cardmarketVariantOverview(pricing){
+  const normal=cardmarketVariantRawPrice(pricing,'Normaal'),holo=cardmarketVariantRawPrice(pricing,'Holo'),reverse=cardmarketVariantRawPrice(pricing,'Reverse holo');
+  const money=v=>'€'+(+v).toFixed(2).replace('.',',');
+  return '<div style="margin-top:5px"><b>Normaal:</b> '+(normal?money(normal):'—')+' · <b>Holo:</b> '+(holo?money(holo):'—')+' · <b>Reverse holo:</b> '+(reverse?money(reverse):'—')+'</div>'+
+    (!reverse&&holo?'<div class="muted">Cardmarket levert voor deze kaart geen aparte Reverse-holo prijs; de Holo-prijs wordt niet als Reverse-prijs overgenomen.</div>':'');
+}
 function openMarketTrends(){show('markettrends');}
 function marketTrendDay(){return new Date().toISOString().slice(0,10);}
 function readMarketTrendHistory(){const saved=readJsonCache(MARKET_TRENDS_CACHE_KEY);return Array.isArray(saved?.days)?saved.days:[];}
@@ -2014,8 +2030,8 @@ async function updateFolderPrices(cards){
   for(let i=0;i<queue.length;i+=4)await Promise.all(queue.slice(i,i+4).map(async c=>{
     const box=document.getElementById('market-'+c.id);if(!box)return;
     try{const p=await getCardmarketPrice(c);if(!p){box.classList.add('unavailable');box.textContent='Geen actuele Cardmarket-prijs beschikbaar';return;}
-      const parts=[];if(p.trend!=null&&Number.isFinite(+p.trend))parts.push('Trend €'+(+p.trend).toFixed(2));if(p.low!=null&&Number.isFinite(+p.low))parts.push('Laagste €'+(+p.low).toFixed(2));if(p['trend-holo']!=null&&Number.isFinite(+p['trend-holo']))parts.push('Holo-trend €'+(+p['trend-holo']).toFixed(2));const advice=cardmarketAdvicePrice(p,c.variant);
-      const date=p.updated?new Date(p.updated).toLocaleDateString('nl-NL'):'';box.innerHTML='<b>Cardmarket Europa:</b> '+escapeHtml(parts.join(' · ')||'prijs onbekend')+(advice?'<br><b>Minimumprijs: €'+advice.toFixed(2)+'</b>':'')+(date?'<br>Bijgewerkt: '+escapeHtml(date):'');
+      const advice=cardmarketAdvicePrice(p,c.variant);
+      const date=p.updated?new Date(p.updated).toLocaleDateString('nl-NL'):'';box.innerHTML='<b>Cardmarket Europa</b>'+cardmarketVariantOverview(p)+(advice?'<br><b>Minimumprijs voor '+escapeHtml(canonicalBundleVariant(c.variant))+': €'+advice.toFixed(2)+'</b>':'')+(date?'<br>Bijgewerkt: '+escapeHtml(date):'');
     }catch(e){box.classList.add('unavailable');box.textContent='Prijs kon niet worden geladen';}
   }));
 }
@@ -2041,8 +2057,7 @@ async function updateEditPrice(card){
   const box=document.getElementById('editMarketPrice'),button=document.getElementById('applyAdvicePrice');editingAdvicePrice=0;button.classList.add('hidden');box.className='market-price';box.textContent='Cardmarket-prijs laden…';
   if(card.productType!=='Pokémonkaart'){box.classList.add('hidden');return;}box.classList.remove('hidden');
   try{const p=await getCardmarketPrice(card);if(!p){box.classList.add('unavailable');box.textContent='Geen actuele Cardmarket-prijs beschikbaar';return;}
-    const parts=[];if(p.trend!=null&&Number.isFinite(+p.trend))parts.push('Trend €'+(+p.trend).toFixed(2));if(p.low!=null&&Number.isFinite(+p.low))parts.push('Laagste €'+(+p.low).toFixed(2));if(p['trend-holo']!=null&&Number.isFinite(+p['trend-holo']))parts.push('Holo-trend €'+(+p['trend-holo']).toFixed(2));
-    editingAdvicePrice=cardmarketAdvicePrice(p,card.variant);const date=p.updated?new Date(p.updated).toLocaleDateString('nl-NL'):'';box.innerHTML='<b>Actuele Cardmarket-prijs (Europa)</b><br>'+escapeHtml(parts.join(' · ')||'Prijs onbekend')+(editingAdvicePrice?'<br><b>Adviesvraagprijs Psycards: €'+editingAdvicePrice.toFixed(2)+'</b>':'')+(date?'<br>Bijgewerkt: '+escapeHtml(date):'');if(editingAdvicePrice)button.classList.remove('hidden');
+    editingAdvicePrice=cardmarketAdvicePrice(p,card.variant);const date=p.updated?new Date(p.updated).toLocaleDateString('nl-NL'):'';box.innerHTML='<b>Actuele Cardmarket-prijs (Europa)</b>'+cardmarketVariantOverview(p)+(editingAdvicePrice?'<br><b>Adviesvraagprijs Psycards ('+escapeHtml(canonicalBundleVariant(card.variant))+'): €'+editingAdvicePrice.toFixed(2)+'</b>':'')+(date?'<br>Bijgewerkt: '+escapeHtml(date):'');if(editingAdvicePrice)button.classList.remove('hidden');
   }catch(e){box.classList.add('unavailable');box.textContent='Prijs kon niet worden geladen';}
 }
 function applyEditAdvicePrice(){if(!editingAdvicePrice)return alert('Er is geen adviesprijs beschikbaar.');document.getElementById('editAsk').value=editingAdvicePrice.toFixed(2);}
