@@ -386,7 +386,7 @@
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
     <div class="card">
       <h2 style="margin:0 0 5px">💶 Kaartwaarde controleren</h2>
-      <div class="muted">Vul de set (afkorting of volledige naam) en het kaartnummer in.</div>
+      <div class="muted">Zoek eerst de kaart. Daarna kies je welke uitvoering je wilt controleren: Normaal, Holo of Reverse holo.</div>
       <label>Set</label><input id="valueSet" placeholder="Bijv. Prismatic of DRI" autocomplete="off" oninput="suggestValueSets()" onfocus="suggestValueSets()"><div id="valueSetSuggestions" class="hidden" style="margin-top:6px"></div><div id="valueSpecialCards" class="hidden" style="margin-top:10px"></div>
       <label>Kaartnummer</label><input id="valueNumber" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')checkCardValue()">
       <button class="primary" style="width:100%;margin-top:12px" onclick="checkCardValue()">Zoek kaart en prijs</button>
@@ -1645,19 +1645,34 @@ function pickValueSpecialCard(number){
  valueNumber.value=decodeURIComponent(number);checkCardValue();
 }
 function valueCardOptionHtml(card,setName,shownNumber){
- const pricing=card?.pricing?.cardmarket,market=pricing?cardmarketAdvicePrice(pricing,'Normaal'):0;
- const price=market?`<b>${valueMoney(market)}</b>`:'<span class="muted">geen prijs</span>';
- return `<button type="button" class="light" style="width:100%;text-align:left;margin:5px 0;padding:12px" onclick="showChosenCardValue('${encodeURIComponent(card.id||'')}','${encodeURIComponent(setName)}','${encodeURIComponent(shownNumber)}')"><b>${escapeHtml(card.name||'Kaart')}</b><br><span class="muted">${escapeHtml(setName)} · ${escapeHtml(shownNumber)}</span><br>Cardmarket: ${price}</button>`;
+ const variants=cardAvailableVariants(card);
+ const variantText=variants.length?variants.join(' · '):'uitvoering na keuze controleren';
+ return `<button type="button" class="light" style="width:100%;text-align:left;margin:5px 0;padding:12px" onclick="showChosenCardValue('${encodeURIComponent(card.id||'')}','${encodeURIComponent(setName)}','${encodeURIComponent(shownNumber)}')"><b>${escapeHtml(card.name||'Kaart')}</b><br><span class="muted">${escapeHtml(setName)} · ${escapeHtml(shownNumber)}</span><br><span class="muted">Beschikbaar: ${escapeHtml(variantText)}</span></button>`;
+}
+function renderValueVariantChoice(card,setName,shownNumber){
+ const variants=cardAvailableVariants(card);
+ if(!variants.length){valueResult.innerHTML=`<b>${escapeHtml(card.name||'Kaart')}</b><br><span class="muted">${escapeHtml(setName)} · ${escapeHtml(shownNumber)}</span><br>Geen bruikbare Cardmarket-prijs gevonden.`;return;}
+ const icon=v=>v==='Normaal'?'⚪':v==='Holo'?'✨':'🔄';
+ valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(setName)} · ${escapeHtml(shownNumber)}</div><div style="margin-top:10px"><b>Welke kaartuitvoering wil je controleren?</b></div><div class="muted" style="margin:3px 0 8px">Alleen uitvoeringen die voor deze kaart beschikbaar zijn worden getoond.</div>`+variants.map(v=>`<button type="button" class="light" style="width:100%;text-align:left;margin:6px 0;padding:12px" onclick="showCardVariantValue('${encodeURIComponent(card.id||'')}','${encodeURIComponent(setName)}','${encodeURIComponent(shownNumber)}','${encodeURIComponent(v)}')">${icon(v)} <b>${escapeHtml(v)}</b> · waarde zoeken</button>`).join('');
 }
 async function showChosenCardValue(cardId,setName,shownNumber){
- valueResult.textContent='Prijs laden…';
+ valueResult.textContent='Kaartgegevens laden…';
  try{
   const card=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(decodeURIComponent(cardId)));
   if(!card){valueResult.textContent='Kaart kon niet worden geladen.';return;}
-  const pricing=card?.pricing?.cardmarket,market=pricing?cardmarketAdvicePrice(pricing,'Normaal'):0;
-  if(!market){valueResult.innerHTML=`<b>${escapeHtml(card.name||'Kaart')}</b><br><span class="muted">${escapeHtml(decodeURIComponent(setName))} · ${escapeHtml(decodeURIComponent(shownNumber))}</span><br>Geen bruikbare Cardmarket-prijs gevonden.`;return;}
-  const trade=market*.80,cash=market*.70;
-  valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(decodeURIComponent(setName))} · ${escapeHtml(decodeURIComponent(shownNumber))}</div><div style="margin-top:10px"><b>Cardmarket waarde: ${valueMoney(market)}</b></div><div style="margin-top:7px">🔄 Inruilwaarde 80%: <b>${valueMoney(trade)}</b></div><div>💵 Inkoop contant 70%: <b>${valueMoney(cash)}</b></div>`;
+  renderValueVariantChoice(card,decodeURIComponent(setName),decodeURIComponent(shownNumber));
+ }catch(e){valueResult.textContent='Kaart kon niet worden opgehaald. Probeer het opnieuw.';}
+}
+async function showCardVariantValue(cardId,setName,shownNumber,variant){
+ valueResult.textContent='Cardmarket-prijs laden…';
+ try{
+  const card=await fetchTcgdex('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(decodeURIComponent(cardId)));
+  if(!card){valueResult.textContent='Kaart kon niet worden geladen.';return;}
+  const chosen=decodeURIComponent(variant),pricing=card?.pricing?.cardmarket||{},market=setValuePrice(pricing,chosen);
+  const set=decodeURIComponent(setName),number=decodeURIComponent(shownNumber);
+  if(!market){valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(set)} · ${escapeHtml(number)} · ${escapeHtml(chosen)}</div><div style="margin-top:10px">Geen aparte Cardmarket-prijs voor deze uitvoering gevonden.</div><button class="light" style="width:100%;margin-top:10px" onclick="renderValueVariantChoice(window._lastValueCard,'${encodeURIComponent(set)}','${encodeURIComponent(number)}')">← Andere uitvoering</button>`;window._lastValueCard=card;return;}
+  const trade=market*.80,cash=market*.70;window._lastValueCard=card;
+  valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(set)} · ${escapeHtml(number)}</div><div style="margin-top:8px;padding:8px 10px;border-radius:9px;background:#eef7ee"><b>Gekozen kaart: ${escapeHtml(card.name||'Kaart')} · ${escapeHtml(chosen)}</b></div><div style="margin-top:10px"><b>Cardmarket waarde: ${valueMoney(market)}</b></div><div style="margin-top:7px">🔄 Inruilwaarde 80%: <b>${valueMoney(trade)}</b></div><div>💵 Inkoop contant 70%: <b>${valueMoney(cash)}</b></div><button class="light" style="width:100%;margin-top:10px" onclick="renderValueVariantChoice(window._lastValueCard,'${encodeURIComponent(set)}','${encodeURIComponent(number)}')">← Andere uitvoering</button>`;
  }catch(e){valueResult.textContent='Prijs kon niet worden opgehaald. Probeer het opnieuw.';}
 }
 async function checkCardValue(){
@@ -1730,10 +1745,8 @@ async function checkCardValue(){
     }).join('');
     return;
   }
-  const card=candidates[0],pricing=card?.pricing?.cardmarket,market=pricing?cardmarketAdvicePrice(pricing,'Normaal'):0;
-  if(!market){valueResult.innerHTML='<b>'+escapeHtml(card.name||'Kaart')+'</b><br>'+escapeHtml(displaySet)+' · '+escapeHtml(numberInput)+'<br>Geen Cardmarket-prijs beschikbaar.';return;}
-  const trade=market*.80,cash=market*.70;
-  valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(displaySet)} · ${escapeHtml(numberInput)}</div><div style="margin-top:10px"><b>Cardmarket waarde: ${valueMoney(market)}</b></div><div style="margin-top:7px">🔄 Inruilwaarde 80%: <b>${valueMoney(trade)}</b></div><div>💵 Inkoop contant 70%: <b>${valueMoney(cash)}</b></div>`;
+  const card=candidates[0];
+  renderValueVariantChoice(card,displaySet,numberInput);
  }catch(e){valueResult.textContent='Prijs kon niet worden opgehaald. Probeer het opnieuw.';}
 }
 
@@ -1747,7 +1760,7 @@ function setValuePrice(pricing,variant){
   const v=canonicalBundleVariant(variant);
   const keys=v==='Normaal'?['trend','avg7','avg30','avg','low']:
     v==='Holo'?['trend-holo','avg7-holo','avg-holo','low-holo']:
-    ['trend-reverse','avg7-reverse','avg-reverse','low-reverse','trend-holo','avg7-holo','avg-holo','low-holo'];
+    ['trend-reverse','avg7-reverse','avg-reverse','low-reverse'];
   const raw=keys.map(k=>+pricing[k]).find(x=>Number.isFinite(x)&&x>0);
   return raw||0;
 }
