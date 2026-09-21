@@ -386,7 +386,7 @@
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
     <div class="card">
       <h2 style="margin:0 0 5px">💶 Kaartwaarde controleren</h2>
-      <div class="muted">Zoek eerst de kaart. Daarna kies je welke uitvoering je wilt controleren: Normaal, Holo of Reverse holo.</div>
+      <div class="muted">Zoek eerst de kaart. Daarna zie je de beschikbare uitvoering en Cardmarket-prijs, inclusief speciale kaarten zoals ex, V, VMAX, VSTAR, Full Art, IR, SIR, SR/Ultra Rare, Hyper Rare en Promo.</div>
       <label>Set</label><input id="valueSet" placeholder="Bijv. Prismatic of DRI" autocomplete="off" oninput="suggestValueSets()" onfocus="suggestValueSets()"><div id="valueSetSuggestions" class="hidden" style="margin-top:6px"></div><div id="valueSpecialCards" class="hidden" style="margin-top:10px"></div>
       <label>Kaartnummer</label><input id="valueNumber" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')checkCardValue()">
       <button class="primary" style="width:100%;margin-top:12px" onclick="checkCardValue()">Zoek kaart en prijs</button>
@@ -1651,9 +1651,16 @@ function valueCardOptionHtml(card,setName,shownNumber){
 }
 function renderValueVariantChoice(card,setName,shownNumber){
  const variants=cardAvailableVariants(card);
+ const pricing=card?.pricing?.cardmarket||{};
  if(!variants.length){valueResult.innerHTML=`<b>${escapeHtml(card.name||'Kaart')}</b><br><span class="muted">${escapeHtml(setName)} · ${escapeHtml(shownNumber)}</span><br>Geen bruikbare Cardmarket-prijs gevonden.`;return;}
- const icon=v=>v==='Normaal'?'⚪':v==='Holo'?'✨':'🔄';
- valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(setName)} · ${escapeHtml(shownNumber)}</div><div style="margin-top:10px"><b>Welke kaartuitvoering wil je controleren?</b></div><div class="muted" style="margin:3px 0 8px">Alleen uitvoeringen die voor deze kaart beschikbaar zijn worden getoond.</div>`+variants.map(v=>`<button type="button" class="light" style="width:100%;text-align:left;margin:6px 0;padding:12px" onclick="showCardVariantValue('${encodeURIComponent(card.id||'')}','${encodeURIComponent(setName)}','${encodeURIComponent(shownNumber)}','${encodeURIComponent(v)}')">${icon(v)} <b>${escapeHtml(v)}</b> · waarde zoeken</button>`).join('');
+ const icon=v=>v==='Normaal'?'⚪':v==='Holo'?'✨':v==='Reverse holo'?'🔄':'🌟';
+ const rows=variants.map(v=>{
+   const market=setValuePrice(pricing,v);
+   if(!market)return '';
+   return `<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid #edf0f4"><div>${icon(v)} <b>${escapeHtml(v)}</b></div><div class="money" style="font-size:17px">${valueMoney(market)}</div></div>`;
+ }).join('');
+ valueResult.innerHTML=`<div style="font-size:18px"><b>${escapeHtml(card.name||'Kaart')}</b></div><div class="muted">${escapeHtml(setName)} · ${escapeHtml(shownNumber)}</div><div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:#eef7ee"><b>Cardmarket-prijzen per beschikbare uitvoering</b></div><div style="margin-top:4px">${rows}</div><div class="muted" style="margin-top:8px">Alle beschikbare varianten van deze kaart worden direct onder elkaar getoond.</div>`;
+ window._lastValueCard=card;
 }
 async function showChosenCardValue(cardId,setName,shownNumber){
  valueResult.textContent='Kaartgegevens laden…';
@@ -1758,18 +1765,36 @@ function saveSetValueCache(cache){try{localStorage.setItem(SET_VALUE_CACHE_KEY,J
 function setValuePrice(pricing,variant){
   if(!pricing)return 0;
   const v=canonicalBundleVariant(variant);
-  const keys=v==='Normaal'?['trend','avg7','avg30','avg','low']:
-    v==='Holo'?['trend-holo','avg7-holo','avg-holo','low-holo']:
-    ['trend-reverse','avg7-reverse','avg-reverse','low-reverse'];
+  // Speciale kaartsoorten (ex/V/VMAX/VSTAR/FA/IR/SIR/SR/UR/HR/Promo)
+  // zijn een eigenschap van de kaart zelf. Cardmarket zet hun prijs daarom
+  // op de gewone trend/avg/low velden, niet op holo/reverse velden.
+  const keys=v==='Holo'?['trend-holo','avg7-holo','avg30-holo','avg-holo','low-holo']:
+    v==='Reverse holo'?['trend-reverse','avg7-reverse','avg30-reverse','avg-reverse','low-reverse']:
+    ['trend','avg7','avg30','avg','low'];
   const raw=keys.map(k=>+pricing[k]).find(x=>Number.isFinite(x)&&x>0);
   return raw||0;
+}
+function valueSpecialVariant(card){
+  const fixed=fixedSpecialVariant(card);
+  if(fixed)return fixed;
+  const rarity=String(card?.rarity||'').trim();
+  if(/special illustration rare/i.test(rarity))return 'Special Illustration Rare (SIR)';
+  if(/illustration rare/i.test(rarity))return 'Illustration Rare (IR)';
+  if(/hyper rare/i.test(rarity))return 'Hyper Rare';
+  if(/ultra rare/i.test(rarity))return 'Ultra Rare / SR';
+  if(/secret rare/i.test(rarity))return 'Secret Rare (SR)';
+  if(/full art/i.test(rarity))return 'Full Art';
+  if(/promo/i.test(rarity))return 'Promo';
+  return '';
 }
 function cardAvailableVariants(card){
   const variants=[];
   const pricing=card?.pricing?.cardmarket||{};
-  // TCGdex exposes variant availability where available; pricing keys are used as a fallback.
   const av=card?.variants||{};
-  if(av.normal!==false && (av.normal===true || setValuePrice(pricing,'Normaal')>0))variants.push('Normaal');
+  const special=valueSpecialVariant(card);
+  // Bij speciale kaarten tonen we de echte kaartsoort in plaats van "Normaal".
+  if(special && setValuePrice(pricing,special)>0)variants.push(special);
+  else if(av.normal!==false && (av.normal===true || setValuePrice(pricing,'Normaal')>0))variants.push('Normaal');
   if(av.holo===true || setValuePrice(pricing,'Holo')>0)variants.push('Holo');
   if(av.reverse===true || av.reverseHolo===true || setValuePrice(pricing,'Reverse holo')>0)variants.push('Reverse holo');
   return [...new Set(variants)];
