@@ -288,7 +288,7 @@
 
   <section id="setCards" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug naar sets</button></nav>
-    <div class="card"><h2 id="setCardsTitle" style="margin:0 0 5px">Kaarten invoeren</h2><div class="muted">Vink per kaart één of meerdere kaartsoorten aan. Iedere soort wordt apart in de voorraad opgeslagen.</div><div id="setCardsStatus" class="scan-status"></div><div class="set-jumpbar"><div><label>🔎 Ga naar kaartnummer</label><input id="setCardJump" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')jumpToSetCard()"></div><button class="light" onclick="jumpToSetCard()">Ga</button></div><button id="setCollectButton" class="light set-star" style="width:100%;margin-bottom:10px" onclick="toggleCurrentSetCollected()">☆ Wordt gespaard</button></div>
+    <div class="card"><h2 id="setCardsTitle" style="margin:0 0 5px">Kaarten invoeren</h2><div class="muted">Vink per kaart één of meerdere kaartsoorten aan. Iedere soort wordt apart in de voorraad opgeslagen.</div><div class="scanbox" style="margin-top:12px"><b>Voorraadregel voor deze set</b><label style="display:flex;gap:10px;align-items:center;margin:10px 0 4px"><input id="setKeepOneRule" type="checkbox" style="width:22px;height:22px;margin:0" onchange="changeSetReserveRule(this)"><span>Altijd 1 exemplaar bewaren</span></label><div id="setReserveRuleText" class="muted"></div></div><div id="setCardsStatus" class="scan-status"></div><div class="set-jumpbar"><div><label>🔎 Ga naar kaartnummer</label><input id="setCardJump" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')jumpToSetCard()"></div><button class="light" onclick="jumpToSetCard()">Ga</button></div><button id="setCollectButton" class="light set-star" style="width:100%;margin-bottom:10px" onclick="toggleCurrentSetCollected()">☆ Wordt gespaard</button></div>
     <div id="setEntryCards"></div>
     <div id="setEntrySavebar" class="set-savebar hidden"><div id="setEntryCount" class="muted" style="text-align:center;margin-bottom:7px">Nog geen wijzigingen</div><button id="setEntrySaveButton" class="green" style="width:100%;padding:13px;font-size:16px" onclick="saveSetEntry()">💾 Wijzigingen lokaal bewaren</button><button id="setEntrySyncButton" class="primary" style="width:100%;padding:13px;font-size:16px;margin-top:8px" onclick="syncPendingSetEntries()">☁️ Klaar met invoeren · alles doorsturen</button><div id="setEntryPendingStatus" class="muted" style="text-align:center;margin-top:7px"></div></div>
   </section>
@@ -753,6 +753,14 @@ const SET_LANGUAGES={en:'Engels',ja:'Japans',ko:'Koreaans','zh-tw':'Chinees (tra
 let setEntrySet=null,setEntryCardMap=new Map(),savedSetsCache=[],setSearchResults=[];
 const COLLECTED_SETS_KEY='psycards-collected-sets-v1';
 const SET_ENTRY_PENDING_KEY='psycards-set-entry-pending-v1';
+const SET_RESERVE_RULES_KEY='psycards-set-reserve-rules-v1';
+function getSetReserveRules(){try{return JSON.parse(localStorage.getItem(SET_RESERVE_RULES_KEY)||'{}')||{};}catch(e){return {};}}
+function reserveRuleKey(saved){return String(saved?.language||'')+'|'+String(saved?.tcgdex_id||saved?.id||'');}
+function keepOneForSet(saved){const rules=getSetReserveRules();return rules[reserveRuleKey(saved)]!==false;}
+function saveKeepOneForSet(saved,keepOne){if(!saved)return;const rules=getSetReserveRules();rules[reserveRuleKey(saved)]=!!keepOne;localStorage.setItem(SET_RESERVE_RULES_KEY,JSON.stringify(rules));}
+function keepOneForSetName(setName){const saved=savedSetsCache.find(s=>normalizeSetName(s.name)===normalizeSetName(setName));return saved?keepOneForSet(saved):true;}
+function updateSetReserveRuleUi(){const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value)),box=document.getElementById('setKeepOneRule'),txt=document.getElementById('setReserveRuleText');if(!saved||!box||!txt)return;box.checked=keepOneForSet(saved);txt.innerHTML=box.checked?'<b>1 exemplaar bewaren</b> · alleen dubbele kaarten mogen naar verkoop/bundels.':'<b>Alles mag weg</b> · ook het laatste exemplaar mag naar verkoop/bundels.';}
+function changeSetReserveRule(box){const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return;saveKeepOneForSet(saved,box.checked);updateSetReserveRuleUi();}
 function getPendingSetEntries(){try{return JSON.parse(localStorage.getItem(SET_ENTRY_PENDING_KEY)||'{}')||{};}catch(e){return {};}}
 function savePendingSetEntries(rows){localStorage.setItem(SET_ENTRY_PENDING_KEY,JSON.stringify(rows||{}));updatePendingSetEntryStatus();}
 function pendingEntryKey(saved,storedName,variant){return [saved?.language||'',saved?.tcgdex_id||saved?.id||'',storedName,canonicalBundleVariant(variant)].join('|');}
@@ -966,7 +974,7 @@ async function downloadAllMySets(){
 
 async function loadSetEntryCards(){
   const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return alert('Kies of voeg eerst een set toe.');
-  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaarten en afbeeldingen laden…';updateCurrentSetCollectButton();currentSetCardFilter='all';const jump=document.getElementById('setCardJump');if(jump)jump.value='';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
+  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaarten en afbeeldingen laden…';updateCurrentSetCollectButton();updateSetReserveRuleUi();currentSetCardFilter='all';const jump=document.getElementById('setCardJump');if(jump)jump.value='';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
   let set=null,current=[];
   try{
     const cachedSet=await readSetLocalCache(saved);
@@ -2192,7 +2200,7 @@ async function startBundleBuilder(){
   await Promise.all([loadCards(),loadBundleData()]);if(!bundleTablesReady)return alert('Voer eerst het nieuwe bestand supabase-setup.sql uit in Supabase.');
   bundlePlanMinPrice=Math.max(0,+document.getElementById('bundleMinCardPrice').value||3.00);bundlePlanMaxPrice=Math.max(bundlePlanMinPrice,+document.getElementById('bundleMaxCardPrice').value||3.75);const allowed=new Set(['Normaal','Holo','Reverse holo']),groups={};
   cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad').forEach(card=>{const set=stockFolderName(card);if(set!=='Kaarten zonder set')(groups[set]??=[]).push(card);});
-  bundlePlans=Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0],'nl')).map(([set,cards])=>{const eligible=cards.filter(c=>allowed.has(canonicalBundleVariant(c.variant))).map(card=>({card,quantity:Math.max(0,availableQuantity(card)-1)})).filter(x=>x.quantity>0),available=eligible.reduce((sum,x)=>sum+x.quantity,0),rules=bundleRulesForSet(set),count=maxMixedBundleCount(eligible,rules);return {set,available,rules,count,bundles:buildBalancedBundlePlan(eligible,count,rules,bundlePlanMinPrice,bundlePlanMaxPrice)};});
+  bundlePlans=Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0],'nl')).map(([set,cards])=>{const eligible=cards.filter(c=>allowed.has(canonicalBundleVariant(c.variant))).map(card=>({card,quantity:Math.max(0,availableQuantity(card)-(keepOneForSetName(set)?1:0))})).filter(x=>x.quantity>0),available=eligible.reduce((sum,x)=>sum+x.quantity,0),rules=bundleRulesForSet(set),count=maxMixedBundleCount(eligible,rules);return {set,available,rules,count,bundles:buildBalancedBundlePlan(eligible,count,rules,bundlePlanMinPrice,bundlePlanMaxPrice)};});
   if(!bundlePlans.length)return alert('Er staan nog geen kaarten per set in de voorraad.');
   document.getElementById('bundleExisting').innerHTML='';document.getElementById('bundleBuilder').classList.remove('hidden');renderBundlePlanOverview();
 }
