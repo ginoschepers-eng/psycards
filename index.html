@@ -266,7 +266,7 @@
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
     <div class="card">
       <h2 style="margin:0 0 5px">Hele set invoeren</h2>
-      <div class="muted">Alle Engelse sets worden automatisch geladen. Tik op een set om direct kaarten en aantallen in te voeren. De set wordt dan ook automatisch aan Mijn sets toegevoegd.</div>
+      <div class="muted">Alle Engelse sets worden per serie gegroepeerd. Open een serie en tik op een set om direct kaarten en aantallen in te voeren. De set wordt dan automatisch aan Mijn sets toegevoegd.</div>
       <select id="setEntrySelect" class="hidden"></select>
       <label>🔎 Zoek set</label>
       <input id="setEntrySearch" placeholder="Typ bijvoorbeeld C, Ce of Celebrations" autocomplete="off" oninput="filterSetEntryList()">
@@ -828,16 +828,46 @@ async function openSetEntry(){
   setEntryStatus.textContent=savedSetsCache.length?savedSetsCache.length+' sets in Mijn sets.':'Voeg eerst een set toe met de knop Set toevoegen.';
 }
 let setEntryAllRows=[];
+const SET_SERIES_ORDER=['Mega Evolution','30th Celebration','Scarlet & Violet','Sword & Shield','Sun & Moon','XY','Black & White','HeartGold & SoulSilver','Platinum','Diamond & Pearl','EX','E-Card','Neo','Gym','Classic','Promos & speciale sets','Overige sets'];
+const SET_SERIES_NAMES={
+'Mega Evolution':['Delta Reign','Pitch Black','Chaos Rising','Perfect Order','Ascended Heroes','Phantasmal Flames','Mega Evolution'],
+'30th Celebration':['30th Celebration','30th Celebration (Classic Collection)','30th Celebration (Pikachu Collection)'],
+'Scarlet & Violet':['White Flare','Black Bolt','Destined Rivals','Journey Together','Prismatic Evolutions','Surging Sparks','Stellar Crown','Shrouded Fable','Twilight Masquerade','Temporal Forces','Paldean Fates','Paradox Rift','151','Obsidian Flames','Paldea Evolved','Scarlet & Violet'],
+'Sword & Shield':['Crown Zenith','Silver Tempest','Lost Origin','Pokémon GO','Pokemon GO','Astral Radiance','Brilliant Stars','Fusion Strike','Celebrations','Evolving Skies','Chilling Reign','Battle Styles','Shining Fates','Vivid Voltage',"Champion's Path",'Champion’s Path','Darkness Ablaze','Rebel Clash','Sword & Shield'],
+'Sun & Moon':['Cosmic Eclipse','Hidden Fates','Unified Minds','Unbroken Bonds','Team Up','Lost Thunder','Dragon Majesty','Celestial Storm','Forbidden Light','Ultra Prism','Crimson Invasion','Shining Legends','Burning Shadows','Guardians Rising','Sun & Moon'],
+'XY':['Evolutions','Steam Siege','Fates Collide','Generations','BREAKpoint','BREAKthrough','Ancient Origins','Roaring Skies','Double Crisis','Primal Clash','Phantom Forces','Furious Fists','Flashfire','XY'],
+'Black & White':['Legendary Treasures','Plasma Blast','Plasma Freeze','Plasma Storm','Boundaries Crossed','Dragon Vault','Dragons Exalted','Dark Explorers','Next Destinies','Noble Victories','Emerging Powers','Black & White'],
+'HeartGold & SoulSilver':['Call of Legends','Triumphant','HS—Triumphant','Undaunted','HS—Undaunted','Unleashed','HS—Unleashed','HeartGold & SoulSilver'],
+'Platinum':['Rumble','Arceus','Supreme Victors','Rising Rivals','Platinum'],
+'Diamond & Pearl':['Stormfront','Legends Awakened','Majestic Dawn','Great Encounters','Secret Wonders','Mysterious Treasures','Diamond & Pearl'],
+'EX':['Power Keepers','Dragon Frontiers','Crystal Guardians','Holon Phantoms','Legend Maker','Delta Species','Unseen Forces','Emerald','Deoxys','Team Rocket Returns','FireRed & LeafGreen','Hidden Legends','Team Magma vs Team Aqua','Dragon','Sandstorm','Ruby & Sapphire'],
+'E-Card':['Skyridge','Aquapolis','Expedition','Expedition Base Set'],
+'Neo':['Neo Destiny','Neo Revelation','Neo Discovery','Neo Genesis'],
+'Gym':['Gym Challenge','Gym Heroes'],
+'Classic':['Team Rocket','Base Set 2','Fossil','Jungle','Base','Base Set']};
+function seriesForSetName(name){
+ const n=normalizeSetName(name);
+ for(const [series,names] of Object.entries(SET_SERIES_NAMES))if(names.some(x=>normalizeSetName(x)===n))return series;
+ if(/promo|mcdonald|trainer kit|energy|pop series|classic—|classic -/i.test(String(name)))return 'Promos & speciale sets';
+ return 'Overige sets';
+}
 function filterSetEntryList(){
   const q=String(document.getElementById('setEntrySearch')?.value||'').trim().toLocaleLowerCase('nl');
   const rows=setEntryAllRows.filter(row=>!q||String(row.saved?.name||row.catalog?.name||'').toLocaleLowerCase('nl').startsWith(q));
   if(!rows.length){setEntrySetGrid.innerHTML='<div class="card muted">Geen sets gevonden die beginnen met “'+escapeHtml(q)+'”.</div>';setEntryStatus.textContent='0 sets gevonden.';return;}
-  setEntrySetGrid.innerHTML=rows.map(row=>{
-    const saved=row.saved,set=row.catalog,name=saved?.name||set?.name||'Onbekende set',code=saved?.set_code||set?.id||'',savedId=saved?.id||'',catalogId=set?.id||saved?.tcgdex_id||'';
-    const action=saved?`selectSetEntryTile('${savedId}')`:`selectCatalogSetForEntry('${encodeURIComponent(String(catalogId))}','${encodeURIComponent(String(name))}')`;
-    return `<button class="light" style="width:100%;padding:12px 14px;margin:0 0 7px;text-align:left;font-size:15px;border-radius:12px" onclick="${action}"><b>${escapeHtml(name)}</b>${code?`<span class="muted" style="display:block;margin-top:2px">${escapeHtml(code)}${saved?' · Mijn sets':''}</span>`:''}</button>`;
+  const groups=new Map();
+  rows.forEach(row=>{const name=row.saved?.name||row.catalog?.name||'Onbekende set';const g=seriesForSetName(name);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(row);});
+  const groupHtml=SET_SERIES_ORDER.filter(g=>groups.has(g)).map(g=>{
+    const items=groups.get(g).sort((a,b)=>String(a.saved?.name||a.catalog?.name||'').localeCompare(String(b.saved?.name||b.catalog?.name||''),'nl'));
+    const buttons=items.map(row=>{
+      const saved=row.saved,set=row.catalog,name=saved?.name||set?.name||'Onbekende set',code=saved?.set_code||set?.id||'',savedId=saved?.id||'',catalogId=set?.id||saved?.tcgdex_id||'';
+      const action=saved?`selectSetEntryTile('${savedId}')`:`selectCatalogSetForEntry('${encodeURIComponent(String(catalogId))}','${encodeURIComponent(String(name))}')`;
+      return `<button class="light" style="width:100%;padding:12px 14px;margin:0 0 7px;text-align:left;font-size:15px;border-radius:12px" onclick="${action}"><b>${escapeHtml(name)}</b>${code?`<span class="muted" style="display:block;margin-top:2px">${escapeHtml(code)}${saved?' · Mijn sets':''}</span>`:''}</button>`;
+    }).join('');
+    return `<details class="card" ${q?'open':''} style="padding:0;margin:0 0 10px;overflow:hidden"><summary style="cursor:pointer;padding:15px 14px;font-size:18px;font-weight:800;list-style:none">${escapeHtml(g)} <span class="muted" style="font-size:13px;font-weight:600">· ${items.length} sets</span></summary><div style="padding:0 10px 10px">${buttons}</div></details>`;
   }).join('');
-  setEntryStatus.textContent=rows.length+' set'+(rows.length===1?'':'s')+' gevonden'+(q?' voor “'+q+'”':'')+'. Tik op een set om de volledige kaartenlijst te openen.';
+  setEntrySetGrid.innerHTML=groupHtml;
+  setEntryStatus.textContent=rows.length+' set'+(rows.length===1?'':'s')+' gevonden'+(q?' voor “'+q+'”':'')+'. Open een serie en tik op een set.';
 }
 async function renderSetEntryTiles(){
   setEntrySetGrid.innerHTML='<div class="muted">Alle sets laden…</div>';
