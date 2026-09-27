@@ -282,6 +282,10 @@
       <input id="setEntrySearch" placeholder="Typ bijvoorbeeld C, Ce of Celebrations" autocomplete="off" oninput="filterSetEntryList()">
       <div class="muted" style="margin-top:6px">Typ één of meer letters. Alleen sets waarvan de naam daarmee begint worden getoond.</div>
       <div id="setEntrySetGrid" style="margin-top:10px"></div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #e5e7eb">
+        <button class="green" style="width:100%;padding:13px;font-size:16px" onclick="preloadFullCardCatalog(this)">⬇️ Kaartgegevens van Mijn sets downloaden</button>
+        <div class="muted" style="margin-top:6px">Downloadt de volledige kaartlijst van iedere set waarvan minimaal 1 kaart is ingevoerd. Sets die al lokaal staan worden overgeslagen.</div>
+      </div>
       <button class="light" style="width:100%;padding:13px;font-size:16px;margin-top:12px" onclick="toggleAddSet(true)">➕ Set toevoegen</button>
       <button class="danger" style="width:100%;padding:10px;font-size:13px;margin-top:8px" onclick="removeSavedSet()">Set uit Mijn sets verwijderen</button>
       <div id="setEntryStatus" class="scan-status"></div>
@@ -977,8 +981,8 @@ async function writeSetLocalCache(saved,set){
 }
 
 
-async function preloadFullCardCatalog(){
-  const button=document.getElementById('preloadCatalogButton'),status=document.getElementById('downloadMySetsStatus');
+async function preloadFullCardCatalog(triggerButton){
+  const button=triggerButton||document.getElementById('preloadCatalogButton'),status=document.getElementById('downloadMySetsStatus')||document.getElementById('setEntryStatus');
   if(!button||!status)return;
   if(!navigator.onLine){status.textContent='Geen internetverbinding. De al opgeslagen kaartlijsten blijven beschikbaar.';return;}
   button.disabled=true;button.textContent='Mijn sets bepalen…';
