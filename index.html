@@ -773,7 +773,7 @@ function setSetCollected(saved,value){const all=getCollectedSets(),key=collected
 function toggleSavedSetCollected(id,event){if(event){event.preventDefault();event.stopPropagation();}const saved=savedSetsCache.find(s=>String(s.id)===String(id));if(!saved)return;setSetCollected(saved,!isSetCollected(saved));renderSetEntryTiles();if(String(setEntrySelect.value)===String(id))updateCurrentSetCollectButton();}
 function updateCurrentSetCollectButton(){const b=document.getElementById('setCollectButton'),saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!b||!saved)return;const on=isSetCollected(saved);b.textContent=on?'⭐ Wordt gespaard':'☆ Wordt gespaard';b.classList.toggle('active',on);}
 function toggleCurrentSetCollected(){const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return;setSetCollected(saved,!isSetCollected(saved));updateCurrentSetCollectButton();}
-function jumpToSetCard(){const input=document.getElementById('setCardJump');if(!input)return;const raw=String(input.value||'').trim();const n=(raw.match(/\d+/)||[])[0];if(!n)return alert('Vul een kaartnummer in, bijvoorbeeld 182.');const el=document.querySelector('.set-entry[data-card-number="'+Number(n)+'"]');if(!el)return alert('Kaartnummer '+n+' is niet gevonden in deze set.');document.querySelectorAll('.set-entry-target').forEach(x=>x.classList.remove('set-entry-target'));el.classList.add('set-entry-target');el.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>el.classList.remove('set-entry-target'),2200);}
+function jumpToSetCard(){const input=document.getElementById('setCardJump');if(!input)return;const raw=String(input.value||'').trim();const n=(raw.match(/\d+/)||[])[0];if(!n)return alert('Vul een kaartnummer in, bijvoorbeeld 182.');const el=document.querySelector('#setEntryCards .set-card-compact[data-card-number="'+Number(n)+'"]');if(!el)return alert('Kaartnummer '+n+' is niet gevonden in deze set.');document.querySelectorAll('.set-entry-target').forEach(x=>x.classList.remove('set-entry-target'));el.classList.add('set-entry-target');el.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>el.classList.remove('set-entry-target'),2200);}
 let currentSetCardFilter='all';
 function filterSetCards(mode){
  currentSetCardFilter=['ex','ir','sir','sr','ur','rares'].includes(mode)?mode:'all';
@@ -974,7 +974,7 @@ async function downloadAllMySets(){
 
 async function loadSetEntryCards(){
   const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return alert('Kies of voeg eerst een set toe.');
-  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaarten en afbeeldingen laden…';updateCurrentSetCollectButton();updateSetReserveRuleUi();currentSetCardFilter='all';const jump=document.getElementById('setCardJump');if(jump)jump.value='';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
+  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaartenlijst laden…';updateCurrentSetCollectButton();updateSetReserveRuleUi();currentSetCardFilter='all';const jump=document.getElementById('setCardJump');if(jump)jump.value='';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
   let set=null,current=[];
   try{
     const cachedSet=await readSetLocalCache(saved);
@@ -984,7 +984,8 @@ async function loadSetEntryCards(){
     ]);
     if(!cachedSet&&set?.cards?.length)writeSetLocalCache(saved,set);
     set=await enrichSetCardVariants(saved,set);
-    await loadPhotosForOpenedSet(saved,current);
+    // Voorraadfoto’s mogen de kaartenlijst niet blokkeren.
+    loadPhotosForOpenedSet(saved,current).catch(e=>console.warn('Voorraadfoto’s op achtergrond laden mislukt:',e));
   }catch(e){
     console.error('Set laden mislukt:',saved,e);
     setCardsStatus.textContent='De set kon niet worden geladen. Probeer het opnieuw.';
