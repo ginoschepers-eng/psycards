@@ -854,7 +854,9 @@ function filterSetEntryList(){
 async function renderSetEntryTiles(){
   setEntrySetGrid.innerHTML='<div class="muted">Alle sets laden…</div>';
   let catalog=[];
-  try{catalog=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets')||[];}catch(e){console.warn('Volledige setlijst laden mislukt:',e);}
+  const catalogKey='psycards-tcgdex-set-catalog-v1';
+  try{const local=JSON.parse(localStorage.getItem(catalogKey)||'null');if(local?.rows?.length)catalog=local.rows;}catch{}
+  if(!catalog.length){try{catalog=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets')||[];try{if(catalog.length)localStorage.setItem(catalogKey,JSON.stringify({savedAt:Date.now(),rows:catalog}));}catch{}}catch(e){console.warn('Volledige setlijst laden mislukt:',e);}}
   const savedByTcgdex=new Map(savedSetsCache.filter(s=>s.language==='en').map(s=>[String(s.tcgdex_id),s]));
   const rows=[];
   (Array.isArray(catalog)?catalog:[]).forEach(set=>rows.push({catalog:set,saved:savedByTcgdex.get(String(set.id))||null}));
@@ -1024,13 +1026,11 @@ async function loadSetEntryCards(){
   try{
     const excelSet=excelCatalogCardsForSet(saved.name);
     const cachedSet=excelSet||await readSetLocalCache(saved);
-    [set,current]=await Promise.all([
-      cachedSet ? Promise.resolve(cachedSet) : fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/sets/'+encodeURIComponent(saved.tcgdex_id)),
-      getAll()
-    ]);
+    if(cachedSet){set=cachedSet;current=Array.isArray(cards)?cards:[];}
+    else{[set,current]=await Promise.all([fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/sets/'+encodeURIComponent(saved.tcgdex_id)),getAll()]);}
     if(!set?.cards?.length)set=fallbackSpecialSet(saved);
     if(!cachedSet&&set?.cards?.length)writeSetLocalCache(saved,set);
-    if(set?.source!=='excel'&&!String(set?.cards?.[0]?.id||'').startsWith('psy-fallback-'))set=await enrichSetCardVariants(saved,set);
+    // Snel openen: kaartdetails worden niet meer vooraf één voor één opgehaald.
   }catch(e){
     console.error('Set laden via hoofdbron mislukt:',saved,e);
     set=fallbackSpecialSet(saved);
