@@ -195,7 +195,7 @@
     <div class="card">
       <h2 style="margin:0 0 5px">Mijn sets</h2>
       <div class="muted">Tik op een set om direct kaarten en aantallen in te voeren.</div>
-      <button id="downloadMySetsButton" class="primary" style="width:100%;margin-top:12px" onclick="downloadAllMySets()">🔄 Database controleren en bijwerken</button><div class="muted" style="margin-top:6px">Kaartcatalogus wordt lokaal opgeslagen. Normaal maximaal 1× per 4 dagen controleren; Supabase wordt hiervoor niet gebruikt.</div>
+      <button id="downloadMySetsButton" class="primary" style="width:100%;margin-top:12px" onclick="downloadAllMySets()">🔄 Database controleren en bijwerken</button><button id="preloadCatalogButton" class="green" style="width:100%;margin-top:8px" onclick="preloadFullCardCatalog()">⚡ Alle kaartlijsten lokaal opslaan</button><div class="muted" style="margin-top:6px">Kaartcatalogus wordt lokaal opgeslagen. Normaal maximaal 1× per 4 dagen controleren; Supabase wordt hiervoor niet gebruikt.</div>
       <div id="downloadMySetsStatus" class="scan-status">Controleert alle sets in Mijn sets tegen TCGdex en vult ontbrekende/gewijzigde kaartgegevens lokaal aan. Voorraad en verkopen worden niet gewijzigd.</div>
       <div id="dashboardSets"></div>
     </div>
@@ -873,7 +873,7 @@ function toggleAddSet(open){addSetPanel.classList.toggle('hidden',!open);if(open
 async function searchSetsToAdd(){
   const language=addSetLanguage.value,query=addSetQuery.value.trim();
   addSetStatus.textContent='Sets zoeken…';addSetResults.classList.add('hidden');
-  try{const sets=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(language)+'/sets');if(!Array.isArray(sets))throw new Error('Setlijst niet beschikbaar');const wanted=normalizeSetName(query);setSearchResults=(query?sets.filter(s=>normalizeSetName(s.name).includes(wanted)||String(s.id).toLocaleLowerCase('en').includes(query.toLocaleLowerCase('en'))):sets).slice().sort((a,b)=>a.name.localeCompare(b.name));if(!setSearchResults.length)throw new Error('Geen set gevonden. Probeer een deel van de naam of de databasecode.');addSetResultSelect.innerHTML=setSearchResults.map((s,i)=>`<option value="${i}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`).join('');addSetResults.classList.remove('hidden');addSetStatus.textContent=query?setSearchResults.length+' sets gevonden.':setSearchResults.length+' sets beschikbaar in deze taal.';}catch(e){addSetStatus.textContent=e.message||'Zoeken is niet gelukt.';}
+  try{let sets=[];if(language==='en'){const local=readJsonCache(TCGDEX_CATALOG_CACHE_KEY);if(local&&Number(local.savedAt)>0&&(Date.now()-Number(local.savedAt)<TCGDEX_CATALOG_MAX_AGE)&&Array.isArray(local.rows))sets=local.rows;}if(!sets.length){sets=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(language)+'/sets');if(language==='en'&&Array.isArray(sets)&&sets.length)writeJsonCache(TCGDEX_CATALOG_CACHE_KEY,{savedAt:Date.now(),rows:sets});}if(!Array.isArray(sets))throw new Error('Setlijst niet beschikbaar');const wanted=normalizeSetName(query);setSearchResults=(query?sets.filter(s=>normalizeSetName(s.name).includes(wanted)||String(s.id).toLocaleLowerCase('en').includes(query.toLocaleLowerCase('en'))):sets).slice().sort((a,b)=>a.name.localeCompare(b.name));if(!setSearchResults.length)throw new Error('Geen set gevonden. Probeer een deel van de naam of de databasecode.');addSetResultSelect.innerHTML=setSearchResults.map((s,i)=>`<option value="${i}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`).join('');addSetResults.classList.remove('hidden');addSetStatus.textContent=query?setSearchResults.length+' sets gevonden.':setSearchResults.length+' sets beschikbaar in deze taal.';}catch(e){addSetStatus.textContent=e.message||'Zoeken is niet gelukt.';}
 }
 async function saveSelectedSet(){
   const selected=setSearchResults[Number(addSetResultSelect.value)||0];if(!selected)return alert('Kies eerst een gevonden set.');
@@ -964,6 +964,51 @@ async function writeSetLocalCache(saved,set){
     });
     db.close();
   }catch(e){console.warn('Lokale setcache opslaan overgeslagen:',e);}
+}
+
+
+async function preloadFullCardCatalog(){
+  const button=document.getElementById('preloadCatalogButton'),status=document.getElementById('downloadMySetsStatus');
+  if(!button||!status)return;
+  if(!navigator.onLine){status.textContent='Geen internetverbinding. De al opgeslagen kaartlijsten blijven gewoon beschikbaar.';return;}
+  button.disabled=true;button.textContent='Kaartlijsten lokaal opslaan…';
+  try{
+    let catalog=[];
+    const localCatalog=readJsonCache(TCGDEX_CATALOG_CACHE_KEY);
+    if(localCatalog&&Array.isArray(localCatalog.rows)&&localCatalog.rows.length)catalog=localCatalog.rows;
+    if(!catalog.length){
+      catalog=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets')||[];
+      if(catalog.length)writeJsonCache(TCGDEX_CATALOG_CACHE_KEY,{savedAt:Date.now(),rows:catalog});
+    }
+    if(!catalog.length)throw new Error('Setcatalogus kon niet worden geladen.');
+    let done=0,downloaded=0,already=0,failed=0;
+    const queue=catalog.slice();
+    async function worker(){
+      while(queue.length){
+        const brief=queue.shift();
+        const saved={language:'en',tcgdex_id:brief.id,name:brief.name};
+        try{
+          const cached=await readSetLocalCache(saved);
+          if(cached?.cards?.length){already++;done++;status.textContent=done+' / '+catalog.length+' kaartlijsten verwerkt · '+downloaded+' nieuw · '+already+' al lokaal';continue;}
+          const full=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets/'+encodeURIComponent(brief.id));
+          if(!full?.cards?.length)throw new Error('Geen kaarten ontvangen');
+          const expected=Number(full.cardCount?.total||full.cards.length)||full.cards.length;
+          if(full.cards.length<expected)throw new Error('Onvolledig '+full.cards.length+'/'+expected);
+          await writeSetLocalCache(saved,full);
+          downloaded++;
+        }catch(e){failed++;console.warn('Lokale kaartlijst overgeslagen:',brief?.name,e);}
+        done++;
+        status.textContent=done+' / '+catalog.length+' kaartlijsten verwerkt · '+downloaded+' nieuw · '+already+' al lokaal'+(failed?' · '+failed+' mislukt':'');
+      }
+    }
+    await Promise.all(Array.from({length:3},()=>worker()));
+    writeJsonCache('psycards-full-local-catalog-v1',{savedAt:Date.now(),sets:catalog.length,failed});
+    status.textContent='✓ Lokale kaartcatalogus gereed: '+(catalog.length-failed)+' van '+catalog.length+' sets beschikbaar op dit apparaat'+(failed?' · '+failed+' konden niet worden geladen':'')+'. Afbeeldingen en prijzen zijn bewust niet vooraf gedownload.';
+  }catch(e){
+    status.textContent='Lokaal voorbereiden is niet gelukt: '+(e.message||e);
+  }finally{
+    button.disabled=false;button.textContent='⚡ Alle kaartlijsten lokaal opslaan';
+  }
 }
 
 async function downloadAllMySets(){
