@@ -141,7 +141,9 @@
     <div class="quick-grid">
       <button class="quick-action" onclick="openCollection()"><span class="ico">🃏</span><span>Kaarten & collectie<small>Sets, regio, kaartwaarde en TCG Collector</small></span></button>
       <button class="quick-action" onclick="openFinance()"><span class="ico">💶</span><span>Financiën<small>Kasboek, beurs, winst, balans en voorraadrapport</small></span></button>
+      <button id="dashboardSetDownloadButton" class="quick-action featured" onclick="preloadFullCardCatalog(this)"><span class="ico">⬇️</span><span>Sets lokaal downloaden<small>Kaartlijsten van ingevoerde sets</small></span></button>
     </div>
+    <div id="dashboardSetDownloadStatus" class="scan-status" style="margin-top:10px">Lokale sets: nog niet gecontroleerd.</div>
     <div class="home-sync">
       <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
       <button id="manualSyncButton" class="light" onclick="manualFullSync()">🔄 Synchroniseren</button>
@@ -196,18 +198,12 @@
       <h2 style="margin:0 0 5px">Mijn sets</h2>
       <div class="muted">Tik op een set om direct kaarten en aantallen in te voeren.</div>
       <div id="dashboardSets"></div>
-      <div class="card" style="margin:16px 0 0;padding:14px">
-        <h3 style="margin:0 0 5px">⚡ Lokale kaartgegevens</h3>
-        <div class="muted">Maak alleen de sets die je al gebruikt snel beschikbaar op dit apparaat. Ook een set met maar 1 ingevoerde kaart telt mee.</div>
-        <button id="preloadCatalogButton" class="green" style="width:100%;margin-top:12px" onclick="preloadFullCardCatalog()">⬇️ Mijn ingevoerde sets downloaden</button>
-        <div class="muted" style="margin-top:6px">Slaat de volledige kaartlijsten lokaal op. Geen afbeeldingen of prijzen en geen extra Supabase-opslag.</div>
-        <details style="margin-top:12px">
-          <summary style="cursor:pointer;font-weight:700">🔧 Onderhoud database</summary>
-          <div class="muted" style="margin-top:8px">Alleen nodig om lokale kaartgegevens opnieuw met TCGdex te controleren. Normaal maximaal 1× per 4 dagen.</div>
-          <button id="downloadMySetsButton" class="light" style="width:100%;margin-top:10px" onclick="downloadAllMySets()">🔄 Database controleren en bijwerken</button>
-        </details>
-        <div id="downloadMySetsStatus" class="scan-status">Klaar. Gebruik “Mijn ingevoerde sets downloaden” om je gebruikte sets lokaal beschikbaar te maken.</div>
-      </div>
+      <details style="margin-top:16px">
+        <summary style="cursor:pointer;font-weight:700">🔧 Onderhoud database</summary>
+        <div class="muted" style="margin-top:8px">Alleen nodig om kaartgegevens opnieuw met TCGdex te controleren. Normaal maximaal 1× per 4 dagen.</div>
+        <button id="downloadMySetsButton" class="light" style="width:100%;margin-top:10px" onclick="downloadAllMySets()">🔄 Database controleren en bijwerken</button>
+        <div id="downloadMySetsStatus" class="scan-status">Database-onderhoud staat los van de lokale download op het dashboard.</div>
+      </details>
     </div>
   </section>
 
@@ -982,24 +978,8 @@ async function writeSetLocalCache(saved,set){
 
 
 
-function ensureSetDownloadButton(){
-  const addButton=[...document.querySelectorAll('button')].find(b=>{
-    const t=String(b.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-    return t.includes('set toevoegen') && b.offsetParent!==null;
-  });
-  if(!addButton||document.getElementById('setDownloadRuntime'))return;
-  const wrap=document.createElement('div');
-  wrap.id='setDownloadRuntime';
-  wrap.style.cssText='margin:14px 0 10px';
-  wrap.innerHTML='<button class="green" style="width:100%;padding:13px;font-size:16px" onclick="preloadFullCardCatalog(this)">⬇️ Kaartgegevens van Mijn sets downloaden</button><div class="muted" style="margin-top:6px">Volledige kaartlijsten lokaal opslaan van sets waarvan minimaal 1 kaart is ingevoerd.</div>';
-  addButton.parentNode.insertBefore(wrap,addButton);
-}
-const setDownloadObserver=new MutationObserver(()=>ensureSetDownloadButton());
-setDownloadObserver.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
-document.addEventListener('DOMContentLoaded',()=>setTimeout(ensureSetDownloadButton,0));
-
 async function preloadFullCardCatalog(triggerButton){
-  const button=triggerButton||document.getElementById('preloadCatalogButton'),status=document.getElementById('downloadMySetsStatus')||document.getElementById('setEntryStatus');
+  const button=triggerButton||document.getElementById('dashboardSetDownloadButton'),status=document.getElementById('dashboardSetDownloadStatus')||document.getElementById('downloadMySetsStatus')||document.getElementById('setEntryStatus');
   if(!button||!status)return;
   if(!navigator.onLine){status.textContent='Geen internetverbinding. De al opgeslagen kaartlijsten blijven beschikbaar.';return;}
   button.disabled=true;button.textContent='Mijn sets bepalen…';
@@ -1064,7 +1044,7 @@ async function preloadFullCardCatalog(triggerButton){
   }catch(e){
     status.textContent='Mijn sets lokaal downloaden is niet gelukt: '+(e.message||e);
   }finally{
-    button.disabled=false;button.textContent='⚡ Mijn ingevoerde sets lokaal downloaden';
+    button.disabled=false;if(button.id==='dashboardSetDownloadButton')button.innerHTML='<span class="ico">⬇️</span><span>Sets lokaal downloaden<small>Kaartlijsten van ingevoerde sets</small></span>';else button.textContent='⬇️ Mijn ingevoerde sets downloaden';
   }
 }
 
