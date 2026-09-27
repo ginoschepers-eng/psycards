@@ -981,6 +981,23 @@ async function writeSetLocalCache(saved,set){
 }
 
 
+
+function ensureSetDownloadButton(){
+  const addButton=[...document.querySelectorAll('button')].find(b=>{
+    const t=String(b.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+    return t.includes('set toevoegen') && b.offsetParent!==null;
+  });
+  if(!addButton||document.getElementById('setDownloadRuntime'))return;
+  const wrap=document.createElement('div');
+  wrap.id='setDownloadRuntime';
+  wrap.style.cssText='margin:14px 0 10px';
+  wrap.innerHTML='<button class="green" style="width:100%;padding:13px;font-size:16px" onclick="preloadFullCardCatalog(this)">⬇️ Kaartgegevens van Mijn sets downloaden</button><div class="muted" style="margin-top:6px">Volledige kaartlijsten lokaal opslaan van sets waarvan minimaal 1 kaart is ingevoerd.</div>';
+  addButton.parentNode.insertBefore(wrap,addButton);
+}
+const setDownloadObserver=new MutationObserver(()=>ensureSetDownloadButton());
+setDownloadObserver.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
+document.addEventListener('DOMContentLoaded',()=>setTimeout(ensureSetDownloadButton,0));
+
 async function preloadFullCardCatalog(triggerButton){
   const button=triggerButton||document.getElementById('preloadCatalogButton'),status=document.getElementById('downloadMySetsStatus')||document.getElementById('setEntryStatus');
   if(!button||!status)return;
