@@ -195,9 +195,19 @@
     <div class="card">
       <h2 style="margin:0 0 5px">Mijn sets</h2>
       <div class="muted">Tik op een set om direct kaarten en aantallen in te voeren.</div>
-      <button id="downloadMySetsButton" class="primary" style="width:100%;margin-top:12px" onclick="downloadAllMySets()">🔄 Database controleren en bijwerken</button><button id="preloadCatalogButton" class="green" style="width:100%;margin-top:8px" onclick="preloadFullCardCatalog()">⚡ Mijn ingevoerde sets lokaal downloaden</button><div class="muted" style="margin-top:6px">Kaartcatalogus wordt lokaal opgeslagen. Normaal maximaal 1× per 4 dagen controleren; Supabase wordt hiervoor niet gebruikt.</div>
-      <div id="downloadMySetsStatus" class="scan-status">Controleert alle sets in Mijn sets tegen TCGdex en vult ontbrekende/gewijzigde kaartgegevens lokaal aan. Voorraad en verkopen worden niet gewijzigd.</div>
       <div id="dashboardSets"></div>
+      <div class="card" style="margin:16px 0 0;padding:14px">
+        <h3 style="margin:0 0 5px">⚡ Lokale kaartgegevens</h3>
+        <div class="muted">Maak alleen de sets die je al gebruikt snel beschikbaar op dit apparaat. Ook een set met maar 1 ingevoerde kaart telt mee.</div>
+        <button id="preloadCatalogButton" class="green" style="width:100%;margin-top:12px" onclick="preloadFullCardCatalog()">⬇️ Mijn ingevoerde sets downloaden</button>
+        <div class="muted" style="margin-top:6px">Slaat de volledige kaartlijsten lokaal op. Geen afbeeldingen of prijzen en geen extra Supabase-opslag.</div>
+        <details style="margin-top:12px">
+          <summary style="cursor:pointer;font-weight:700">🔧 Onderhoud database</summary>
+          <div class="muted" style="margin-top:8px">Alleen nodig om lokale kaartgegevens opnieuw met TCGdex te controleren. Normaal maximaal 1× per 4 dagen.</div>
+          <button id="downloadMySetsButton" class="light" style="width:100%;margin-top:10px" onclick="downloadAllMySets()">🔄 Database controleren en bijwerken</button>
+        </details>
+        <div id="downloadMySetsStatus" class="scan-status">Klaar. Gebruik “Mijn ingevoerde sets downloaden” om je gebruikte sets lokaal beschikbaar te maken.</div>
+      </div>
     </div>
   </section>
 
