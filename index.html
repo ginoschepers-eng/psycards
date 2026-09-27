@@ -268,7 +268,10 @@
       <h2 style="margin:0 0 5px">Hele set invoeren</h2>
       <div class="muted">Alle Engelse sets worden automatisch geladen. Tik op een set om direct kaarten en aantallen in te voeren. De set wordt dan ook automatisch aan Mijn sets toegevoegd.</div>
       <select id="setEntrySelect" class="hidden"></select>
-      <div id="setEntrySetGrid" class="set-tile-grid"></div>
+      <label>🔎 Zoek set</label>
+      <input id="setEntrySearch" placeholder="Typ bijvoorbeeld C, Ce of Celebrations" autocomplete="off" oninput="filterSetEntryList()">
+      <div class="muted" style="margin-top:6px">Typ één of meer letters. Alleen sets waarvan de naam daarmee begint worden getoond.</div>
+      <div id="setEntrySetGrid" style="margin-top:10px"></div>
       <button class="light" style="width:100%;padding:13px;font-size:16px;margin-top:12px" onclick="toggleAddSet(true)">➕ Set toevoegen</button>
       <button class="danger" style="width:100%;padding:10px;font-size:13px;margin-top:8px" onclick="removeSavedSet()">Set uit Mijn sets verwijderen</button>
       <div id="setEntryStatus" class="scan-status"></div>
@@ -790,10 +793,18 @@ function filterSetCards(mode){
 }
 
 
-function loadSetCardOnOpen(details){
+async function loadSetCardOnOpen(details){
   if(!details.open)return;
   const img=details.querySelector('img[data-detail-image]');
-  if(img&&!img.src){img.src=img.dataset.detailImage;img.removeAttribute('data-detail-image');}
+  if(!img||img.dataset.loading==='1'||img.dataset.loaded==='1')return;
+  const remote=img.dataset.detailImage||'';
+  if(!remote)return;
+  img.dataset.loading='1';
+  try{
+    img.src=await localCardImageUrl(remote);
+    img.dataset.loaded='1';
+    img.removeAttribute('data-detail-image');
+  }finally{delete img.dataset.loading;}
 }
 
 function openAllCardSearch(){show('allcardsearch');const input=document.getElementById('allCardSearchInput');if(input){input.value='';setTimeout(()=>input.focus(),50);}const r=document.getElementById('allCardSearchResults');if(r)r.innerHTML='';const st=document.getElementById('allCardSearchStatus');if(st)st.textContent='Typ een naam om alle sets tegelijk te doorzoeken.';}
@@ -816,6 +827,18 @@ async function openSetEntry(){
   await renderSetEntryTiles();
   setEntryStatus.textContent=savedSetsCache.length?savedSetsCache.length+' sets in Mijn sets.':'Voeg eerst een set toe met de knop Set toevoegen.';
 }
+let setEntryAllRows=[];
+function filterSetEntryList(){
+  const q=String(document.getElementById('setEntrySearch')?.value||'').trim().toLocaleLowerCase('nl');
+  const rows=setEntryAllRows.filter(row=>!q||String(row.saved?.name||row.catalog?.name||'').toLocaleLowerCase('nl').startsWith(q));
+  if(!rows.length){setEntrySetGrid.innerHTML='<div class="card muted">Geen sets gevonden die beginnen met “'+escapeHtml(q)+'”.</div>';setEntryStatus.textContent='0 sets gevonden.';return;}
+  setEntrySetGrid.innerHTML=rows.map(row=>{
+    const saved=row.saved,set=row.catalog,name=saved?.name||set?.name||'Onbekende set',code=saved?.set_code||set?.id||'',savedId=saved?.id||'',catalogId=set?.id||saved?.tcgdex_id||'';
+    const action=saved?`selectSetEntryTile('${savedId}')`:`selectCatalogSetForEntry('${encodeURIComponent(String(catalogId))}','${encodeURIComponent(String(name))}')`;
+    return `<button class="light" style="width:100%;padding:12px 14px;margin:0 0 7px;text-align:left;font-size:15px;border-radius:12px" onclick="${action}"><b>${escapeHtml(name)}</b>${code?`<span class="muted" style="display:block;margin-top:2px">${escapeHtml(code)}${saved?' · Mijn sets':''}</span>`:''}</button>`;
+  }).join('');
+  setEntryStatus.textContent=rows.length+' set'+(rows.length===1?'':'s')+' gevonden'+(q?' voor “'+q+'”':'')+'. Tik op een set om de volledige kaartenlijst te openen.';
+}
 async function renderSetEntryTiles(){
   setEntrySetGrid.innerHTML='<div class="muted">Alle sets laden…</div>';
   let catalog=[];
@@ -824,14 +847,12 @@ async function renderSetEntryTiles(){
   const rows=[];
   (Array.isArray(catalog)?catalog:[]).forEach(set=>rows.push({catalog:set,saved:savedByTcgdex.get(String(set.id))||null}));
   savedSetsCache.filter(s=>s.language!=='en'||!rows.some(r=>r.saved&&String(r.saved.id)===String(s.id))).forEach(saved=>rows.push({catalog:null,saved}));
+  // Sets die uit een TCG Collector-CSV zijn geleerd ook in de keuzelijst tonen.
+  getCollectorSetCatalog().forEach(cs=>{if(!rows.some(r=>normalizeSetName(r.saved?.name||r.catalog?.name)===normalizeSetName(cs.name)))rows.push({catalog:{id:'collector:'+normalizeSetName(cs.name),name:cs.name,collectorOnly:true},saved:null});});
   rows.sort((a,b)=>String(a.saved?.name||a.catalog?.name||'').localeCompare(String(b.saved?.name||b.catalog?.name||''),'nl'));
+  setEntryAllRows=rows;
   if(!rows.length){setEntrySetGrid.innerHTML='<div class="muted">Geen sets beschikbaar.</div>';return;}
-  setEntrySetGrid.innerHTML=rows.map(row=>{
-    const saved=row.saved,set=row.catalog,name=saved?.name||set?.name||'Onbekende set',code=saved?.set_code||set?.id||'',savedId=saved?.id||'',catalogId=set?.id||saved?.tcgdex_id||'';
-    const action=saved?`selectSetEntryTile('${savedId}')`:`selectCatalogSetForEntry('${encodeURIComponent(String(catalogId))}','${encodeURIComponent(String(name))}')`;
-    return `<button class="set-tile" onclick="${action}"><span class="folder-icon">${saved&&isSetCollected(saved)?'⭐':'🗂️'}</span><b>${escapeHtml(name)}</b><small>${escapeHtml(code)}${saved?' · Mijn sets':''}</small>${saved?`<span class="set-star${isSetCollected(saved)?' active':''}" onclick="toggleSavedSetCollected('${saved.id}',event)">${isSetCollected(saved)?'⭐ Wordt gespaard':'☆ Sparen'}</span>`:''}</button>`;
-  }).join('');
-  setEntryStatus.textContent=rows.length+' sets beschikbaar · '+savedSetsCache.length+' in Mijn sets.';
+  filterSetEntryList();
 }
 async function selectSetEntryTile(id){setEntrySelect.value=String(id);await loadSetEntryCards();}
 async function selectCatalogSetForEntry(encodedId,encodedName){
@@ -974,6 +995,11 @@ async function downloadAllMySets(){
 
 function fallbackSpecialSet(saved){
   const n=String(saved?.name||'').toLowerCase();
+  const collectorSet=collectorCatalogSet(saved?.name);
+  if(collectorSet?.cards?.length){
+    const cards=collectorSet.cards.slice().sort((a,b)=>(+a.sort||0)-(+b.sort||0)||String(a.number).localeCompare(String(b.number),undefined,{numeric:true}));
+    return {name:saved.name,cardCount:{official:collectorSet.official||cards.length,total:cards.length},cards:cards.map((r,i)=>({id:'psy-collector-'+normalizeSetName(saved.name)+'-'+i,localId:r.number,name:r.name,rarity:r.rarity||'',variants:r.variants||{normal:true}}))};
+  }
   if(!(n.includes('celebrations')&&n.includes('classic')))return null;
   const rows=[
     ['2/102','Blastoise'],['4/102','Charizard'],['8/82','Dark Gyarados'],["9/95","Team Magma's Groudon"],['15/82','Here Comes Team Rocket!'],['15/106','Claydol'],["15/132","Rocket's Zapdos"],['15/102','Venusaur'],['17/17','Umbreon ★'],['20/111','Cleffa'],["24/53","_____’s Pikachu"],['54/99','Mewtwo EX'],['60/145','Tapu Lele GX'],['66/64','Shining Magikarp'],['73/102','Imposter Professor Oak'],['76/108','M Rayquaza EX'],["86/109","Rocket's Admin."],['88/92','Mew ex'],['93/101','Gardevoir ex δ'],['97/146','Xerneas EX'],['107/123','Donphan'],['109/111','Luxray GL LV.X'],['113/114','Reshiram'],['114/114','Zekrom'],['145/147','Garchomp C LV.X']
@@ -983,7 +1009,7 @@ function fallbackSpecialSet(saved){
 
 async function loadSetEntryCards(){
   const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return alert('Kies of voeg eerst een set toe.');
-  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaarten en afbeeldingen laden…';updateCurrentSetCollectButton();updateSetReserveRuleUi();currentSetCardFilter='all';const jump=document.getElementById('setCardJump');if(jump)jump.value='';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
+  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaartenlijst laden…';updateCurrentSetCollectButton();updateSetReserveRuleUi();currentSetCardFilter='all';const jump=document.getElementById('setCardJump');if(jump)jump.value='';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
   let set=null,current=[];
   try{
     const cachedSet=await readSetLocalCache(saved);
@@ -994,7 +1020,6 @@ async function loadSetEntryCards(){
     if(!set?.cards?.length)set=fallbackSpecialSet(saved);
     if(!cachedSet&&set?.cards?.length)writeSetLocalCache(saved,set);
     if(!String(set?.cards?.[0]?.id||'').startsWith('psy-fallback-'))set=await enrichSetCardVariants(saved,set);
-    loadPhotosForOpenedSet(saved,current).catch(e=>console.warn('Foto’s op achtergrond niet geladen:',e));
   }catch(e){
     console.error('Set laden via hoofdbron mislukt:',saved,e);
     set=fallbackSpecialSet(saved);
@@ -1016,7 +1041,7 @@ async function loadSetEntryCards(){
     const rarity=String(card.rarity||'').trim(),isSir=/special\s+illustration\s+rare|\bSIR\b|\bSRI\b/i.test(rarity),isIr=!isSir&&(/illustration\s+rare|\bIR\b/i.test(rarity)),isUr=/ultra\s+rare|\bUR\b/i.test(rarity),isSr=!isSir&&!isIr&&!isUr&&(/secret\s+rare|\bSR\b/i.test(rarity)),isRare=isEx||isIr||isSir||isSr||isUr||/rare/i.test(rarity);
     const rows=SET_ENTRY_COMMON.concat(SET_ENTRY_SPECIAL).map(v=>existingFor(v)).filter(Boolean),priced=rows.find(x=>Number(x.ask||0)>0)||rows[0],ask=Number(priced?.ask||0),min=Number(priced?.minimum||0);
     const priceHtml=isRare?`<div style="margin:5px 0 2px;font-weight:900">💶 ${ask>0?'€'+ask.toFixed(2).replace('.',','):'Prijs —'}${min>0?' · Min. €'+min.toFixed(2).replace('.',','):''}</div>`:'';
-    return `<details class="card set-card-compact ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}" ontoggle="loadSetCardOnOpen(this)"><summary style="cursor:pointer;font-size:16px;font-weight:800;padding:3px 0">${escapeHtml(number)} · ${escapeHtml(card.name)}</summary><div class="set-entry" style="margin-top:10px">${image?`<img class="set-detail-image" data-detail-image="${escapeHtml(image)}" alt="${escapeHtml(card.name)}">`:'<span></span>'}<div><div class="muted">${escapeHtml(set.name)}${rarity?' · '+escapeHtml(rarity):''}</div>${priceHtml}<div class="set-entry-options">${common}</div></div></div></details>`;
+    return `<div class="card set-card-compact ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}"><details onchange="loadSetCardOnOpen(this)"><summary style="font-size:16px;font-weight:800;cursor:pointer;color:#1f4e78">${escapeHtml(number)} · ${escapeHtml(card.name)}</summary>${image?`<div style="margin-top:10px;text-align:center"><img data-detail-image="${escapeHtml(image)}" alt="${escapeHtml(card.name)}" style="width:min(220px,72vw);height:auto;border-radius:12px;background:#edf1f6"><div class="muted" style="margin-top:5px">Afbeelding wordt na de eerste keer lokaal bewaard.</div></div>`:`<div class="muted" style="margin-top:8px">Voor deze kaart is geen afbeelding beschikbaar.</div>`}</details>${rarity?`<div class="muted" style="margin-top:2px">${escapeHtml(rarity)}</div>`:''}${priceHtml}<div class="set-entry-options">${common}</div></div>`;
   }).join('')+'</div>';
   setCardsStatus.textContent=set.cards.length+' kaarten beschikbaar. Bestaande aantallen komen eerst uit de lokale gegevens. Wijzigingen worden pas naar de database gestuurd als je op “Klaar met invoeren” drukt.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();updatePendingSetEntryStatus();
 }
@@ -1885,6 +1910,10 @@ async function openSetEntryForSavedSet(id){await openSetEntry();setEntrySelect.v
 let setLogoPromise,setCatalogPromise;
 function normalizeSetName(value){return String(value||'').toLocaleLowerCase('en').replace(/[^a-z0-9]/g,'');}
 
+const COLLECTOR_CATALOG_KEY='psycards_collector_set_catalog_v1';
+function getCollectorSetCatalog(){try{const x=JSON.parse(localStorage.getItem(COLLECTOR_CATALOG_KEY)||'[]');return Array.isArray(x)?x:[];}catch(e){return [];}}
+function saveCollectorSetCatalog(rows){localStorage.setItem(COLLECTOR_CATALOG_KEY,JSON.stringify(rows||[]));}
+function collectorCatalogSet(name){return getCollectorSetCatalog().find(s=>normalizeSetName(s.name)===normalizeSetName(name));}
 function collectorNumber(value){const m=String(value||'').match(/\d+/);return m?String(Number(m[0])):'';}
 function collectorFinish(value){const v=normalizeSetName(value);if(v.includes('reverseholo'))return 'reverse';if(v.includes('holo'))return 'holo';if(v==='normal'||v==='normaal')return 'normal';return v||'normal';}
 function loadCollectorCards(){
@@ -1898,13 +1927,33 @@ function parseCsvRows(text){
 async function importCollectorCsv(){
   const file=document.getElementById('collectorCsv').files[0];if(!file)return;
   try{
-    const rows=parseCsvRows(await file.text());if(rows.length<2)throw new Error('Het bestand bevat geen kaartregels.');
-    const headers=rows[0].map(x=>String(x).replace(/^\ufeff/,'').trim()),col=name=>headers.indexOf(name),setCol=col('Expansion'),numberCol=col('Card number'),variantCol=col('Card variant'),quantityCol=col('Quantity');
-    if(setCol<0||numberCol<0||variantCol<0)throw new Error('Dit is geen herkenbaar TCG Collector-exportbestand.');
-    const imported=rows.slice(1).map(r=>({s:normalizeSetName(r[setCol]),n:collectorNumber(r[numberCol]),v:collectorFinish(r[variantCol]),q:Math.max(1,parseInt(r[quantityCol])||1)})).filter(x=>x.s&&x.n);
-    if(!imported.length)throw new Error('Er zijn geen kaarten uit het bestand gelezen.');
-    collectorCards=imported;localStorage.setItem(COLLECTOR_KEY,JSON.stringify(imported));renderCollector();
-    collectorStatus.textContent='✓ '+imported.length+' kaartregels uit '+file.name+' geladen. De verkoopcontrole gebruikt nu deze binderlijst.';
+    const rows=parseCsvRows(await file.text());if(rows.length<1)throw new Error('Het bestand bevat geen gegevens.');
+    const headers=rows[0].map(x=>String(x).replace(/^\ufeff/,'').trim()),col=name=>headers.indexOf(name);
+    const setCol=col('Expansion'),numberCol=col('Card number'),variantCol=col('Card variant'),quantityCol=col('Quantity'),nameCol=col('Card name'),sortCol=col('Card number sorting order'),rarityCol=col('Rarity'),languageCol=col('Card language'),conditionCol=col('Card condition'),priceCol=col('Price'),totalPriceCol=col('Total price'),noteCol=col('Note'),regionCol=col('TCG region');
+    if(setCol<0||numberCol<0||nameCol<0)throw new Error('Dit is geen herkenbaar TCG Collector-exportbestand.');
+    const dataRows=rows.slice(1).filter(r=>String(r[setCol]||'').trim()&&String(r[numberCol]||'').trim()&&String(r[nameCol]||'').trim());
+    if(!dataRows.length){collectorStatus.textContent='✓ '+file.name+' bevat nog geen kaartregels. Er hoefde niets te worden aangepast.';document.getElementById('collectorCsv').value='';return;}
+    const money=value=>{const t=String(value||'').trim().replace(/[^0-9,.-]/g,'');if(!t)return null;const normalized=t.includes(',')&&!t.includes('.')?t.replace(',','.'):t.replace(/,/g,'');const n=Number(normalized);return Number.isFinite(n)?n:null;};
+    // Collection/lists: verkoopcontrole opbouwen. Bij een collection-export gebruiken we de echte Quantity.
+    const imported=variantCol>=0?dataRows.map(r=>({s:normalizeSetName(r[setCol]),n:collectorNumber(r[numberCol]),v:collectorFinish(r[variantCol]),q:Math.max(1,parseInt(quantityCol>=0?r[quantityCol]:1)||1),name:String(r[nameCol]||'').trim(),rarity:rarityCol>=0?String(r[rarityCol]||'').trim():'',language:languageCol>=0?String(r[languageCol]||'').trim():'',condition:conditionCol>=0?String(r[conditionCol]||'').trim():'',price:priceCol>=0?money(r[priceCol]):null,totalPrice:totalPriceCol>=0?money(r[totalPriceCol]):null,note:noteCol>=0?String(r[noteCol]||'').trim():'',region:regionCol>=0?String(r[regionCol]||'').trim():''})).filter(x=>x.s&&x.n):[];
+    // Lokale set-/kaartenindex. Alle nuttige TCG Collector-velden blijven per variant beschikbaar.
+    const bySet=new Map();
+    dataRows.forEach(r=>{
+      const setName=String(r[setCol]||'').trim(),number=String(r[numberCol]||'').trim(),cardName=String(r[nameCol]||'').trim(),sk=normalizeSetName(setName),ck=number+'|'+cardName;
+      if(!bySet.has(sk))bySet.set(sk,{name:setName,cards:new Map()});
+      const set=bySet.get(sk),finish=variantCol>=0?collectorFinish(r[variantCol]):'normal';
+      if(!set.cards.has(ck))set.cards.set(ck,{number,name:cardName,sort:sortCol>=0?(parseInt(r[sortCol])||Number(collectorNumber(number))||0):(Number(collectorNumber(number))||0),rarity:rarityCol>=0?String(r[rarityCol]||'').trim():'',language:languageCol>=0?String(r[languageCol]||'').trim():'',region:regionCol>=0?String(r[regionCol]||'').trim():'',note:noteCol>=0?String(r[noteCol]||'').trim():'',variants:{},variantData:{}});
+      const c=set.cards.get(ck),variantKey=finish==='reverse'?'reverse':finish==='holo'?'holo':finish||'normal';c.variants[variantKey]=true;
+      c.variantData[variantKey]={quantity:Math.max(0,parseInt(quantityCol>=0?r[quantityCol]:0)||0),price:priceCol>=0?money(r[priceCol]):null,totalPrice:totalPriceCol>=0?money(r[totalPriceCol]):null,condition:conditionCol>=0?String(r[conditionCol]||'').trim():'',language:languageCol>=0?String(r[languageCol]||'').trim():'',note:noteCol>=0?String(r[noteCol]||'').trim():''};
+      if(!c.note&&noteCol>=0)c.note=String(r[noteCol]||'').trim();
+    });
+    const previous=getCollectorSetCatalog(),merged=new Map(previous.map(x=>[normalizeSetName(x.name),x]));
+    bySet.forEach((set,key)=>{const old=merged.get(key),cards=new Map((old?.cards||[]).map(c=>[c.number+'|'+c.name,c]));set.cards.forEach((c,k)=>{const prev=cards.get(k)||{};cards.set(k,{...prev,...c,variants:{...(prev.variants||{}),...(c.variants||{})},variantData:{...(prev.variantData||{}),...(c.variantData||{})}});});merged.set(key,{...(old||{}),name:set.name,cards:[...cards.values()]});});
+    saveCollectorSetCatalog([...merged.values()]);
+    if(imported.length){collectorCards=imported;localStorage.setItem(COLLECTOR_KEY,JSON.stringify(imported));}
+    renderCollector();
+    const prices=dataRows.filter(r=>priceCol>=0&&money(r[priceCol])!==null).length,notes=dataRows.filter(r=>noteCol>=0&&String(r[noteCol]||'').trim()).length;
+    collectorStatus.textContent='✓ '+dataRows.length+' TCG Collector-regels verwerkt uit '+file.name+' · '+bySet.size+' sets bijgewerkt'+(imported.length?' · voorraad/varianten geladen':'')+(prices?' · '+prices+' prijzen':'')+(notes?' · '+notes+' notities':'')+'.';
   }catch(error){collectorStatus.textContent='Importeren mislukt: '+(error.message||error);}
   document.getElementById('collectorCsv').value='';
 }
