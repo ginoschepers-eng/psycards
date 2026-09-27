@@ -820,12 +820,17 @@ async function searchAllCards(){
   out.innerHTML=rows.map(c=>{const p=splitStoredName(c.name),variant=canonicalBundleVariant(c.variant),av=availableQuantity(c),inBundle=allocatedQuantity(c.id);return `<div class="card"><b>${escapeHtml(p.name||c.name)}</b><div class="muted">${escapeHtml(p.set||'Set onbekend')} · ${escapeHtml(p.number||'nummer onbekend')} · ${escapeHtml(variant)}</div><div style="margin-top:6px"><b>${av} beschikbaar</b>${inBundle?` · ${inBundle} in bundel(s)`:''}</div><button class="green" style="padding:8px 10px;font-size:13px;margin-top:9px" onclick="startSale('${c.id}')">💰 Verkopen</button><button class="light" style="padding:8px 10px;font-size:13px;margin-top:9px" onclick="openEdit('${c.id}')">Bekijken</button></div>`;}).join('');
 }
 async function openSetEntry(){
-  show('setEntry');setEntryStatus.textContent='Mijn sets laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');toggleAddSet(false);
-  const {data,error}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
-  if(error){savedSetsCache=[];setEntrySetGrid.innerHTML='';setEntrySelect.innerHTML='<option value="">Database-uitbreiding nodig</option>';setEntryStatus.textContent='Voer eerst het bestand psycards-mijn-sets.sql uit in Supabase.';return;}
-  savedSetsCache=data||[];setEntrySelect.innerHTML=savedSetsCache.length?savedSetsCache.map(s=>`<option value="${s.id}">${escapeHtml(s.name)} · ${escapeHtml(SET_LANGUAGES[s.language]||s.language)}${s.set_code?' ('+escapeHtml(s.set_code)+')':''}</option>`).join(''):'<option value="">Nog geen sets toegevoegd</option>';
+  show('setEntry');setEntryStatus.textContent='Alle Pokémon-sets laden…';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');toggleAddSet(false);
+  try{
+    const {data,error}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
+    if(error)throw error;
+    savedSetsCache=data||[];
+  }catch(e){
+    console.warn('Mijn sets kon niet worden geladen; openbare setcatalogus blijft beschikbaar:',e);
+    savedSetsCache=[];
+  }
+  setEntrySelect.innerHTML=savedSetsCache.length?savedSetsCache.map(s=>`<option value="${s.id}">${escapeHtml(s.name)} · ${escapeHtml(SET_LANGUAGES[s.language]||s.language)}${s.set_code?' ('+escapeHtml(s.set_code)+')':''}</option>`).join(''):'<option value="">Kies een set uit de lijst</option>';
   await renderSetEntryTiles();
-  setEntryStatus.textContent=savedSetsCache.length?savedSetsCache.length+' sets in Mijn sets.':'Voeg eerst een set toe met de knop Set toevoegen.';
 }
 let setEntryAllRows=[];
 const SET_SERIES_ORDER=['Mega Evolution','30th Celebration','Scarlet & Violet','Sword & Shield','Sun & Moon','XY','Black & White','HeartGold & SoulSilver','Platinum','Diamond & Pearl','EX','E-Card','Neo','Gym','Classic','Promos & speciale sets','Overige sets'];
@@ -887,15 +892,22 @@ async function renderSetEntryTiles(){
 async function selectSetEntryTile(id){setEntrySelect.value=String(id);await loadSetEntryCards();}
 async function selectCatalogSetForEntry(encodedId,encodedName){
   const tcgdexId=decodeURIComponent(encodedId),name=decodeURIComponent(encodedName);
-  setEntryStatus.textContent=name+' toevoegen aan Mijn sets…';
-  const row={language:'en',tcgdex_id:tcgdexId,name,set_code:null};
-  const {error}=await cloud.from('psycard_sets').insert(row);
-  if(error&&String(error.code)!=='23505'){alert('Set toevoegen is niet gelukt: '+error.message);return;}
-  const {data, error:reloadError}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
-  if(reloadError){alert('Setlijst opnieuw laden is niet gelukt: '+reloadError.message);return;}
-  savedSetsCache=data||[];
-  const saved=savedSetsCache.find(s=>s.language==='en'&&String(s.tcgdex_id)===String(tcgdexId));
-  if(!saved){alert('De set kon niet worden geopend.');return;}
+  setEntryStatus.textContent=name+' openen…';
+  let saved=savedSetsCache.find(s=>s.language==='en'&&String(s.tcgdex_id)===String(tcgdexId));
+  if(!saved){
+    const row={language:'en',tcgdex_id:tcgdexId,name,set_code:null};
+    try{
+      const {error}=await cloud.from('psycard_sets').insert(row);
+      if(error&&String(error.code)!=='23505')throw error;
+      const {data}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
+      if(Array.isArray(data))savedSetsCache=data;
+      saved=savedSetsCache.find(s=>s.language==='en'&&String(s.tcgdex_id)===String(tcgdexId));
+    }catch(e){console.warn('Set niet in Mijn sets opgeslagen; lokaal openen:',e);}
+  }
+  if(!saved){
+    saved={id:'local:'+tcgdexId,language:'en',tcgdex_id:tcgdexId,name,set_code:null,_localOnly:true};
+    savedSetsCache.push(saved);
+  }
   setEntrySelect.innerHTML=savedSetsCache.map(s=>`<option value="${s.id}">${escapeHtml(s.name)} · ${escapeHtml(SET_LANGUAGES[s.language]||s.language)}${s.set_code?' ('+escapeHtml(s.set_code)+')':''}</option>`).join('');
   setEntrySelect.value=String(saved.id);await loadSetEntryCards();
 }
@@ -1053,8 +1065,10 @@ async function loadSetEntryCards(){
       getAll()
     ]);
     if(!set?.cards?.length)set=fallbackSpecialSet(saved);
+    // Snel laden: toon eerst alleen de set-checklist. Haal NIET alle kaartdetails/varianten
+    // vooraf op; dat veroorzaakte honderden netwerkverzoeken bij grote sets.
+    // De setlijst wordt lokaal gecachet en afbeeldingen laden pas wanneer een kaart wordt geopend.
     if(!cachedSet&&set?.cards?.length)writeSetLocalCache(saved,set);
-    if(!String(set?.cards?.[0]?.id||'').startsWith('psy-fallback-'))set=await enrichSetCardVariants(saved,set);
   }catch(e){
     console.error('Set laden via hoofdbron mislukt:',saved,e);
     set=fallbackSpecialSet(saved);
@@ -1075,11 +1089,11 @@ async function loadSetEntryCards(){
     const hasStock=variants.some(v=>quantityFor(v)>0);
     const isEx=/\bex\b/i.test(String(card.name||''))||variants.some(v=>String(v).toLowerCase()==='ex');
     const rarity=String(card.rarity||'').trim(),isSir=/special\s+illustration\s+rare|\bSIR\b|\bSRI\b/i.test(rarity),isIr=!isSir&&(/illustration\s+rare|\bIR\b/i.test(rarity)),isUr=/ultra\s+rare|\bUR\b/i.test(rarity),isSr=!isSir&&!isIr&&!isUr&&(/secret\s+rare|\bSR\b/i.test(rarity)),isRare=isEx||isIr||isSir||isSr||isUr||/rare/i.test(rarity);
-    const rows=SET_ENTRY_COMMON.concat(SET_ENTRY_SPECIAL).map(v=>existingFor(v)).filter(Boolean),priced=rows.find(x=>Number(x.ask||0)>0)||rows[0],ask=Number(priced?.ask||0),min=Number(priced?.minimum||0);
+    const stockRows=current.filter(c=>bundleCardIdentity(c)===identity&&c.condition==='NM'&&c.productType==='Pokémonkaart'),priced=stockRows.find(x=>Number(x.ask||0)>0)||stockRows[0],ask=Number(priced?.ask||0),min=Number(priced?.minimum||0);
     const priceHtml=isRare?`<div style="margin:5px 0 2px;font-weight:900">💶 ${ask>0?'€'+ask.toFixed(2).replace('.',','):'Prijs —'}${min>0?' · Min. €'+min.toFixed(2).replace('.',','):''}</div>`:'';
     return `<div class="card set-card-compact ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}"><details onchange="loadSetCardOnOpen(this)"><summary style="font-size:16px;font-weight:800;cursor:pointer;color:#1f4e78">${escapeHtml(number)} · ${escapeHtml(card.name)}</summary>${image?`<div style="margin-top:10px;text-align:center"><img data-detail-image="${escapeHtml(image)}" alt="${escapeHtml(card.name)}" style="width:min(220px,72vw);height:auto;border-radius:12px;background:#edf1f6"><div class="muted" style="margin-top:5px">Afbeelding wordt na de eerste keer lokaal bewaard.</div></div>`:`<div class="muted" style="margin-top:8px">Voor deze kaart is geen afbeelding beschikbaar.</div>`}</details>${rarity?`<div class="muted" style="margin-top:2px">${escapeHtml(rarity)}</div>`:''}${priceHtml}<div class="set-entry-options">${common}</div></div>`;
   }).join('')+'</div>';
-  setCardsStatus.textContent=set.cards.length+' kaarten beschikbaar. Bestaande aantallen komen eerst uit de lokale gegevens. Wijzigingen worden pas naar de database gestuurd als je op “Klaar met invoeren” drukt.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();updatePendingSetEntryStatus();
+  setCardsStatus.textContent=set.cards.length+' kaarten direct beschikbaar. De kaartenlijst wordt lokaal bewaard; afbeeldingen laden pas wanneer je een kaart opent. Bestaande aantallen komen uit de lokale gegevens.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();updatePendingSetEntryStatus();
 }
 function toggleSetEntryVariant(box){
   const label=box.closest('.set-variant-option'),amount=label.querySelector('input[type=number]');
@@ -1409,7 +1423,7 @@ function adaptTcgdexCard(card,setInfo){
   const set=card.set||setInfo||{},counts=set.cardCount||setInfo?.cardCount||{};
   return {id:card.id,name:card.name,number:String(card.localId??card.number??''),set:{id:set.id||setInfo?.id,name:set.name||setInfo?.name||'Onbekende set',printedTotal:counts.official||counts.total||'',ptcgoCode:set.tcgOnline||setInfo?.tcgOnline||''},images:{small:card.image?card.image+'.webp':'',large:card.image?card.image+'/high.webp':''},_source:'TCGdex'};
 }
-async function fetchTcgdex(url){const response=await fetch(url);if(!response.ok)return null;return await response.json();}
+async function fetchTcgdex(url){const response=await fetch(url,{cache:'no-cache'});if(!response.ok)throw new Error('TCGdex '+response.status+' bij '+url);return await response.json();}
 async function searchTcgdex({setCode='',number='',total='',name=''}){
   try{
     setCode=normalizeSetCode(setCode);
