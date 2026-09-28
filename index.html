@@ -875,7 +875,9 @@ function filterSetEntryList(){
   setEntrySetGrid.innerHTML=rows.map(row=>{
     const saved=row.saved,set=row.catalog,name=saved?.name||set?.name||'Onbekende set',code=saved?.set_code||set?.id||'',savedId=saved?.id||'',catalogId=set?.id||saved?.tcgdex_id||'';
     const action=saved?`selectSetEntryTile('${savedId}')`:`selectCatalogSetForEntry('${encodeURIComponent(String(catalogId))}','${encodeURIComponent(String(name))}')`;
-    return `<button class="light" style="width:100%;padding:12px 14px;margin:0 0 7px;text-align:left;font-size:15px;border-radius:12px" onclick="${action}"><b>${escapeHtml(name)}</b>${code?`<span class="muted" style="display:block;margin-top:2px">${escapeHtml(code)}${saved?' · Mijn sets':''}</span>`:''}</button>`;
+    const localInfo=row.localCardCount>0?`<span style="display:inline-block;margin-top:6px;padding:4px 8px;border-radius:999px;background:#e8f7ec;color:#216e39;font-size:11px;font-weight:800">✓ Lokaal · ${row.localCardCount} kaarten</span>`:'';
+    const hint=saved&&row.localCardCount>0?`<span class="muted" style="display:block;margin-top:5px;font-size:11px">Tik om kaarten te bekijken of aantallen toe te voegen</span>`:'';
+    return `<button class="light" style="width:100%;padding:12px 14px;margin:0 0 7px;text-align:left;font-size:15px;border-radius:12px" onclick="${action}"><b>${escapeHtml(name)}</b>${code?`<span class="muted" style="display:block;margin-top:2px">${escapeHtml(code)}${saved?' · Mijn sets':''}</span>`:''}${localInfo}${hint}</button>`;
   }).join('');
   setEntryStatus.textContent=rows.length+' set'+(rows.length===1?'':'s')+' gevonden'+(q?' voor “'+q+'”':'')+'. Tik op een set om de volledige kaartenlijst te openen.';
 }
@@ -895,6 +897,14 @@ async function renderSetEntryTiles(){
   (Array.isArray(catalog)?catalog:[]).forEach(set=>rows.push({catalog:set,saved:savedByTcgdex.get(String(set.id))||null}));
   savedSetsCache.filter(s=>s.language!=='en'||!rows.some(r=>r.saved&&String(r.saved.id)===String(s.id))).forEach(saved=>rows.push({catalog:null,saved}));
   rows.sort((a,b)=>String(a.saved?.name||a.catalog?.name||'').localeCompare(String(b.saved?.name||b.catalog?.name||''),'nl'));
+  // Toon bij iedere set direct of de volledige kaartlijst op dit toestel staat.
+  // De set blijft gewoon aanklikbaar om kaarten te bekijken en nieuwe aantallen toe te voegen.
+  await Promise.all(rows.map(async row=>{
+    row.localCardCount=0;
+    if(!row.saved)return;
+    const local=await readSetLocalCache(row.saved,true);
+    row.localCardCount=local?.cards?.length||0;
+  }));
   setEntryAllRows=rows;
   if(!rows.length){setEntrySetGrid.innerHTML='<div class="muted">Geen sets beschikbaar.</div>';return;}
   filterSetEntryList();
