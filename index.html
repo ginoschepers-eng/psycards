@@ -1183,11 +1183,11 @@ async function loadSetEntryCards(){
     const hasStock=variants.some(v=>quantityFor(v)>0);
     const isEx=/\bex\b/i.test(String(card.name||''))||variants.some(v=>String(v).toLowerCase()==='ex');
     const rarity=String(card.rarity||'').trim(),isSir=/special\s+illustration\s+rare|\bSIR\b|\bSRI\b/i.test(rarity),isIr=!isSir&&(/illustration\s+rare|\bIR\b/i.test(rarity)),isUr=/ultra\s+rare|\bUR\b/i.test(rarity),isSr=!isSir&&!isIr&&!isUr&&(/secret\s+rare|\bSR\b/i.test(rarity)),isRare=isEx||isIr||isSir||isSr||isUr||/rare/i.test(rarity);
-    const rows=SET_ENTRY_COMMON.concat(SET_ENTRY_SPECIAL).map(v=>existingFor(v)).filter(Boolean),priced=rows.find(x=>Number(x.ask||0)>0)||rows[0],ask=Number(priced?.ask||0),min=Number(priced?.minimum||0);
-    const priceHtml=isRare?`<div style="margin:5px 0 2px;font-weight:900">💶 ${ask>0?'€'+ask.toFixed(2).replace('.',','):'Prijs —'}${min>0?' · Min. €'+min.toFixed(2).replace('.',','):''}</div>`:'';
+    // Prijzen blokkeren het lokaal tonen van kaarten niet; prijsinformatie kan later apart worden geladen.
+    const priceHtml='';
     return `<div class="card set-card-compact ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}"><div style="font-size:16px;font-weight:800">${escapeHtml(number)} · ${escapeHtml(card.name)}</div>${rarity?`<div class="muted" style="margin-top:2px">${escapeHtml(rarity)}</div>`:''}${priceHtml}<div class="set-entry-options">${common}</div></div>`;
   }).join('')+'</div>';
-  setCardsStatus.textContent=set.cards.length+' kaarten beschikbaar. Bestaande aantallen komen eerst uit de lokale gegevens. Wijzigingen worden pas naar de database gestuurd als je op “Klaar met invoeren” drukt.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();updatePendingSetEntryStatus();
+  setCardsStatus.textContent='✓ '+set.cards.length+' lokale kaarten zichtbaar. Tik hieronder de gewenste kaartsoort aan. Bestaande aantallen komen eerst uit de lokale gegevens. Wijzigingen worden pas naar de database gestuurd als je op “Klaar met invoeren” drukt.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();updatePendingSetEntryStatus();
 }
 function toggleSetEntryVariant(box){
   const label=box.closest('.set-variant-option'),amount=label.querySelector('input[type=number]');
