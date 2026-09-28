@@ -102,6 +102,15 @@
     nav{position:sticky;top:84px;z-index:4;background:rgba(238,242,247,.94);backdrop-filter:blur(8px);padding:7px 0;margin:-2px 0 8px}
     nav button{background:#fff!important}
     @media(max-width:520px){main{padding:10px 10px 28px}.brand-logo{height:62px}.quick-grid{grid-template-columns:1fr 1fr;gap:8px}.quick-action{min-height:66px;padding:10px;font-size:14px}.quick-action .ico{font-size:22px;width:28px}.quick-action small{display:none}#home .stats{grid-template-columns:1fr 1fr}.card{padding:13px}.home-sync{grid-template-columns:1fr}.home-sync button{width:100%!important}.folder-grid{gap:8px}.set-tile-grid{gap:8px}}
+
+    .dashboard-primary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .dashboard-download-card{margin-top:14px;padding:16px;border:1px solid #d9e2ec;border-radius:20px;background:#fff}
+    .dashboard-download-head{display:flex;align-items:center;gap:12px}
+    .dashboard-download-icon{font-size:30px}
+    .dashboard-download-title{font-weight:800;font-size:18px}
+    .dashboard-download-status{margin-top:10px;padding:10px 12px;border-radius:12px;background:#f3f6f9;font-size:14px}
+    .dashboard-download-button{width:100%;margin-top:12px}
+    @media(max-width:520px){.dashboard-primary-grid{grid-template-columns:1fr 1fr}.dashboard-download-card{padding:14px}}
   </style>
 </head>
 <body>
@@ -120,30 +129,32 @@
   </section>
 
   <section id="home" class="hidden">
-    <div class="dashboard-hero">
-      <h2>Psycards beheer</h2>
-      <div>Voorraad, bundels en verkoop overzichtelijk op één plek.</div>
-      <button onclick="openCollection()">🃏 Kaarten & collectie openen</button>
-    </div>
-
     <div class="app-section-title">Snel naar</div>
-    <div class="quick-grid">
-      <button class="quick-action featured" onclick="show('stock');renderStock()"><span class="ico">📦</span><span>Voorraad<small>Bekijk alle losse kaarten</small></span></button>
-      <button class="quick-action" onclick="show('bundles');renderBundles()"><span class="ico">🎁</span><span>Bundels<small>Maken, bekijken en verkopen</small></span></button>
-      <button class="quick-action" onclick="show('sell')"><span class="ico">💰</span><span>Verkoop invoeren<small>Registreer een verkochte kaart</small></span></button>
-      <button class="quick-action" onclick="show('sold');renderSold()"><span class="ico">✅</span><span>Verkoophistorie<small>Bekijk eerdere verkopen</small></span></button>
+    <div class="dashboard-primary-grid">
+      <button class="quick-action featured" onclick="show('stock');renderStock()"><span class="ico">📦</span><span>Voorraad</span></button>
+      <button class="quick-action" onclick="show('bundles');renderBundles()"><span class="ico">🎁</span><span>Bundels</span></button>
+      <button class="quick-action" onclick="show('sell')"><span class="ico">💰</span><span>Verkoop invoeren</span></button>
+      <button class="quick-action" onclick="show('sold');renderSold()"><span class="ico">✅</span><span>Verkoophistorie</span></button>
     </div>
 
-    <div class="app-section-title">Voorraadsamenvatting</div>
+    <div class="app-section-title">Voorraad</div>
     <div id="homeStats" class="stock-summary"></div>
 
     <div class="app-section-title">Beheer</div>
-    <div class="quick-grid">
-      <button class="quick-action" onclick="openCollection()"><span class="ico">🃏</span><span>Kaarten & collectie<small>Sets, regio, kaartwaarde en TCG Collector</small></span></button>
-      <button class="quick-action" onclick="openFinance()"><span class="ico">💶</span><span>Financiën<small>Kasboek, beurs, winst, balans en voorraadrapport</small></span></button>
-      <button id="dashboardSetDownloadButton" class="quick-action featured" onclick="preloadFullCardCatalog(this)"><span class="ico">⬇️</span><span>Sets lokaal downloaden<small>Kaartlijsten van ingevoerde sets</small></span></button>
+    <div class="dashboard-primary-grid">
+      <button class="quick-action" onclick="openCollection()"><span class="ico">🃏</span><span>Kaarten & collectie</span></button>
+      <button class="quick-action" onclick="openFinance()"><span class="ico">💶</span><span>Financiën</span></button>
     </div>
-    <div id="dashboardSetDownloadStatus" class="scan-status" style="margin-top:10px">Lokale sets: nog niet gecontroleerd.</div>
+
+    <div class="dashboard-download-card">
+      <div class="dashboard-download-head">
+        <span class="dashboard-download-icon">⬇️</span>
+        <div><div class="dashboard-download-title">Kaartlijsten op dit toestel</div><div class="muted">Voor sets waarvan minimaal 1 kaart is ingevoerd.</div></div>
+      </div>
+      <div id="dashboardSetDownloadStatus" class="dashboard-download-status">Controleren of er nieuwe sets gedownload moeten worden…</div>
+      <button id="dashboardSetDownloadButton" class="green dashboard-download-button" onclick="preloadFullCardCatalog(this)">⬇️ Sets nu downloaden</button>
+    </div>
+
     <div class="home-sync">
       <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
       <button id="manualSyncButton" class="light" onclick="manualFullSync()">🔄 Synchroniseren</button>
@@ -693,6 +704,29 @@ function updateConnection(){
   if(dot)dot.classList.toggle('offline',!online);
   if(text)text.textContent=!online?'Geen internetverbinding':(remoteChangesPending?'Wijziging beschikbaar · synchroniseer wanneer nodig':'Verbonden');
 }
+
+async function updateDashboardLocalSetStatus(){
+  const el=document.getElementById('dashboardSetDownloadStatus');
+  if(!el)return;
+  try{
+    const cards=await getAll();
+    const enteredNames=new Set(cards.filter(c=>c.productType==='Pokémonkaart').map(c=>normalizeSetName(stockFolderName(c))).filter(Boolean));
+    if(!enteredNames.size){el.textContent='Geen ingevoerde sets gevonden.';return;}
+    let saved=savedSetsCache||[];
+    if(!saved.length){
+      const result=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
+      saved=result.data||[]; savedSetsCache=saved;
+    }
+    const wanted=saved.filter(set=>enteredNames.has(normalizeSetName(set.name)));
+    let local=0;
+    for(const set of wanted){if(await readSetLocalCache(set))local++;}
+    const missing=Math.max(0,wanted.length-local);
+    el.textContent=missing
+      ? '⚠️ '+missing+' van '+wanted.length+' set(s) nog downloaden.'
+      : '✅ Alle '+wanted.length+' ingevoerde set(s) staan lokaal op dit toestel.';
+  }catch(e){el.textContent='Tik op “Sets nu downloaden” om de lokale kaartlijsten te controleren.';}
+}
+
 async function renderHomeDashboard(){
   const cards=await getAll(),open=cards.filter(c=>c.status==='Op voorraad'&&availableQuantity(c)>0),{data:sets}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true}),saved=sets||[];
   savedSetsCache=saved;
@@ -702,6 +736,7 @@ async function renderHomeDashboard(){
   const variantCount=open.filter(c=>c.productType==='Pokémonkaart').length;
   homeStats.innerHTML=`<div class="summary-chip"><span>📦</span><b>${stockAmount}</b><small>kaarten</small></div><div class="summary-chip"><span>🃏</span><b>${uniqueCards}</b><small>uniek</small></div><div class="summary-chip"><span>🔄</span><b>${variantCount}</b><small>varianten</small></div><div class="summary-chip"><span>📚</span><b>${saved.length}</b><small>sets</small></div>`;
   dashboardSets.innerHTML=saved.length?saved.map(set=>{const matching=open.filter(c=>c.productType==='Pokémonkaart'&&normalizeSetName(stockFolderName(c))===normalizeSetName(set.name)),amount=matching.reduce((sum,c)=>sum+availableQuantity(c),0);return `<button class="dashboard-set" onclick="openSetEntryForSavedSet('${set.id}')"><span><b>${escapeHtml(set.name)}</b><small class="muted" style="display:block">${escapeHtml(SET_LANGUAGES[set.language]||set.language)}${set.set_code?' · '+escapeHtml(set.set_code):''}</small></span><span class="dashboard-set-count">${amount} kaarten</span></button>`;}).join(''):'<div class="muted" style="margin-top:10px">Nog geen sets toegevoegd.</div>';
+  updateDashboardLocalSetStatus();
 }
 async function openMySets(){await renderHomeDashboard();show('mysets');}
 async function openSetEntryByLanguage(language){
@@ -1044,7 +1079,7 @@ async function preloadFullCardCatalog(triggerButton){
   }catch(e){
     status.textContent='Mijn sets lokaal downloaden is niet gelukt: '+(e.message||e);
   }finally{
-    button.disabled=false;if(button.id==='dashboardSetDownloadButton')button.innerHTML='<span class="ico">⬇️</span><span>Sets lokaal downloaden<small>Kaartlijsten van ingevoerde sets</small></span>';else button.textContent='⬇️ Mijn ingevoerde sets downloaden';
+    button.disabled=false;if(button.id==='dashboardSetDownloadButton')button.textContent='⬇️ Sets nu downloaden';else button.textContent='⬇️ Mijn ingevoerde sets downloaden';
   }
 }
 
