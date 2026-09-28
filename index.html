@@ -102,6 +102,15 @@
     nav{position:sticky;top:84px;z-index:4;background:rgba(238,242,247,.94);backdrop-filter:blur(8px);padding:7px 0;margin:-2px 0 8px}
     nav button{background:#fff!important}
     @media(max-width:520px){main{padding:10px 10px 28px}.brand-logo{height:62px}.quick-grid{grid-template-columns:1fr 1fr;gap:8px}.quick-action{min-height:66px;padding:10px;font-size:14px}.quick-action .ico{font-size:22px;width:28px}.quick-action small{display:none}#home .stats{grid-template-columns:1fr 1fr}.card{padding:13px}.home-sync{grid-template-columns:1fr}.home-sync button{width:100%!important}.folder-grid{gap:8px}.set-tile-grid{gap:8px}}
+
+    .dashboard-primary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .dashboard-download-card{margin-top:14px;padding:16px;border:1px solid #d9e2ec;border-radius:20px;background:#fff}
+    .dashboard-download-head{display:flex;align-items:center;gap:12px}
+    .dashboard-download-icon{font-size:30px}
+    .dashboard-download-title{font-weight:800;font-size:18px}
+    .dashboard-download-status{margin-top:10px;padding:10px 12px;border-radius:12px;background:#f3f6f9;font-size:14px}
+    .dashboard-download-button{width:100%;margin-top:12px}
+    @media(max-width:520px){.dashboard-primary-grid{grid-template-columns:1fr 1fr}.dashboard-download-card{padding:14px}}
   </style>
 </head>
 <body>
@@ -120,28 +129,32 @@
   </section>
 
   <section id="home" class="hidden">
-    <div class="dashboard-hero">
-      <h2>Psycards beheer</h2>
-      <div>Voorraad, bundels en verkoop overzichtelijk op één plek.</div>
-      <button onclick="openCollection()">🃏 Kaarten & collectie openen</button>
-    </div>
-
     <div class="app-section-title">Snel naar</div>
-    <div class="quick-grid">
-      <button class="quick-action featured" onclick="show('stock');renderStock()"><span class="ico">📦</span><span>Voorraad<small>Bekijk alle losse kaarten</small></span></button>
-      <button class="quick-action" onclick="show('bundles');renderBundles()"><span class="ico">🎁</span><span>Bundels<small>Maken, bekijken en verkopen</small></span></button>
-      <button class="quick-action" onclick="show('sell')"><span class="ico">💰</span><span>Verkoop invoeren<small>Registreer een verkochte kaart</small></span></button>
-      <button class="quick-action" onclick="show('sold');renderSold()"><span class="ico">✅</span><span>Verkoophistorie<small>Bekijk eerdere verkopen</small></span></button>
+    <div class="dashboard-primary-grid">
+      <button class="quick-action featured" onclick="show('stock');renderStock()"><span class="ico">📦</span><span>Voorraad</span></button>
+      <button class="quick-action" onclick="show('bundles');renderBundles()"><span class="ico">🎁</span><span>Bundels</span></button>
+      <button class="quick-action" onclick="show('sell')"><span class="ico">💰</span><span>Verkoop invoeren</span></button>
+      <button class="quick-action" onclick="show('sold');renderSold()"><span class="ico">✅</span><span>Verkoophistorie</span></button>
     </div>
 
-    <div class="app-section-title">Voorraadsamenvatting</div>
+    <div class="app-section-title">Voorraad</div>
     <div id="homeStats" class="stock-summary"></div>
 
     <div class="app-section-title">Beheer</div>
-    <div class="quick-grid">
-      <button class="quick-action" onclick="openCollection()"><span class="ico">🃏</span><span>Kaarten & collectie<small>Sets, regio, kaartwaarde en TCG Collector</small></span></button>
-      <button class="quick-action" onclick="openFinance()"><span class="ico">💶</span><span>Financiën<small>Kasboek, beurs, winst, balans en voorraadrapport</small></span></button>
+    <div class="dashboard-primary-grid">
+      <button class="quick-action" onclick="openCollection()"><span class="ico">🃏</span><span>Kaarten & collectie</span></button>
+      <button class="quick-action" onclick="openFinance()"><span class="ico">💶</span><span>Financiën</span></button>
     </div>
+
+    <div class="dashboard-download-card">
+      <div class="dashboard-download-head">
+        <span class="dashboard-download-icon">⬇️</span>
+        <div><div class="dashboard-download-title">Kaartlijsten op dit toestel</div><div class="muted">Voor sets waarvan minimaal 1 kaart is ingevoerd.</div></div>
+      </div>
+      <div id="dashboardSetDownloadStatus" class="dashboard-download-status">Controleren of er nieuwe sets gedownload moeten worden…</div>
+      <button id="dashboardSetDownloadButton" class="green dashboard-download-button" onclick="preloadFullCardCatalog(this)">⬇️ Sets nu downloaden</button>
+    </div>
+
     <div class="home-sync">
       <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
       <button id="manualSyncButton" class="light" onclick="manualFullSync()">🔄 Synchroniseren</button>
@@ -195,9 +208,13 @@
     <div class="card">
       <h2 style="margin:0 0 5px">Mijn sets</h2>
       <div class="muted">Tik op een set om direct kaarten en aantallen in te voeren.</div>
-      <button id="downloadMySetsButton" class="primary" style="width:100%;margin-top:12px" onclick="downloadAllMySets()">⬇️ Mijn sets lokaal opslaan</button>
-      <div id="downloadMySetsStatus" class="scan-status">Kaartgegevens worden lokaal opgeslagen. Afbeeldingen laden alleen wanneer ze in beeld komen.</div>
       <div id="dashboardSets"></div>
+      <details style="margin-top:16px">
+        <summary style="cursor:pointer;font-weight:700">🔧 Onderhoud database</summary>
+        <div class="muted" style="margin-top:8px">Alleen nodig om kaartgegevens opnieuw met TCGdex te controleren. Normaal maximaal 1× per 4 dagen.</div>
+        <button id="downloadMySetsButton" class="light" style="width:100%;margin-top:10px" onclick="downloadAllMySets()">🔄 Database controleren en bijwerken</button>
+        <div id="downloadMySetsStatus" class="scan-status">Database-onderhoud staat los van de lokale download op het dashboard.</div>
+      </details>
     </div>
   </section>
 
@@ -266,12 +283,16 @@
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
     <div class="card">
       <h2 style="margin:0 0 5px">Hele set invoeren</h2>
-      <div class="muted">Alle Engelse sets worden per serie gegroepeerd. Open een serie en tik op een set om direct kaarten en aantallen in te voeren. De set wordt dan automatisch aan Mijn sets toegevoegd.</div>
+      <div class="muted">Alle Engelse sets worden automatisch geladen. Tik op een set om direct kaarten en aantallen in te voeren. De set wordt dan ook automatisch aan Mijn sets toegevoegd.</div>
       <select id="setEntrySelect" class="hidden"></select>
       <label>🔎 Zoek set</label>
       <input id="setEntrySearch" placeholder="Typ bijvoorbeeld C, Ce of Celebrations" autocomplete="off" oninput="filterSetEntryList()">
       <div class="muted" style="margin-top:6px">Typ één of meer letters. Alleen sets waarvan de naam daarmee begint worden getoond.</div>
       <div id="setEntrySetGrid" style="margin-top:10px"></div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #e5e7eb">
+        <button class="green" style="width:100%;padding:13px;font-size:16px" onclick="preloadFullCardCatalog(this)">⬇️ Kaartgegevens van Mijn sets downloaden</button>
+        <div class="muted" style="margin-top:6px">Downloadt de volledige kaartlijst van iedere set waarvan minimaal 1 kaart is ingevoerd. Sets die al lokaal staan worden overgeslagen.</div>
+      </div>
       <button class="light" style="width:100%;padding:13px;font-size:16px;margin-top:12px" onclick="toggleAddSet(true)">➕ Set toevoegen</button>
       <button class="danger" style="width:100%;padding:10px;font-size:13px;margin-top:8px" onclick="removeSavedSet()">Set uit Mijn sets verwijderen</button>
       <div id="setEntryStatus" class="scan-status"></div>
@@ -602,6 +623,9 @@ let cardsCacheLoaded=false;
 const DATA_CACHE_KEY='psycards-data-cache-v2';
 const BUNDLE_CACHE_KEY='psycards-bundle-cache-v6';
 const DATA_SYNC_MAX_AGE=4*24*60*60*1000;
+const TCGDEX_CATALOG_CACHE_KEY='psycards-tcgdex-catalog-v2';
+const TCGDEX_CATALOG_MAX_AGE=4*24*60*60*1000;
+const TCGDEX_DATABASE_CHECK_KEY='psycards-tcgdex-database-check-v1';
 const MARKET_TRENDS_CACHE_KEY='psycards-market-trends-v1';
 const MARKET_TRENDS_MIN_PRICE=1;
 const MARKET_TRENDS_MAX_AGE=24*60*60*1000;
@@ -680,6 +704,29 @@ function updateConnection(){
   if(dot)dot.classList.toggle('offline',!online);
   if(text)text.textContent=!online?'Geen internetverbinding':(remoteChangesPending?'Wijziging beschikbaar · synchroniseer wanneer nodig':'Verbonden');
 }
+
+async function updateDashboardLocalSetStatus(){
+  const el=document.getElementById('dashboardSetDownloadStatus');
+  if(!el)return;
+  try{
+    const cards=await getAll();
+    const enteredNames=new Set(cards.filter(c=>c.productType==='Pokémonkaart').map(c=>normalizeSetName(stockFolderName(c))).filter(Boolean));
+    if(!enteredNames.size){el.textContent='Geen ingevoerde sets gevonden.';return;}
+    let saved=savedSetsCache||[];
+    if(!saved.length){
+      const result=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
+      saved=result.data||[]; savedSetsCache=saved;
+    }
+    const wanted=saved.filter(set=>enteredNames.has(normalizeSetName(set.name)));
+    let local=0;
+    for(const set of wanted){if(await readSetLocalCache(set))local++;}
+    const missing=Math.max(0,wanted.length-local);
+    el.textContent=missing
+      ? '⚠️ '+missing+' van '+wanted.length+' set(s) nog downloaden.'
+      : '✅ Alle '+wanted.length+' ingevoerde set(s) staan lokaal op dit toestel.';
+  }catch(e){el.textContent='Tik op “Sets nu downloaden” om de lokale kaartlijsten te controleren.';}
+}
+
 async function renderHomeDashboard(){
   const cards=await getAll(),open=cards.filter(c=>c.status==='Op voorraad'&&availableQuantity(c)>0),{data:sets}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true}),saved=sets||[];
   savedSetsCache=saved;
@@ -689,6 +736,7 @@ async function renderHomeDashboard(){
   const variantCount=open.filter(c=>c.productType==='Pokémonkaart').length;
   homeStats.innerHTML=`<div class="summary-chip"><span>📦</span><b>${stockAmount}</b><small>kaarten</small></div><div class="summary-chip"><span>🃏</span><b>${uniqueCards}</b><small>uniek</small></div><div class="summary-chip"><span>🔄</span><b>${variantCount}</b><small>varianten</small></div><div class="summary-chip"><span>📚</span><b>${saved.length}</b><small>sets</small></div>`;
   dashboardSets.innerHTML=saved.length?saved.map(set=>{const matching=open.filter(c=>c.productType==='Pokémonkaart'&&normalizeSetName(stockFolderName(c))===normalizeSetName(set.name)),amount=matching.reduce((sum,c)=>sum+availableQuantity(c),0);return `<button class="dashboard-set" onclick="openSetEntryForSavedSet('${set.id}')"><span><b>${escapeHtml(set.name)}</b><small class="muted" style="display:block">${escapeHtml(SET_LANGUAGES[set.language]||set.language)}${set.set_code?' · '+escapeHtml(set.set_code):''}</small></span><span class="dashboard-set-count">${amount} kaarten</span></button>`;}).join(''):'<div class="muted" style="margin-top:10px">Nog geen sets toegevoegd.</div>';
+  updateDashboardLocalSetStatus();
 }
 async function openMySets(){await renderHomeDashboard();show('mysets');}
 async function openSetEntryByLanguage(language){
@@ -793,18 +841,10 @@ function filterSetCards(mode){
 }
 
 
-async function loadSetCardOnOpen(details){
+function loadSetCardOnOpen(details){
   if(!details.open)return;
   const img=details.querySelector('img[data-detail-image]');
-  if(!img||img.dataset.loading==='1'||img.dataset.loaded==='1')return;
-  const remote=img.dataset.detailImage||'';
-  if(!remote)return;
-  img.dataset.loading='1';
-  try{
-    img.src=await localCardImageUrl(remote);
-    img.dataset.loaded='1';
-    img.removeAttribute('data-detail-image');
-  }finally{delete img.dataset.loading;}
+  if(img&&!img.src){img.src=img.dataset.detailImage;img.removeAttribute('data-detail-image');}
 }
 
 function openAllCardSearch(){show('allcardsearch');const input=document.getElementById('allCardSearchInput');if(input){input.value='';setTimeout(()=>input.focus(),50);}const r=document.getElementById('allCardSearchResults');if(r)r.innerHTML='';const st=document.getElementById('allCardSearchStatus');if(st)st.textContent='Typ een naam om alle sets tegelijk te doorzoeken.';}
@@ -828,57 +868,32 @@ async function openSetEntry(){
   setEntryStatus.textContent=savedSetsCache.length?savedSetsCache.length+' sets in Mijn sets.':'Voeg eerst een set toe met de knop Set toevoegen.';
 }
 let setEntryAllRows=[];
-const SET_SERIES_ORDER=['Mega Evolution','30th Celebration','Scarlet & Violet','Sword & Shield','Sun & Moon','XY','Black & White','HeartGold & SoulSilver','Platinum','Diamond & Pearl','EX','E-Card','Neo','Gym','Classic','Promos & speciale sets','Overige sets'];
-const SET_SERIES_NAMES={
-'Mega Evolution':['Delta Reign','Pitch Black','Chaos Rising','Perfect Order','Ascended Heroes','Phantasmal Flames','Mega Evolution'],
-'30th Celebration':['30th Celebration','30th Celebration (Classic Collection)','30th Celebration (Pikachu Collection)'],
-'Scarlet & Violet':['White Flare','Black Bolt','Destined Rivals','Journey Together','Prismatic Evolutions','Surging Sparks','Stellar Crown','Shrouded Fable','Twilight Masquerade','Temporal Forces','Paldean Fates','Paradox Rift','151','Obsidian Flames','Paldea Evolved','Scarlet & Violet'],
-'Sword & Shield':['Crown Zenith','Silver Tempest','Lost Origin','Pokémon GO','Pokemon GO','Astral Radiance','Brilliant Stars','Fusion Strike','Celebrations','Evolving Skies','Chilling Reign','Battle Styles','Shining Fates','Vivid Voltage',"Champion's Path",'Champion’s Path','Darkness Ablaze','Rebel Clash','Sword & Shield'],
-'Sun & Moon':['Cosmic Eclipse','Hidden Fates','Unified Minds','Unbroken Bonds','Team Up','Lost Thunder','Dragon Majesty','Celestial Storm','Forbidden Light','Ultra Prism','Crimson Invasion','Shining Legends','Burning Shadows','Guardians Rising','Sun & Moon'],
-'XY':['Evolutions','Steam Siege','Fates Collide','Generations','BREAKpoint','BREAKthrough','Ancient Origins','Roaring Skies','Double Crisis','Primal Clash','Phantom Forces','Furious Fists','Flashfire','XY'],
-'Black & White':['Legendary Treasures','Plasma Blast','Plasma Freeze','Plasma Storm','Boundaries Crossed','Dragon Vault','Dragons Exalted','Dark Explorers','Next Destinies','Noble Victories','Emerging Powers','Black & White'],
-'HeartGold & SoulSilver':['Call of Legends','Triumphant','HS—Triumphant','Undaunted','HS—Undaunted','Unleashed','HS—Unleashed','HeartGold & SoulSilver'],
-'Platinum':['Rumble','Arceus','Supreme Victors','Rising Rivals','Platinum'],
-'Diamond & Pearl':['Stormfront','Legends Awakened','Majestic Dawn','Great Encounters','Secret Wonders','Mysterious Treasures','Diamond & Pearl'],
-'EX':['Power Keepers','Dragon Frontiers','Crystal Guardians','Holon Phantoms','Legend Maker','Delta Species','Unseen Forces','Emerald','Deoxys','Team Rocket Returns','FireRed & LeafGreen','Hidden Legends','Team Magma vs Team Aqua','Dragon','Sandstorm','Ruby & Sapphire'],
-'E-Card':['Skyridge','Aquapolis','Expedition','Expedition Base Set'],
-'Neo':['Neo Destiny','Neo Revelation','Neo Discovery','Neo Genesis'],
-'Gym':['Gym Challenge','Gym Heroes'],
-'Classic':['Team Rocket','Base Set 2','Fossil','Jungle','Base','Base Set']};
-function seriesForSetName(name){
- const n=normalizeSetName(name);
- for(const [series,names] of Object.entries(SET_SERIES_NAMES))if(names.some(x=>normalizeSetName(x)===n))return series;
- if(/promo|mcdonald|trainer kit|energy|pop series|classic—|classic -/i.test(String(name)))return 'Promos & speciale sets';
- return 'Overige sets';
-}
 function filterSetEntryList(){
   const q=String(document.getElementById('setEntrySearch')?.value||'').trim().toLocaleLowerCase('nl');
   const rows=setEntryAllRows.filter(row=>!q||String(row.saved?.name||row.catalog?.name||'').toLocaleLowerCase('nl').startsWith(q));
   if(!rows.length){setEntrySetGrid.innerHTML='<div class="card muted">Geen sets gevonden die beginnen met “'+escapeHtml(q)+'”.</div>';setEntryStatus.textContent='0 sets gevonden.';return;}
-  const groups=new Map();
-  rows.forEach(row=>{const name=row.saved?.name||row.catalog?.name||'Onbekende set';const g=seriesForSetName(name);if(!groups.has(g))groups.set(g,[]);groups.get(g).push(row);});
-  const groupHtml=SET_SERIES_ORDER.filter(g=>groups.has(g)).map(g=>{
-    const items=groups.get(g).sort((a,b)=>String(a.saved?.name||a.catalog?.name||'').localeCompare(String(b.saved?.name||b.catalog?.name||''),'nl'));
-    const buttons=items.map(row=>{
-      const saved=row.saved,set=row.catalog,name=saved?.name||set?.name||'Onbekende set',code=saved?.set_code||set?.id||'',savedId=saved?.id||'',catalogId=set?.id||saved?.tcgdex_id||'';
-      const action=saved?`selectSetEntryTile('${savedId}')`:`selectCatalogSetForEntry('${encodeURIComponent(String(catalogId))}','${encodeURIComponent(String(name))}')`;
-      return `<button class="light" style="width:100%;padding:12px 14px;margin:0 0 7px;text-align:left;font-size:15px;border-radius:12px" onclick="${action}"><b>${escapeHtml(name)}</b>${code?`<span class="muted" style="display:block;margin-top:2px">${escapeHtml(code)}${saved?' · Mijn sets':''}</span>`:''}</button>`;
-    }).join('');
-    return `<details class="card" ${q?'open':''} style="padding:0;margin:0 0 10px;overflow:hidden"><summary style="cursor:pointer;padding:15px 14px;font-size:18px;font-weight:800;list-style:none">${escapeHtml(g)} <span class="muted" style="font-size:13px;font-weight:600">· ${items.length} sets</span></summary><div style="padding:0 10px 10px">${buttons}</div></details>`;
+  setEntrySetGrid.innerHTML=rows.map(row=>{
+    const saved=row.saved,set=row.catalog,name=saved?.name||set?.name||'Onbekende set',code=saved?.set_code||set?.id||'',savedId=saved?.id||'',catalogId=set?.id||saved?.tcgdex_id||'';
+    const action=saved?`selectSetEntryTile('${savedId}')`:`selectCatalogSetForEntry('${encodeURIComponent(String(catalogId))}','${encodeURIComponent(String(name))}')`;
+    return `<button class="light" style="width:100%;padding:12px 14px;margin:0 0 7px;text-align:left;font-size:15px;border-radius:12px" onclick="${action}"><b>${escapeHtml(name)}</b>${code?`<span class="muted" style="display:block;margin-top:2px">${escapeHtml(code)}${saved?' · Mijn sets':''}</span>`:''}</button>`;
   }).join('');
-  setEntrySetGrid.innerHTML=groupHtml;
-  setEntryStatus.textContent=rows.length+' set'+(rows.length===1?'':'s')+' gevonden'+(q?' voor “'+q+'”':'')+'. Open een serie en tik op een set.';
+  setEntryStatus.textContent=rows.length+' set'+(rows.length===1?'':'s')+' gevonden'+(q?' voor “'+q+'”':'')+'. Tik op een set om de volledige kaartenlijst te openen.';
 }
 async function renderSetEntryTiles(){
   setEntrySetGrid.innerHTML='<div class="muted">Alle sets laden…</div>';
   let catalog=[];
-  try{catalog=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets')||[];}catch(e){console.warn('Volledige setlijst laden mislukt:',e);}
+  const localCatalog=readJsonCache(TCGDEX_CATALOG_CACHE_KEY);
+  if(localCatalog&&Number(localCatalog.savedAt)>0&&(Date.now()-Number(localCatalog.savedAt)<TCGDEX_CATALOG_MAX_AGE)&&Array.isArray(localCatalog.rows))catalog=localCatalog.rows;
+  if(!catalog.length){
+    try{
+      catalog=await fetchTcgdex('https://api.tcgdex.net/v2/en/sets')||[];
+      if(catalog.length)writeJsonCache(TCGDEX_CATALOG_CACHE_KEY,{savedAt:Date.now(),rows:catalog});
+    }catch(e){console.warn('Volledige setlijst laden mislukt:',e);}
+  }
   const savedByTcgdex=new Map(savedSetsCache.filter(s=>s.language==='en').map(s=>[String(s.tcgdex_id),s]));
   const rows=[];
   (Array.isArray(catalog)?catalog:[]).forEach(set=>rows.push({catalog:set,saved:savedByTcgdex.get(String(set.id))||null}));
   savedSetsCache.filter(s=>s.language!=='en'||!rows.some(r=>r.saved&&String(r.saved.id)===String(s.id))).forEach(saved=>rows.push({catalog:null,saved}));
-  // Sets die uit een TCG Collector-CSV zijn geleerd ook in de keuzelijst tonen.
-  getCollectorSetCatalog().forEach(cs=>{if(!rows.some(r=>normalizeSetName(r.saved?.name||r.catalog?.name)===normalizeSetName(cs.name)))rows.push({catalog:{id:'collector:'+normalizeSetName(cs.name),name:cs.name,collectorOnly:true},saved:null});});
   rows.sort((a,b)=>String(a.saved?.name||a.catalog?.name||'').localeCompare(String(b.saved?.name||b.catalog?.name||''),'nl'));
   setEntryAllRows=rows;
   if(!rows.length){setEntrySetGrid.innerHTML='<div class="muted">Geen sets beschikbaar.</div>';return;}
@@ -903,7 +918,7 @@ function toggleAddSet(open){addSetPanel.classList.toggle('hidden',!open);if(open
 async function searchSetsToAdd(){
   const language=addSetLanguage.value,query=addSetQuery.value.trim();
   addSetStatus.textContent='Sets zoeken…';addSetResults.classList.add('hidden');
-  try{const sets=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(language)+'/sets');if(!Array.isArray(sets))throw new Error('Setlijst niet beschikbaar');const wanted=normalizeSetName(query);setSearchResults=(query?sets.filter(s=>normalizeSetName(s.name).includes(wanted)||String(s.id).toLocaleLowerCase('en').includes(query.toLocaleLowerCase('en'))):sets).slice().sort((a,b)=>a.name.localeCompare(b.name));if(!setSearchResults.length)throw new Error('Geen set gevonden. Probeer een deel van de naam of de databasecode.');addSetResultSelect.innerHTML=setSearchResults.map((s,i)=>`<option value="${i}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`).join('');addSetResults.classList.remove('hidden');addSetStatus.textContent=query?setSearchResults.length+' sets gevonden.':setSearchResults.length+' sets beschikbaar in deze taal.';}catch(e){addSetStatus.textContent=e.message||'Zoeken is niet gelukt.';}
+  try{let sets=[];if(language==='en'){const local=readJsonCache(TCGDEX_CATALOG_CACHE_KEY);if(local&&Number(local.savedAt)>0&&(Date.now()-Number(local.savedAt)<TCGDEX_CATALOG_MAX_AGE)&&Array.isArray(local.rows))sets=local.rows;}if(!sets.length){sets=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(language)+'/sets');if(language==='en'&&Array.isArray(sets)&&sets.length)writeJsonCache(TCGDEX_CATALOG_CACHE_KEY,{savedAt:Date.now(),rows:sets});}if(!Array.isArray(sets))throw new Error('Setlijst niet beschikbaar');const wanted=normalizeSetName(query);setSearchResults=(query?sets.filter(s=>normalizeSetName(s.name).includes(wanted)||String(s.id).toLocaleLowerCase('en').includes(query.toLocaleLowerCase('en'))):sets).slice().sort((a,b)=>a.name.localeCompare(b.name));if(!setSearchResults.length)throw new Error('Geen set gevonden. Probeer een deel van de naam of de databasecode.');addSetResultSelect.innerHTML=setSearchResults.map((s,i)=>`<option value="${i}">${escapeHtml(s.name)} (${escapeHtml(s.id)})</option>`).join('');addSetResults.classList.remove('hidden');addSetStatus.textContent=query?setSearchResults.length+' sets gevonden.':setSearchResults.length+' sets beschikbaar in deze taal.';}catch(e){addSetStatus.textContent=e.message||'Zoeken is niet gelukt.';}
 }
 async function saveSelectedSet(){
   const selected=setSearchResults[Number(addSetResultSelect.value)||0];if(!selected)return alert('Kies eerst een gevonden set.');
@@ -996,40 +1011,118 @@ async function writeSetLocalCache(saved,set){
   }catch(e){console.warn('Lokale setcache opslaan overgeslagen:',e);}
 }
 
+
+
+async function preloadFullCardCatalog(triggerButton){
+  const button=triggerButton||document.getElementById('dashboardSetDownloadButton'),status=document.getElementById('dashboardSetDownloadStatus')||document.getElementById('downloadMySetsStatus')||document.getElementById('setEntryStatus');
+  if(!button||!status)return;
+  if(!navigator.onLine){status.textContent='Geen internetverbinding. De al opgeslagen kaartlijsten blijven beschikbaar.';return;}
+  button.disabled=true;button.textContent='Mijn sets bepalen…';
+  try{
+    // Gebruik eerst de lokale voorraadcache; alleen als die nog niet bestaat wordt de normale voorraadfunctie gebruikt.
+    const cards=await getAll();
+    const enteredNames=new Set(
+      cards.filter(c=>c.productType==='Pokémonkaart')
+           .map(c=>normalizeSetName(stockFolderName(c)))
+           .filter(Boolean)
+    );
+    if(!enteredNames.size){
+      status.textContent='Er zijn nog geen Pokémon-sets met kaarten ingevoerd.';
+      return;
+    }
+
+    // Mijn sets is klein. Alleen de setdefinities zijn nodig om naam -> TCGdex-id te koppelen.
+    let saved=savedSetsCache||[];
+    if(!saved.length){
+      const result=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
+      saved=result.data||[];
+      savedSetsCache=saved;
+    }
+    const wanted=saved.filter(set=>enteredNames.has(normalizeSetName(set.name)));
+    if(!wanted.length){
+      status.textContent='Er zijn '+enteredNames.size+' ingevoerde set(s) gevonden, maar de setkoppeling ontbreekt. Open die set één keer via Mijn sets en probeer opnieuw.';
+      return;
+    }
+
+    let done=0,downloaded=0,already=0,failed=0;
+    const queue=wanted.slice();
+    status.textContent=wanted.length+' ingevoerde set(s) gevonden. Lokale kaartlijsten controleren…';
+
+    async function worker(){
+      while(queue.length){
+        const saved=queue.shift();
+        try{
+          const cached=await readSetLocalCache(saved);
+          if(cached?.cards?.length){
+            already++;
+          }else{
+            const lang=saved.language||'en';
+            const setId=saved.tcgdex_id||saved.id;
+            if(!setId)throw new Error('Geen TCGdex set-id');
+            const full=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(lang)+'/sets/'+encodeURIComponent(setId));
+            if(!full?.cards?.length)throw new Error('Geen kaarten ontvangen');
+            const expected=Number(full.cardCount?.total||full.cards.length)||full.cards.length;
+            if(full.cards.length<expected)throw new Error('Onvolledig '+full.cards.length+'/'+expected);
+            await writeSetLocalCache(saved,full);
+            downloaded++;
+          }
+        }catch(e){
+          failed++;
+          console.warn('Set lokaal downloaden mislukt:',saved?.name,e);
+        }
+        done++;
+        status.textContent=done+' / '+wanted.length+' sets verwerkt · '+downloaded+' gedownload · '+already+' al lokaal'+(failed?' · '+failed+' mislukt':'');
+      }
+    }
+    await Promise.all(Array.from({length:Math.min(2,wanted.length)},()=>worker()));
+    status.textContent='✓ '+wanted.length+' ingevoerde set(s) gevonden → '+already+' al lokaal → '+downloaded+' gedownload'+(failed?' → '+failed+' mislukt':'')+'. Ook een set met maar 1 ingevoerde kaart telt mee.';
+  }catch(e){
+    status.textContent='Mijn sets lokaal downloaden is niet gelukt: '+(e.message||e);
+  }finally{
+    button.disabled=false;if(button.id==='dashboardSetDownloadButton')button.textContent='⬇️ Sets nu downloaden';else button.textContent='⬇️ Mijn ingevoerde sets downloaden';
+  }
+}
+
 async function downloadAllMySets(){
   const button=document.getElementById('downloadMySetsButton'),status=document.getElementById('downloadMySetsStatus');
   if(!button||!status)return;
   if(!navigator.onLine){status.textContent='Geen internetverbinding. Probeer het opnieuw zodra je online bent.';return;}
-  button.disabled=true;button.textContent='Sets lokaal opslaan…';
+  button.disabled=true;button.textContent='Database controleren…';
   try{
     if(!savedSetsCache.length){
       const {data,error}=await cloud.from('psycard_sets').select('*').order('name',{ascending:true});
       if(error)throw error;savedSetsCache=data||[];
     }
     if(!savedSetsCache.length){status.textContent='Er staan nog geen sets in Mijn sets.';return;}
-    let stored=0,already=0,failed=0;
+    let updated=0,unchanged=0,addedCards=0,removedCards=0,failed=0;
+    const details=[];
     for(let i=0;i<savedSetsCache.length;i++){
-      const saved=savedSetsCache[i];status.textContent=(i+1)+' van '+savedSetsCache.length+': '+saved.name+' controleren…';
-      const cached=await readSetLocalCache(saved);
-      if(cached){already++;continue;}
+      const saved=savedSetsCache[i];
+      status.textContent=(i+1)+' van '+savedSetsCache.length+': '+saved.name+' controleren…';
       try{
-        let set=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/sets/'+encodeURIComponent(saved.tcgdex_id));
-        if(!set?.cards?.length)throw new Error('Geen kaarten ontvangen');
-        set=await enrichSetCardVariants(saved,set);await writeSetLocalCache(saved,set);stored++;
-      }catch(e){console.warn('Set lokaal opslaan mislukt:',saved.name,e);failed++;}
+        const oldSet=await readSetLocalCache(saved);
+        let fresh=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/sets/'+encodeURIComponent(saved.tcgdex_id));
+        if(!fresh?.cards?.length)throw new Error('Geen kaarten ontvangen');
+        const expected=Number(fresh.cardCount?.total||fresh.cards.length)||fresh.cards.length;
+        if(fresh.cards.length<expected)throw new Error('Onvolledige set ontvangen ('+fresh.cards.length+'/'+expected+')');
+        const oldMap=new Map((oldSet?.cards||[]).map(c=>[String(c.id||c.localId),String(c.name||'')]));
+        const newMap=new Map((fresh.cards||[]).map(c=>[String(c.id||c.localId),String(c.name||'')]));
+        let add=0,remove=0,rename=0;
+        for(const [id,name] of newMap){if(!oldMap.has(id))add++;else if(oldMap.get(id)!==name)rename++;}
+        for(const id of oldMap.keys())if(!newMap.has(id))remove++;
+        const changed=!oldSet||add||remove||rename||(oldSet.cards?.length!==fresh.cards.length);
+        await writeSetLocalCache(saved,fresh);
+        if(changed){updated++;addedCards+=add;removedCards+=remove;details.push(saved.name+': '+(oldSet?(add+' toegevoegd, '+remove+' verwijderd'+(rename?', '+rename+' naam gewijzigd':'')):'nieuw lokaal opgeslagen ('+fresh.cards.length+' kaarten)'));}
+        else unchanged++;
+      }catch(e){console.warn('Databasecontrole mislukt:',saved.name,e);failed++;details.push(saved.name+': controle mislukt');}
     }
-    status.textContent='✓ Klaar: '+stored+' set'+(stored===1?'':'s')+' gedownload · '+already+' al lokaal'+(failed?' · '+failed+' niet gelukt':'')+'. Afbeeldingen worden alleen geladen wanneer je ze bekijkt.';
-  }catch(e){status.textContent='Lokaal opslaan is niet gelukt: '+(e.message||e);}
-  finally{button.disabled=false;button.textContent='⬇️ Mijn sets lokaal opslaan';}
+    if(!failed)writeJsonCache(TCGDEX_DATABASE_CHECK_KEY,{savedAt:Date.now()});
+    status.textContent='✓ Controle klaar: '+updated+' bijgewerkt · '+unchanged+' ongewijzigd'+(addedCards?' · '+addedCards+' kaarten toegevoegd':'')+(removedCards?' · '+removedCards+' vervallen kaarten verwijderd':'')+(failed?' · '+failed+' niet gelukt':'')+'. Catalogus blijft lokaal opgeslagen; opnieuw controleren is normaal pas over 4 dagen nodig.'+(details.length?' '+details.slice(0,4).join(' | ')+(details.length>4?' | +'+(details.length-4)+' meer':''):'');
+  }catch(e){status.textContent='Databasecontrole is niet gelukt: '+(e.message||e);}
+  finally{button.disabled=false;button.textContent='🔄 Database controleren en bijwerken';}
 }
-
 function fallbackSpecialSet(saved){
   const n=String(saved?.name||'').toLowerCase();
-  const collectorSet=collectorCatalogSet(saved?.name);
-  if(collectorSet?.cards?.length){
-    const cards=collectorSet.cards.slice().sort((a,b)=>(+a.sort||0)-(+b.sort||0)||String(a.number).localeCompare(String(b.number),undefined,{numeric:true}));
-    return {name:saved.name,cardCount:{official:collectorSet.official||cards.length,total:cards.length},cards:cards.map((r,i)=>({id:'psy-collector-'+normalizeSetName(saved.name)+'-'+i,localId:r.number,name:r.name,rarity:r.rarity||'',variants:r.variants||{normal:true}}))};
-  }
   if(!(n.includes('celebrations')&&n.includes('classic')))return null;
   const rows=[
     ['2/102','Blastoise'],['4/102','Charizard'],['8/82','Dark Gyarados'],["9/95","Team Magma's Groudon"],['15/82','Here Comes Team Rocket!'],['15/106','Claydol'],["15/132","Rocket's Zapdos"],['15/102','Venusaur'],['17/17','Umbreon ★'],['20/111','Cleffa'],["24/53","_____’s Pikachu"],['54/99','Mewtwo EX'],['60/145','Tapu Lele GX'],['66/64','Shining Magikarp'],['73/102','Imposter Professor Oak'],['76/108','M Rayquaza EX'],["86/109","Rocket's Admin."],['88/92','Mew ex'],['93/101','Gardevoir ex δ'],['97/146','Xerneas EX'],['107/123','Donphan'],['109/111','Luxray GL LV.X'],['113/114','Reshiram'],['114/114','Zekrom'],['145/147','Garchomp C LV.X']
@@ -1049,7 +1142,8 @@ async function loadSetEntryCards(){
     ]);
     if(!set?.cards?.length)set=fallbackSpecialSet(saved);
     if(!cachedSet&&set?.cards?.length)writeSetLocalCache(saved,set);
-    if(!String(set?.cards?.[0]?.id||'').startsWith('psy-fallback-'))set=await enrichSetCardVariants(saved,set);
+    // Egress/dataverbruik beperken: kaartdetails niet één voor één ophalen bij openen.
+    // Basiskaartlijst komt uit lokale IndexedDB; details/prijzen alleen wanneer echt nodig.
   }catch(e){
     console.error('Set laden via hoofdbron mislukt:',saved,e);
     set=fallbackSpecialSet(saved);
@@ -1071,7 +1165,7 @@ async function loadSetEntryCards(){
     const rarity=String(card.rarity||'').trim(),isSir=/special\s+illustration\s+rare|\bSIR\b|\bSRI\b/i.test(rarity),isIr=!isSir&&(/illustration\s+rare|\bIR\b/i.test(rarity)),isUr=/ultra\s+rare|\bUR\b/i.test(rarity),isSr=!isSir&&!isIr&&!isUr&&(/secret\s+rare|\bSR\b/i.test(rarity)),isRare=isEx||isIr||isSir||isSr||isUr||/rare/i.test(rarity);
     const rows=SET_ENTRY_COMMON.concat(SET_ENTRY_SPECIAL).map(v=>existingFor(v)).filter(Boolean),priced=rows.find(x=>Number(x.ask||0)>0)||rows[0],ask=Number(priced?.ask||0),min=Number(priced?.minimum||0);
     const priceHtml=isRare?`<div style="margin:5px 0 2px;font-weight:900">💶 ${ask>0?'€'+ask.toFixed(2).replace('.',','):'Prijs —'}${min>0?' · Min. €'+min.toFixed(2).replace('.',','):''}</div>`:'';
-    return `<div class="card set-card-compact ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}"><details onchange="loadSetCardOnOpen(this)"><summary style="font-size:16px;font-weight:800;cursor:pointer;color:#1f4e78">${escapeHtml(number)} · ${escapeHtml(card.name)}</summary>${image?`<div style="margin-top:10px;text-align:center"><img data-detail-image="${escapeHtml(image)}" alt="${escapeHtml(card.name)}" style="width:min(220px,72vw);height:auto;border-radius:12px;background:#edf1f6"><div class="muted" style="margin-top:5px">Afbeelding wordt na de eerste keer lokaal bewaard.</div></div>`:`<div class="muted" style="margin-top:8px">Voor deze kaart is geen afbeelding beschikbaar.</div>`}</details>${rarity?`<div class="muted" style="margin-top:2px">${escapeHtml(rarity)}</div>`:''}${priceHtml}<div class="set-entry-options">${common}</div></div>`;
+    return `<div class="card set-card-compact ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}"><div style="font-size:16px;font-weight:800">${escapeHtml(number)} · ${escapeHtml(card.name)}</div>${rarity?`<div class="muted" style="margin-top:2px">${escapeHtml(rarity)}</div>`:''}${priceHtml}<div class="set-entry-options">${common}</div></div>`;
   }).join('')+'</div>';
   setCardsStatus.textContent=set.cards.length+' kaarten beschikbaar. Bestaande aantallen komen eerst uit de lokale gegevens. Wijzigingen worden pas naar de database gestuurd als je op “Klaar met invoeren” drukt.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();updatePendingSetEntryStatus();
 }
@@ -1940,10 +2034,6 @@ async function openSetEntryForSavedSet(id){await openSetEntry();setEntrySelect.v
 let setLogoPromise,setCatalogPromise;
 function normalizeSetName(value){return String(value||'').toLocaleLowerCase('en').replace(/[^a-z0-9]/g,'');}
 
-const COLLECTOR_CATALOG_KEY='psycards_collector_set_catalog_v1';
-function getCollectorSetCatalog(){try{const x=JSON.parse(localStorage.getItem(COLLECTOR_CATALOG_KEY)||'[]');return Array.isArray(x)?x:[];}catch(e){return [];}}
-function saveCollectorSetCatalog(rows){localStorage.setItem(COLLECTOR_CATALOG_KEY,JSON.stringify(rows||[]));}
-function collectorCatalogSet(name){return getCollectorSetCatalog().find(s=>normalizeSetName(s.name)===normalizeSetName(name));}
 function collectorNumber(value){const m=String(value||'').match(/\d+/);return m?String(Number(m[0])):'';}
 function collectorFinish(value){const v=normalizeSetName(value);if(v.includes('reverseholo'))return 'reverse';if(v.includes('holo'))return 'holo';if(v==='normal'||v==='normaal')return 'normal';return v||'normal';}
 function loadCollectorCards(){
@@ -1957,33 +2047,13 @@ function parseCsvRows(text){
 async function importCollectorCsv(){
   const file=document.getElementById('collectorCsv').files[0];if(!file)return;
   try{
-    const rows=parseCsvRows(await file.text());if(rows.length<1)throw new Error('Het bestand bevat geen gegevens.');
-    const headers=rows[0].map(x=>String(x).replace(/^\ufeff/,'').trim()),col=name=>headers.indexOf(name);
-    const setCol=col('Expansion'),numberCol=col('Card number'),variantCol=col('Card variant'),quantityCol=col('Quantity'),nameCol=col('Card name'),sortCol=col('Card number sorting order'),rarityCol=col('Rarity'),languageCol=col('Card language'),conditionCol=col('Card condition'),priceCol=col('Price'),totalPriceCol=col('Total price'),noteCol=col('Note'),regionCol=col('TCG region');
-    if(setCol<0||numberCol<0||nameCol<0)throw new Error('Dit is geen herkenbaar TCG Collector-exportbestand.');
-    const dataRows=rows.slice(1).filter(r=>String(r[setCol]||'').trim()&&String(r[numberCol]||'').trim()&&String(r[nameCol]||'').trim());
-    if(!dataRows.length){collectorStatus.textContent='✓ '+file.name+' bevat nog geen kaartregels. Er hoefde niets te worden aangepast.';document.getElementById('collectorCsv').value='';return;}
-    const money=value=>{const t=String(value||'').trim().replace(/[^0-9,.-]/g,'');if(!t)return null;const normalized=t.includes(',')&&!t.includes('.')?t.replace(',','.'):t.replace(/,/g,'');const n=Number(normalized);return Number.isFinite(n)?n:null;};
-    // Collection/lists: verkoopcontrole opbouwen. Bij een collection-export gebruiken we de echte Quantity.
-    const imported=variantCol>=0?dataRows.map(r=>({s:normalizeSetName(r[setCol]),n:collectorNumber(r[numberCol]),v:collectorFinish(r[variantCol]),q:Math.max(1,parseInt(quantityCol>=0?r[quantityCol]:1)||1),name:String(r[nameCol]||'').trim(),rarity:rarityCol>=0?String(r[rarityCol]||'').trim():'',language:languageCol>=0?String(r[languageCol]||'').trim():'',condition:conditionCol>=0?String(r[conditionCol]||'').trim():'',price:priceCol>=0?money(r[priceCol]):null,totalPrice:totalPriceCol>=0?money(r[totalPriceCol]):null,note:noteCol>=0?String(r[noteCol]||'').trim():'',region:regionCol>=0?String(r[regionCol]||'').trim():''})).filter(x=>x.s&&x.n):[];
-    // Lokale set-/kaartenindex. Alle nuttige TCG Collector-velden blijven per variant beschikbaar.
-    const bySet=new Map();
-    dataRows.forEach(r=>{
-      const setName=String(r[setCol]||'').trim(),number=String(r[numberCol]||'').trim(),cardName=String(r[nameCol]||'').trim(),sk=normalizeSetName(setName),ck=number+'|'+cardName;
-      if(!bySet.has(sk))bySet.set(sk,{name:setName,cards:new Map()});
-      const set=bySet.get(sk),finish=variantCol>=0?collectorFinish(r[variantCol]):'normal';
-      if(!set.cards.has(ck))set.cards.set(ck,{number,name:cardName,sort:sortCol>=0?(parseInt(r[sortCol])||Number(collectorNumber(number))||0):(Number(collectorNumber(number))||0),rarity:rarityCol>=0?String(r[rarityCol]||'').trim():'',language:languageCol>=0?String(r[languageCol]||'').trim():'',region:regionCol>=0?String(r[regionCol]||'').trim():'',note:noteCol>=0?String(r[noteCol]||'').trim():'',variants:{},variantData:{}});
-      const c=set.cards.get(ck),variantKey=finish==='reverse'?'reverse':finish==='holo'?'holo':finish||'normal';c.variants[variantKey]=true;
-      c.variantData[variantKey]={quantity:Math.max(0,parseInt(quantityCol>=0?r[quantityCol]:0)||0),price:priceCol>=0?money(r[priceCol]):null,totalPrice:totalPriceCol>=0?money(r[totalPriceCol]):null,condition:conditionCol>=0?String(r[conditionCol]||'').trim():'',language:languageCol>=0?String(r[languageCol]||'').trim():'',note:noteCol>=0?String(r[noteCol]||'').trim():''};
-      if(!c.note&&noteCol>=0)c.note=String(r[noteCol]||'').trim();
-    });
-    const previous=getCollectorSetCatalog(),merged=new Map(previous.map(x=>[normalizeSetName(x.name),x]));
-    bySet.forEach((set,key)=>{const old=merged.get(key),cards=new Map((old?.cards||[]).map(c=>[c.number+'|'+c.name,c]));set.cards.forEach((c,k)=>{const prev=cards.get(k)||{};cards.set(k,{...prev,...c,variants:{...(prev.variants||{}),...(c.variants||{})},variantData:{...(prev.variantData||{}),...(c.variantData||{})}});});merged.set(key,{...(old||{}),name:set.name,cards:[...cards.values()]});});
-    saveCollectorSetCatalog([...merged.values()]);
-    if(imported.length){collectorCards=imported;localStorage.setItem(COLLECTOR_KEY,JSON.stringify(imported));}
-    renderCollector();
-    const prices=dataRows.filter(r=>priceCol>=0&&money(r[priceCol])!==null).length,notes=dataRows.filter(r=>noteCol>=0&&String(r[noteCol]||'').trim()).length;
-    collectorStatus.textContent='✓ '+dataRows.length+' TCG Collector-regels verwerkt uit '+file.name+' · '+bySet.size+' sets bijgewerkt'+(imported.length?' · voorraad/varianten geladen':'')+(prices?' · '+prices+' prijzen':'')+(notes?' · '+notes+' notities':'')+'.';
+    const rows=parseCsvRows(await file.text());if(rows.length<2)throw new Error('Het bestand bevat geen kaartregels.');
+    const headers=rows[0].map(x=>String(x).replace(/^\ufeff/,'').trim()),col=name=>headers.indexOf(name),setCol=col('Expansion'),numberCol=col('Card number'),variantCol=col('Card variant'),quantityCol=col('Quantity');
+    if(setCol<0||numberCol<0||variantCol<0)throw new Error('Dit is geen herkenbaar TCG Collector-exportbestand.');
+    const imported=rows.slice(1).map(r=>({s:normalizeSetName(r[setCol]),n:collectorNumber(r[numberCol]),v:collectorFinish(r[variantCol]),q:Math.max(1,parseInt(r[quantityCol])||1)})).filter(x=>x.s&&x.n);
+    if(!imported.length)throw new Error('Er zijn geen kaarten uit het bestand gelezen.');
+    collectorCards=imported;localStorage.setItem(COLLECTOR_KEY,JSON.stringify(imported));renderCollector();
+    collectorStatus.textContent='✓ '+imported.length+' kaartregels uit '+file.name+' geladen. De verkoopcontrole gebruikt nu deze binderlijst.';
   }catch(error){collectorStatus.textContent='Importeren mislukt: '+(error.message||error);}
   document.getElementById('collectorCsv').value='';
 }
