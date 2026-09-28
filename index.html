@@ -719,7 +719,7 @@ async function updateDashboardLocalSetStatus(){
     }
     const wanted=saved.filter(set=>enteredNames.has(normalizeSetName(set.name)));
     let local=0;
-    for(const set of wanted){if(await readSetLocalCache(set))local++;}
+    for(const set of wanted){if(await readSetLocalCache(set,true))local++;}
     const missing=Math.max(0,wanted.length-local);
     el.textContent=missing
       ? '⚠️ '+missing+' van '+wanted.length+' set(s) nog downloaden.'
@@ -983,7 +983,7 @@ function openSetLocalCache(){
     req.onerror=()=>reject(req.error);
   });
 }
-async function readSetLocalCache(saved){
+async function readSetLocalCache(saved,allowStale=false){
   try{
     const db=await openSetLocalCache();
     const key=String(saved.language)+'|'+String(saved.tcgdex_id);
@@ -993,7 +993,8 @@ async function readSetLocalCache(saved){
       req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);
     });
     db.close();
-    if(!row||!row.savedAt||Date.now()-row.savedAt>SET_LOCAL_CACHE_MAX_AGE||!row.data?.cards?.length)return null;
+    if(!row||!row.data?.cards?.length)return null;
+    if(!allowStale&&(!row.savedAt||Date.now()-row.savedAt>SET_LOCAL_CACHE_MAX_AGE))return null;
     return row.data;
   }catch(e){console.warn('Lokale setcache lezen overgeslagen:',e);return null;}
 }
@@ -1052,7 +1053,7 @@ async function preloadFullCardCatalog(triggerButton){
       while(queue.length){
         const saved=queue.shift();
         try{
-          const cached=await readSetLocalCache(saved);
+          const cached=await readSetLocalCache(saved,true);
           if(cached?.cards?.length){
             already++;
           }else{
@@ -1132,26 +1133,35 @@ function fallbackSpecialSet(saved){
 
 async function loadSetEntryCards(){
   const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return alert('Kies of voeg eerst een set toe.');
-  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Kaartenlijst laden…';updateCurrentSetCollectButton();updateSetReserveRuleUi();currentSetCardFilter='all';const jump=document.getElementById('setCardJump');if(jump)jump.value='';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
+  show('setCards');setCardsTitle.textContent=saved.name+' invoeren';setCardsStatus.textContent='Lokale kaartlijst openen…';updateCurrentSetCollectButton();updateSetReserveRuleUi();currentSetCardFilter='all';const jump=document.getElementById('setCardJump');if(jump)jump.value='';setEntryCards.innerHTML='';setEntrySavebar.classList.add('hidden');
+
+  // Local-first: de kaartcatalogus komt uitsluitend uit IndexedDB als deze eerder is gedownload.
+  // De eigen voorraad wordt parallel uit de bestaande lokale voorraadcache gelezen.
   let set=null,current=[];
   try{
-    const cachedSet=await readSetLocalCache(saved);
-    [set,current]=await Promise.all([
-      cachedSet ? Promise.resolve(cachedSet) : fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/sets/'+encodeURIComponent(saved.tcgdex_id)),
-      getAll()
-    ]);
+    [set,current]=await Promise.all([readSetLocalCache(saved,true),getAll()]);
+    if(set?.cards?.length){
+      setCardsStatus.textContent='✓ Lokale kaartlijst geladen · '+set.cards.length+' kaarten';
+    }else{
+      // Alleen als de set nog nooit lokaal is opgeslagen, één keer online ophalen en meteen bewaren.
+      if(!navigator.onLine){
+        set=fallbackSpecialSet(saved);
+        if(!set){setCardsStatus.textContent='Deze set staat nog niet lokaal. Ga naar het dashboard en tik op “Sets nu downloaden”.';return;}
+      }else{
+        setCardsStatus.textContent='Deze set staat nog niet lokaal · éénmalig downloaden…';
+        set=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language)+'/sets/'+encodeURIComponent(saved.tcgdex_id));
+        if(set?.cards?.length)await writeSetLocalCache(saved,set);
+      }
+    }
     if(!set?.cards?.length)set=fallbackSpecialSet(saved);
-    if(!cachedSet&&set?.cards?.length)writeSetLocalCache(saved,set);
-    // Egress/dataverbruik beperken: kaartdetails niet één voor één ophalen bij openen.
-    // Basiskaartlijst komt uit lokale IndexedDB; details/prijzen alleen wanneer echt nodig.
   }catch(e){
-    console.error('Set laden via hoofdbron mislukt:',saved,e);
+    console.error('Lokale set laden mislukt:',saved,e);
     set=fallbackSpecialSet(saved);
-    if(!set){setCardsStatus.textContent='De set kon niet worden geladen. Probeer het opnieuw.';return;}
+    if(!set){setCardsStatus.textContent='De set kon niet lokaal worden geladen. Gebruik “Sets nu downloaden” op het dashboard.';return;}
   }
   if(!set?.cards?.length){
-    set=fallbackSpecialSet(saved);
-    if(!set){console.error('Geen kaarten ontvangen voor set:',saved,set);setCardsStatus.textContent='De kaarten van '+saved.name+' konden niet worden geladen. De bestaande voorraad is niet gewijzigd.';return;}
+    setCardsStatus.textContent='Geen lokale kaartlijst beschikbaar voor '+saved.name+'.';
+    return;
   }
   setEntrySet=set;setEntryCardMap=new Map(set.cards.map(c=>[String(c.id),c]));
   const official=set.cardCount?.official||set.cardCount?.total||'?',pending=getPendingSetEntries(),savedForPending=saved;
