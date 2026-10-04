@@ -111,6 +111,10 @@
     .dashboard-download-status{margin-top:10px;padding:10px 12px;border-radius:12px;background:#f3f6f9;font-size:14px}
     .dashboard-download-button{width:100%;margin-top:12px}
     @media(max-width:520px){.dashboard-primary-grid{grid-template-columns:1fr 1fr}.dashboard-download-card{padding:14px}}
+
+    .card-extra-button{width:100%;margin-top:9px;padding:8px 10px!important;font-size:12px!important;border-radius:10px!important}
+    .card-extra-info{margin-top:8px;padding:10px 11px;border:1px solid #dbe4ee;border-radius:11px;background:#f8fafc;font-size:12px;line-height:1.5}
+    .card-extra-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;margin-top:7px}.card-extra-grid div{min-width:0}.card-extra-grid b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#667085}.card-extra-note{margin-top:7px;color:#667085;font-size:11px}
   </style>
 </head>
 <body>
@@ -272,15 +276,6 @@
       <div class="row">
         <div><label>Gekocht voor €</label><input id="buy" type="number" step="0.01" inputmode="decimal"></div>
         <div><label>Verkopen voor €</label><input id="ask" type="number" step="0.01" inputmode="decimal"></div>
-      </div>
-      <div class="scanbox" style="margin-top:12px">
-        <b>🧾 Inkoopgegevens</b>
-        <div class="muted">Voor later fiscaal gebruik. Dit verandert nu niets aan de btw-berekening.</div>
-        <label>Herkomst inkoop</label>
-        <select id="purchaseSource"><option value="unknown">Nog niet opgegeven</option><option value="private">Particulier · mogelijke marge-inkoop</option><option value="business">Bedrijf / leverancier</option><option value="own">Eigen bezit / privé ingebracht</option></select>
-        <div class="row"><div><label>Inkoopdatum</label><input id="purchaseDate" type="date"></div><div><label>Betaald via</label><select id="purchasePayment"><option>Bank</option><option>Kas</option><option>Betaalverzoek</option><option>Overig</option></select></div></div>
-        <label>Verkoper / leverancier (optioneel)</label><input id="purchaseSupplier" placeholder="Naam particulier, winkel of leverancier">
-        <label>📎 Aankoopbewijs (optioneel)</label><input id="purchaseProof" class="file-hidden" type="file" accept="image/*,.pdf,application/pdf"><label for="purchaseProof" class="file-button light-file">📷 Foto maken of document kiezen</label><div id="purchaseProofName" class="muted">Nog geen aankoopbewijs gekozen.</div>
       </div>
       <label>Minimaal €</label>
       <input id="min" type="number" step="0.01" inputmode="decimal">
@@ -495,11 +490,11 @@
   <section id="bookkeeping" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug</button><button class="light" onclick="exportBookkeepingCSV()">⬇️ Export Excel/CSV</button></nav>
     <div class="card"><h2 style="margin:0 0 5px">🏦 Boekhouding</h2><div class="muted">Aanvullende financiële posten voor een completer balansoverzicht. Verkoop, voorraad en gewone uitgaven blijven uit de bestaande Psycards-administratie komen.</div><div id="bookkeepingStats" class="stats" style="margin-top:12px"></div></div>
-    <div class="card"><h3 style="margin:0 0 5px">⚙️ Fiscale instellingen</h3><div class="muted">Voorbereiding voor later. Zolang btw niet actief staat, wordt bij verkopen géén btw berekend of afgeboekt.</div><label>BTW-status</label><select id="taxMode" onchange="saveTaxSettings()"><option value="pre">Nog niet btw-geregistreerd / voorbereiding</option><option value="kor">KOR · geen btw op verkoop</option><option value="vat">BTW actief</option></select><div id="taxStartBox" class="hidden"><label>BTW-startdatum</label><input id="taxStartDate" type="date" onchange="saveTaxSettings()"><label>Standaard btw-tarief</label><select id="taxRate" onchange="saveTaxSettings()"><option value="21">21%</option><option value="9">9%</option><option value="0">0%</option></select></div><div id="taxModeStatus" class="scan-status"></div></div>
     <div class="card"><h3 style="margin:0 0 5px">Nieuwe financiële post</h3>
       <div class="row"><div><label>Datum</label><input id="bkDate" type="date"></div><div><label>Soort</label><select id="bkType" onchange="updateBookkeepingForm()"><option value="bank">Bankcorrectie / beginsaldo</option><option value="cash">Kascorrectie / beginsaldo</option><option value="vat_receivable">BTW te vorderen</option><option value="vat_payable">BTW te betalen</option><option value="debtor">Debiteur</option><option value="creditor">Crediteur</option><option value="private_in">Privé-inbreng</option><option value="private_out">Privé-opname</option><option value="debt">Schuld / lening</option><option value="debt_payment">Aflossing schuld</option></select></div></div>
       <label>Omschrijving</label><input id="bkDescription" placeholder="Bijv. beginsaldo zakelijke rekening">
       <div class="row"><div><label>Bedrag €</label><input id="bkAmount" type="number" min="0" step="0.01" inputmode="decimal"></div><div><label>Status</label><select id="bkStatus"><option value="open">Open</option><option value="paid">Betaald / ontvangen</option></select></div></div>
+      <div id="bkDestinationBox" class="hidden"><label>Geld ontvangen op</label><div class="row" style="gap:10px"><label class="light" style="display:flex;align-items:center;gap:9px;padding:12px;border-radius:12px;cursor:pointer"><input type="radio" name="bkDestinationChoice" value="bank" checked style="width:auto"> 🏦 Bank</label><label class="light" style="display:flex;align-items:center;gap:9px;padding:12px;border-radius:12px;cursor:pointer"><input type="radio" name="bkDestinationChoice" value="cash" style="width:auto"> 💶 Kas</label></div><div class="muted" style="margin-top:5px">Vink Bank of Kas aan. Privé-inbreng telt niet als omzet of winst.</div></div>
       <div id="bkVatBox" class="hidden"><label>BTW-tarief</label><select id="bkVatRate"><option value="21">21%</option><option value="9">9%</option><option value="0">0%</option></select></div>
       <button class="primary" style="width:100%;margin-top:14px" onclick="saveBookkeepingEntry()">Post opslaan</button>
     </div>
@@ -543,7 +538,6 @@
       <label>Omschrijving</label><input id="expenseDescription" placeholder="Bijv. tafelkleed of knuffels">
       <label>Bedrag inclusief btw €</label><input id="expenseAmount" type="number" min="0" step="0.01" inputmode="decimal">
       <label>Betaalwijze</label><select id="expensePayment"><option>Bank</option><option>iDEAL</option><option>Wero</option><option>Contant</option><option>Overig</option></select>
-      <label>📎 Aankoopbewijs / bon (optioneel)</label><input id="expenseProof" class="file-hidden" type="file" accept="image/*,.pdf,application/pdf"><label for="expenseProof" class="file-button light-file">📷 Foto maken of document kiezen</label><div id="expenseProofName" class="muted">Nog geen aankoopbewijs gekozen.</div>
       <button class="primary" style="width:100%;margin-top:14px" onclick="saveExpense()">Uitgave opslaan</button>
     </div>
     <div id="moneyTransactions"></div>
@@ -621,7 +615,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
 // Verkoopprijs-preview direct bijwerken wanneer het totaal handmatig wordt aangepast.
 document.addEventListener('input',e=>{if(e.target&&e.target.id==='soldPrice')updateSaleProfitPreview();});
-document.addEventListener('DOMContentLoaded',()=>{const d=document.getElementById('purchaseDate');if(d&&!d.value)d.value=new Date().toISOString().slice(0,10);renderTaxSettings();});
 </script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
@@ -1195,11 +1188,11 @@ async function loadSetEntryCards(){
     const hasStock=variants.some(v=>quantityFor(v)>0);
     const isEx=/\bex\b/i.test(String(card.name||''))||variants.some(v=>String(v).toLowerCase()==='ex');
     const rarity=String(card.rarity||'').trim(),isSir=/special\s+illustration\s+rare|\bSIR\b|\bSRI\b/i.test(rarity),isIr=!isSir&&(/illustration\s+rare|\bIR\b/i.test(rarity)),isUr=/ultra\s+rare|\bUR\b/i.test(rarity),isSr=!isSir&&!isIr&&!isUr&&(/secret\s+rare|\bSR\b/i.test(rarity)),isRare=isEx||isIr||isSir||isSr||isUr||/rare/i.test(rarity);
-    const rows=SET_ENTRY_COMMON.concat(SET_ENTRY_SPECIAL).map(v=>existingFor(v)).filter(Boolean),priced=rows.find(x=>Number(x.ask||0)>0)||rows[0],ask=Number(priced?.ask||0),min=Number(priced?.minimum||0);
-    const priceHtml=isRare?`<div style="margin:5px 0 2px;font-weight:900">💶 ${ask>0?'€'+ask.toFixed(2).replace('.',','):'Prijs —'}${min>0?' · Min. €'+min.toFixed(2).replace('.',','):''}</div>`:'';
-    return `<div class="card set-card-compact ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}"><div style="font-size:16px;font-weight:800">${escapeHtml(number)} · ${escapeHtml(card.name)}</div>${rarity?`<div class="muted" style="margin-top:2px">${escapeHtml(rarity)}</div>`:''}${priceHtml}<div class="set-entry-options">${common}</div></div>`;
+    // Prijzen blokkeren het lokaal tonen van kaarten niet; prijsinformatie kan later apart worden geladen.
+    const priceHtml='';
+    return `<div class="card set-card-compact ${hasStock?'':'no-stock'}" data-is-ex="${isEx?'1':'0'}" data-is-ir="${isIr?'1':'0'}" data-is-sir="${isSir?'1':'0'}" data-is-sr="${isSr?'1':'0'}" data-is-ur="${isUr?'1':'0'}" data-is-rare="${isRare?'1':'0'}" data-card-number="${escapeHtml(String(parseInt(card.localId,10)||card.localId))}"><div style="font-size:16px;font-weight:800">${escapeHtml(number)} · ${escapeHtml(card.name)}</div>${rarity?`<div class="muted" style="margin-top:2px">${escapeHtml(rarity)}</div>`:''}${priceHtml}<div class="set-entry-options">${common}</div><button type="button" class="light card-extra-button" onclick="toggleSetCardExtra(this,'${escapeHtml(String(card.id))}')">ℹ️ Extra kaartinfo</button><div class="card-extra-info hidden"></div></div>`;
   }).join('')+'</div>';
-  setCardsStatus.textContent=set.cards.length+' kaarten beschikbaar. Bestaande aantallen komen eerst uit de lokale gegevens. Wijzigingen worden pas naar de database gestuurd als je op “Klaar met invoeren” drukt.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();updatePendingSetEntryStatus();
+  setCardsStatus.textContent='✓ '+set.cards.length+' lokale kaarten zichtbaar. Tik hieronder de gewenste kaartsoort aan. Bestaande aantallen komen eerst uit de lokale gegevens. Wijzigingen worden pas naar de database gestuurd als je op “Klaar met invoeren” drukt.';setEntrySavebar.classList.remove('hidden');updateSetEntryCount();updatePendingSetEntryStatus();
 }
 function toggleSetEntryVariant(box){
   const label=box.closest('.set-variant-option'),amount=label.querySelector('input[type=number]');
@@ -1530,6 +1523,29 @@ function adaptTcgdexCard(card,setInfo){
   return {id:card.id,name:card.name,number:String(card.localId??card.number??''),set:{id:set.id||setInfo?.id,name:set.name||setInfo?.name||'Onbekende set',printedTotal:counts.official||counts.total||'',ptcgoCode:set.tcgOnline||setInfo?.tcgOnline||''},images:{small:card.image?card.image+'.webp':'',large:card.image?card.image+'/high.webp':''},_source:'TCGdex'};
 }
 async function fetchTcgdex(url){const response=await fetch(url);if(!response.ok)return null;return await response.json();}
+async function getFullCardInfoForSetEntry(cardId){
+  const card=setEntryCardMap.get(String(cardId));if(!card)return null;
+  if(card._fullInfoLoaded)return card;
+  const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return card;
+  try{
+    const full=await fetchTcgdex('https://api.tcgdex.net/v2/'+encodeURIComponent(saved.language||'en')+'/cards/'+encodeURIComponent(card.id));
+    if(full){Object.assign(card,full,{_fullInfoLoaded:true});if(setEntrySet)await writeSetLocalCache(saved,setEntrySet);}
+  }catch(e){console.warn('Extra kaartinfo laden mislukt:',card.id,e);}
+  return card;
+}
+function extraCardInfoHtml(card){
+  if(!card)return '<span class="muted">Geen extra kaartinformatie beschikbaar.</span>';
+  const types=Array.isArray(card.types)?card.types.join(', '):'', illustrator=card.illustrator||'', category=card.category||'', rarity=card.rarity||'', hp=card.hp||'', stage=card.stage||'', regulation=card.regulationMark||card.regulation||'', dex=Array.isArray(card.dexId)?card.dexId.join(', '):(card.dexId||''), retreat=card.retreat??card.retreatCost??'', variants=realVariantsForCard(card).join(', ');
+  const rows=[['Categorie',category],['Rarity',rarity],['HP',hp],['Type',types],['Stage',stage],['Illustrator',illustrator],['Pokédex nr.',dex],['Retreat',retreat],['Regulation',regulation],['Uitvoeringen',variants]].filter(x=>String(x[1]??'').trim());
+  return rows.length?'<div class="card-extra-grid">'+rows.map(([k,v])=>'<div><b>'+escapeHtml(k)+'</b>'+escapeHtml(String(v))+'</div>').join('')+'</div><div class="card-extra-note">Kaartgegevens via de bestaande TCGdex-database van Psycards.</div>':'<span class="muted">Voor deze kaart zijn geen aanvullende gegevens beschikbaar.</span>';
+}
+async function toggleSetCardExtra(button,cardId){
+  const host=button.parentElement.querySelector('.card-extra-info');if(!host)return;
+  if(!host.classList.contains('hidden')){host.classList.add('hidden');button.textContent='ℹ️ Extra kaartinfo';return;}
+  host.classList.remove('hidden');host.innerHTML='<span class="muted">Extra kaartinfo laden…</span>';button.textContent='▴ Kaartinfo sluiten';
+  const card=await getFullCardInfoForSetEntry(cardId);host.innerHTML=extraCardInfoHtml(card);
+}
+
 async function searchTcgdex({setCode='',number='',total='',name=''}){
   try{
     setCode=normalizeSetCode(setCode);
@@ -1623,8 +1639,8 @@ function chooseScanMatch(){
   if(card){document.getElementById('name').value=card.name;document.getElementById('detectedSet').value=card.set?.name||'';document.getElementById('detectedNumber').value=card.number+'/'+(card.set?.printedTotal||'?');}
 }
 function resetNewProductForm(){
-  ['name','buy','ask','min','purchaseSupplier','photo','cameraPhoto','productPhoto','productGalleryPhoto','detectedSet','detectedNumber','manualSetCode','manualCardNumber'].forEach(x=>document.getElementById(x).value='');
-  quantity.value='1';cardVariant.value='Normaal';if(document.getElementById('purchaseProof'))purchaseProof.value='';if(document.getElementById('purchaseProofName'))purchaseProofName.textContent='Nog geen aankoopbewijs gekozen.';cardVariant.value='Normaal';if(document.getElementById('purchaseSource'))purchaseSource.value='unknown';if(document.getElementById('purchasePayment'))purchasePayment.value='Bank';if(document.getElementById('purchaseDate'))purchaseDate.value=new Date().toISOString().slice(0,10);scanCandidates=[];selectedPhotoFile=null;document.getElementById('scanResult').classList.add('hidden');
+  ['name','buy','ask','min','photo','cameraPhoto','productPhoto','productGalleryPhoto','detectedSet','detectedNumber','manualSetCode','manualCardNumber'].forEach(x=>document.getElementById(x).value='');
+  quantity.value='1';cardVariant.value='Normaal';scanCandidates=[];selectedPhotoFile=null;document.getElementById('scanResult').classList.add('hidden');
   if(activeSetCode){manualSetCode.value=activeSetCode;manualSetCode.readOnly=true;setScanStatus('Klaar voor de volgende kaart uit '+activeSetName+' ('+activeSetCode+').');}else{manualSetCode.readOnly=false;setScanStatus('Klaar voor de volgende kaart. Maak of kies een scherpe foto van de volledige voorkant.');}
 }
 async function saveCard(){
@@ -1642,12 +1658,10 @@ async function saveCard(){
     existing.quantity=totalQuantity;existing.status='Op voorraad';
     if(card.ask>0)existing.ask=card.ask;if(card.min>0)existing.min=card.min;const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);
     if(error)return alert('Voorraad verhogen is niet gelukt: '+error.message);
-    {const pf=document.getElementById('purchaseProof')?.files?.[0];const proofId=pf?await saveProofFile(pf,'purchase',existing.id):'';savePurchaseMeta(existing.id,{source:document.getElementById('purchaseSource')?.value||'unknown',date:document.getElementById('purchaseDate')?.value||new Date().toISOString().slice(0,10),payment:document.getElementById('purchasePayment')?.value||'',supplier:document.getElementById('purchaseSupplier')?.value.trim()||'',amount:card.buy*newQuantity,quantity:newQuantity,proofId,proofName:pf?.name||''});}
     await loadCards(true);resetNewProductForm();alert(displayId(existing.id)+' bestond al. '+newQuantity+' toegevoegd; totaal op voorraad: '+availableQuantity(existing)+'. Je kunt nu direct de volgende kaart scannen.');show('new');return;
   }
   const {data,error}=await cloud.from('cards').insert(toDb(card)).select().single();
   if(error)return alert('Opslaan is niet gelukt: '+error.message);
-  {const pf=document.getElementById('purchaseProof')?.files?.[0];const proofId=pf?await saveProofFile(pf,'purchase',data.id):'';savePurchaseMeta(data.id,{source:document.getElementById('purchaseSource')?.value||'unknown',date:document.getElementById('purchaseDate')?.value||new Date().toISOString().slice(0,10),payment:document.getElementById('purchasePayment')?.value||'',supplier:document.getElementById('purchaseSupplier')?.value.trim()||'',amount:card.buy*card.quantity,quantity:card.quantity,proofId,proofName:pf?.name||''});}
   await loadCards(true);
   resetNewProductForm();
   alert(displayId(data.id)+' opgeslagen. Je kunt nu direct de volgende kaart scannen.');
@@ -2554,7 +2568,7 @@ async function renderMoney(){
   moneyPeriodSummary.innerHTML=`<b>${label}</b><div style="margin-top:7px">Inkomsten: <b>${euro(income)}</b> · Uitgaven: <b>${euro(expenses)}</b> · Saldo: <b>${euro(balance)}</b></div><div class="muted" style="margin-top:5px">${periodRows.length} boeking${periodRows.length===1?'':'en'}</div>`;
   expenseDate.value=expenseDate.value||new Date().toISOString().slice(0,10);
   filtered.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-  moneyTransactions.innerHTML='<div class="card"><h2 style="margin:0 0 5px">📒 Boekingen</h2><div class="muted">Verkopen worden automatisch toegevoegd. Uitgaven kun je hieronder invoeren.</div></div>'+ (filtered.length?filtered.map(t=>`<div class="card"><div style="display:flex;justify-content:space-between;gap:10px"><div><b>${t.type==='income'?'➕':'➖'} ${escapeHtml(t.description)}</b><div class="muted">${escapeHtml(t.category)}${t.payment?' · '+escapeHtml(t.payment):''}</div></div><div class="money" style="white-space:nowrap">${t.type==='income'?'+':'-'}${euro(t.amount)}</div></div><div class="muted" style="margin-top:7px">${t.date?new Date(t.date).toLocaleDateString('nl-NL'):''}</div>${t.source==='expense'&&localStorage.getItem('psycards-expense-proof-'+t.id)?`<button class="light" style="width:100%;margin-top:9px;padding:9px;font-size:13px" onclick="openProofFile('${localStorage.getItem('psycards-expense-proof-'+t.id)}')">📎 Bekijk aankoopbewijs</button>`:''}${t.source==='expense'?`<button class="danger" style="width:100%;margin-top:9px;padding:9px;font-size:13px" onclick="deleteExpense('${t.id}')">Uitgave verwijderen</button>`:''}</div>`).join(''):'<div class="card">Geen boekingen binnen dit filter.</div>');
+  moneyTransactions.innerHTML='<div class="card"><h2 style="margin:0 0 5px">📒 Boekingen</h2><div class="muted">Verkopen worden automatisch toegevoegd. Uitgaven kun je hieronder invoeren.</div></div>'+ (filtered.length?filtered.map(t=>`<div class="card"><div style="display:flex;justify-content:space-between;gap:10px"><div><b>${t.type==='income'?'➕':'➖'} ${escapeHtml(t.description)}</b><div class="muted">${escapeHtml(t.category)}${t.payment?' · '+escapeHtml(t.payment):''}</div></div><div class="money" style="white-space:nowrap">${t.type==='income'?'+':'-'}${euro(t.amount)}</div></div><div class="muted" style="margin-top:7px">${t.date?new Date(t.date).toLocaleDateString('nl-NL'):''}</div>${t.source==='expense'?`<button class="danger" style="width:100%;margin-top:9px;padding:9px;font-size:13px" onclick="deleteExpense('${t.id}')">Uitgave verwijderen</button>`:''}</div>`).join(''):'<div class="card">Geen boekingen binnen dit filter.</div>');
 }
 async function seedKnownExpenses(){
   if(expenseCache.length)return;
@@ -2577,14 +2591,12 @@ async function saveExpense(){
   if(amount<=0)return alert('Vul een bedrag hoger dan €0 in.');
   if(!date)return alert('Kies een datum.');
   const row={name:description,condition:'Kosten | '+expenseCategory.value,buy:amount,ask:0,minimum:0,status:'Verkocht',quantity:1,sold_quantity:0,sold_price:0,payment:expensePayment.value,sold_date:new Date(date+'T12:00:00').toISOString()};
-  const {data:created,error}=await cloud.from('cards').insert(row).select('id').single();
+  const {error}=await cloud.from('cards').insert(row);
   if(error)return alert('Uitgave opslaan is niet gelukt: '+error.message);
-  const proofFile=document.getElementById('expenseProof')?.files?.[0];if(proofFile&&created?.id){try{const proofId=await saveProofFile(proofFile,'expense',created.id);localStorage.setItem('psycards-expense-proof-'+created.id,proofId);}catch(e){alert('De uitgave is opgeslagen, maar het aankoopbewijs kon niet lokaal worden bewaard.');}}
-  expenseDescription.value='';expenseAmount.value='';if(document.getElementById('expenseProof'))expenseProof.value='';if(document.getElementById('expenseProofName'))expenseProofName.textContent='Nog geen aankoopbewijs gekozen.';await loadCards(true);renderMoney();
+  expenseDescription.value='';expenseAmount.value='';await loadCards(true);renderMoney();
 }
 async function deleteExpense(id){
   if(!confirm('Deze uitgave uit het kasboek verwijderen?'))return;
-  const proofId=localStorage.getItem('psycards-expense-proof-'+id);if(proofId){try{await deleteProofFile(proofId);}catch(e){}localStorage.removeItem('psycards-expense-proof-'+id);}
   const {error}=await cloud.from('cards').delete().eq('id',id);
   if(error)return alert('Uitgave verwijderen is niet gelukt: '+error.message);
   await loadCards(true);renderMoney();
@@ -2611,33 +2623,19 @@ async function exportBalanceCSV(){await renderReports();const d=await reportData
 async function inventoryRows(){const cards=await getAll();await loadBundleData();const rows=[['ID','Set / product','Naam','Kaartsoort','Conditie','Totaal','Verkocht','In bundels','Beschikbaar','Inkoop/stuk','Inkoopwaarde voorraad','Verkoopprijs/stuk','Verkoopwaarde voorraad','Status']];cards.filter(c=>c.status==='Op voorraad').forEach(c=>{const a=availableQuantity(c);rows.push([displayId(c.id),splitStoredName(c.name).set||c.productType,splitStoredName(c.name).name,c.variant||'',c.condition,c.quantity,c.soldQuantity,allocatedQuantity(c.id),a,c.buy,(+c.buy||0)*a,c.ask,(+c.ask||0)*a,c.status]);});bundlesCache.filter(b=>b.status==='Samengesteld').forEach(b=>rows.push(['BUNDEL-'+b.id,'Bundel',b.name,'','',1,0,0,1,.50,.50,+b.ask||0,+b.ask||0,b.status]));return rows;}
 async function exportInventoryExcelCSV(){downloadCsvFile(`Psycards_voorraad_${new Date().toISOString().slice(0,10)}.csv`,await inventoryRows());}
 async function printInventoryReport(){const rows=await inventoryRows(),body=rows.slice(1).map(r=>`<tr>${r.map((v,i)=>`<td>${escapeHtml(String(v??''))}</td>`).join('')}</tr>`).join(''),w=window.open('','_blank');w.document.write(`<html><head><title>Psycards voorraad</title><style>body{font-family:Arial,sans-serif;font-size:10px}h1{font-size:18px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:4px;text-align:left}th{background:#eee}@media print{button{display:none}}</style></head><body><h1>Psycards voorraadoverzicht</h1><p>Datum: ${new Date().toLocaleDateString('nl-NL')}</p><button onclick="window.print()">Print</button><table><thead><tr>${rows[0].map(x=>`<th>${escapeHtml(x)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></body></html>`);w.document.close();}
-const PROOF_DB_NAME='psycards-documents-v1';
-function openProofDb(){return new Promise((resolve,reject)=>{const q=indexedDB.open(PROOF_DB_NAME,1);q.onupgradeneeded=()=>{const db=q.result;if(!db.objectStoreNames.contains('proofs'))db.createObjectStore('proofs',{keyPath:'id'});};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);});}
-async function saveProofFile(file,kind,linkId){if(!file)return '';const db=await openProofDb(),id='proof-'+Date.now()+'-'+Math.random().toString(36).slice(2);return new Promise((resolve,reject)=>{const tx=db.transaction('proofs','readwrite');tx.objectStore('proofs').put({id,kind,linkId:String(linkId||''),name:file.name||'aankoopbewijs',type:file.type||'application/octet-stream',size:file.size||0,createdAt:new Date().toISOString(),blob:file});tx.oncomplete=()=>resolve(id);tx.onerror=()=>reject(tx.error);});}
-async function openProofFile(id){if(!id)return;const db=await openProofDb();const row=await new Promise((resolve,reject)=>{const q=db.transaction('proofs').objectStore('proofs').get(id);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);});if(!row?.blob)return alert('Aankoopbewijs is niet meer op dit toestel gevonden.');const u=URL.createObjectURL(row.blob);window.open(u,'_blank');setTimeout(()=>URL.revokeObjectURL(u),60000);}
-async function deleteProofFile(id){if(!id)return;const db=await openProofDb();return new Promise((resolve,reject)=>{const tx=db.transaction('proofs','readwrite');tx.objectStore('proofs').delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}
-function proofChosenText(inputId,labelId){const f=document.getElementById(inputId)?.files?.[0],el=document.getElementById(labelId);if(el)el.textContent=f?('Gekozen: '+f.name+' · '+Math.max(1,Math.round(f.size/1024))+' KB'):'Nog geen aankoopbewijs gekozen.';}
-document.addEventListener('change',e=>{if(e.target?.id==='purchaseProof')proofChosenText('purchaseProof','purchaseProofName');if(e.target?.id==='expenseProof')proofChosenText('expenseProof','expenseProofName');});
-const TAX_SETTINGS_KEY='psycards-tax-settings-v1';
-const PURCHASE_META_KEY='psycards-purchase-meta-v1';
-function getTaxSettings(){try{return JSON.parse(localStorage.getItem(TAX_SETTINGS_KEY)||'{"mode":"pre","startDate":"","rate":21}')||{mode:'pre',startDate:'',rate:21};}catch(e){return {mode:'pre',startDate:'',rate:21};}}
-function saveTaxSettings(){const mode=document.getElementById('taxMode')?.value||'pre',startDate=document.getElementById('taxStartDate')?.value||'',rate=+(document.getElementById('taxRate')?.value||21);localStorage.setItem(TAX_SETTINGS_KEY,JSON.stringify({mode,startDate,rate}));renderTaxSettings();}
-function renderTaxSettings(){const x=getTaxSettings(),mode=document.getElementById('taxMode'),start=document.getElementById('taxStartDate'),rate=document.getElementById('taxRate'),box=document.getElementById('taxStartBox'),status=document.getElementById('taxModeStatus');if(!mode)return;mode.value=x.mode||'pre';if(start)start.value=x.startDate||'';if(rate)rate.value=String(x.rate||21);box?.classList.toggle('hidden',x.mode!=='vat');if(status)status.innerHTML=x.mode==='pre'?'<b>Voorbereidingsstand.</b> Verkopen worden volledig als omzet geregistreerd; er wordt geen btw berekend.':x.mode==='kor'?'<b>KOR ingesteld.</b> Geen btw op verkoop. Bewaar wel alle omzet en inkoopgegevens.':'<b>BTW actief.</b> Startdatum: '+(x.startDate||'nog niet ingevuld')+' · standaardtarief '+(x.rate||21)+'%. Automatische btw-boeking blijft uit totdat de fiscale behandeling per inkoop/verkoop is bevestigd.';}
-function getPurchaseMeta(){try{return JSON.parse(localStorage.getItem(PURCHASE_META_KEY)||'{}')||{};}catch(e){return {};}}
-function savePurchaseMeta(cardId,entry){const all=getPurchaseMeta(),key=String(cardId);if(!Array.isArray(all[key]))all[key]=[];all[key].push({...entry,createdAt:new Date().toISOString()});localStorage.setItem(PURCHASE_META_KEY,JSON.stringify(all));}
-function purchaseSourceLabel(v){return ({private:'Particulier / mogelijke marge',business:'Bedrijf / leverancier',own:'Privé ingebracht',unknown:'Niet opgegeven'})[v]||v;}
 const BOOKKEEPING_KEY='psycards-bookkeeping-v1';
 function getBookkeepingEntries(){try{return JSON.parse(localStorage.getItem(BOOKKEEPING_KEY)||'[]')}catch(e){return []}}
 function setBookkeepingEntries(v){localStorage.setItem(BOOKKEEPING_KEY,JSON.stringify(v));}
-function openBookkeeping(){show('bookkeeping');if(!bkDate.value)bkDate.value=new Date().toISOString().slice(0,10);updateBookkeepingForm();renderTaxSettings();renderBookkeeping();}
-function updateBookkeepingForm(){const t=bkType.value;bkVatBox.classList.toggle('hidden',!['vat_receivable','vat_payable'].includes(t));bkStatus.disabled=!['debtor','creditor'].includes(t);if(bkStatus.disabled)bkStatus.value='paid';}
+function openBookkeeping(){show('bookkeeping');if(!bkDate.value)bkDate.value=new Date().toISOString().slice(0,10);updateBookkeepingForm();renderBookkeeping();}
+function updateBookkeepingForm(){const t=bkType.value;bkVatBox.classList.toggle('hidden',!['vat_receivable','vat_payable'].includes(t));bkDestinationBox.classList.toggle('hidden',!['private_in','private_out'].includes(t));bkStatus.disabled=!['debtor','creditor'].includes(t);if(bkStatus.disabled)bkStatus.value='paid';}
 function bkLabel(t){return ({bank:'Bank',cash:'Kas',vat_receivable:'BTW te vorderen',vat_payable:'BTW te betalen',debtor:'Debiteur',creditor:'Crediteur',private_in:'Privé-inbreng',private_out:'Privé-opname',debt:'Schuld / lening',debt_payment:'Aflossing schuld'})[t]||t;}
-function saveBookkeepingEntry(){const amount=+bkAmount.value||0;if(!amount)return alert('Vul een bedrag in.');const rows=getBookkeepingEntries();rows.push({id:Date.now(),date:bkDate.value||new Date().toISOString().slice(0,10),type:bkType.value,description:bkDescription.value.trim()||bkLabel(bkType.value),amount,status:bkStatus.value,vatRate:+bkVatRate.value||0});setBookkeepingEntries(rows);bkDescription.value='';bkAmount.value='';renderBookkeeping();}
+function saveBookkeepingEntry(){const amount=+bkAmount.value||0;if(!amount)return alert('Vul een bedrag in.');const rows=getBookkeepingEntries();const t=bkType.value;rows.push({id:Date.now(),date:bkDate.value||new Date().toISOString().slice(0,10),type:t,description:bkDescription.value.trim()||bkLabel(t),amount,status:bkStatus.value,vatRate:+bkVatRate.value||0,destination:['private_in','private_out'].includes(t)?(document.querySelector('input[name="bkDestinationChoice"]:checked')?.value||'bank'):''});setBookkeepingEntries(rows);bkDescription.value='';bkAmount.value='';renderBookkeeping();}
 function deleteBookkeepingEntry(id){if(!confirm('Deze financiële post verwijderen?'))return;setBookkeepingEntries(getBookkeepingEntries().filter(x=>x.id!==id));renderBookkeeping();}
 function toggleBookkeepingStatus(id){const r=getBookkeepingEntries();const x=r.find(v=>v.id===id);if(x)x.status=x.status==='open'?'paid':'open';setBookkeepingEntries(r);renderBookkeeping();}
-function bookkeepingTotals(cutoff){const r=getBookkeepingEntries().filter(x=>!cutoff||new Date(x.date+'T23:59:59')<=cutoff),sum=t=>r.filter(x=>x.type===t).reduce((s,x)=>s+(+x.amount||0),0),open=t=>r.filter(x=>x.type===t&&x.status==='open').reduce((s,x)=>s+(+x.amount||0),0);return {bank:sum('bank'),cash:sum('cash'),vatReceivable:sum('vat_receivable'),vatPayable:sum('vat_payable'),debtors:open('debtor'),creditors:open('creditor'),privateIn:sum('private_in'),privateOut:sum('private_out'),debts:Math.max(0,sum('debt')-sum('debt_payment'))};}
-function renderBookkeeping(){const rows=getBookkeepingEntries().sort((a,b)=>String(b.date).localeCompare(String(a.date))),t=bookkeepingTotals();bookkeepingStats.innerHTML=`<div class="stat">Bankcorrecties<b>${euro(t.bank)}</b></div><div class="stat">Kascorrecties<b>${euro(t.cash)}</b></div><div class="stat">Debiteuren open<b>${euro(t.debtors)}</b></div><div class="stat">Crediteuren open<b>${euro(t.creditors)}</b></div><div class="stat">BTW saldo<b>${euro(t.vatReceivable-t.vatPayable)}</b></div><div class="stat">Schulden<b>${euro(t.debts)}</b></div>`;vatStats.innerHTML=`<div class="stat">Te vorderen<b>${euro(t.vatReceivable)}</b></div><div class="stat">Te betalen<b>${euro(t.vatPayable)}</b></div><div class="stat">Saldo<b>${euro(t.vatReceivable-t.vatPayable)}</b></div>`;bookkeepingList.innerHTML=rows.length?rows.map(x=>`<div class="sale-cart-item"><div><b>${escapeHtml(bkLabel(x.type))}</b><div class="muted">${escapeHtml(x.date)} · ${escapeHtml(x.description)}${['debtor','creditor'].includes(x.type)?' · '+(x.status==='open'?'OPEN':'AFGEHANDELD'):''}</div></div><div style="text-align:right"><b>${euro(x.amount)}</b>${['debtor','creditor'].includes(x.type)?`<button class="light" style="display:block;padding:5px 7px;margin-top:4px" onclick="toggleBookkeepingStatus(${x.id})">${x.status==='open'?'Afhandelen':'Heropenen'}</button>`:''}<button class="danger" style="display:block;padding:5px 7px;margin-top:4px" onclick="deleteBookkeepingEntry(${x.id})">×</button></div></div>`).join(''):'<div class="muted">Nog geen aanvullende financiële posten.</div>';}
-function exportBookkeepingCSV(){const tax=getTaxSettings(),rows=[['Psycards boekhouding'],['BTW-status',tax.mode],['BTW-startdatum',tax.startDate],['Standaardtarief',tax.rate+'%'],[],['Datum','Soort','Omschrijving','Bedrag','Status','BTW-tarief'],...getBookkeepingEntries().map(x=>[x.date,bkLabel(x.type),x.description,x.amount,x.status,x.vatRate||'']),[],['INKOOPHERKOMST'],['Voorraad-ID','Datum','Herkomst','Verkoper / leverancier','Betaalwijze','Aantal','Bedrag']];const pm=getPurchaseMeta();Object.entries(pm).forEach(([id,list])=>(list||[]).forEach(x=>rows.push([id,x.date,purchaseSourceLabel(x.source),x.supplier||'',x.payment||'',x.quantity||'',x.amount||0])));downloadCsvFile('Psycards_boekhouding_'+new Date().toISOString().slice(0,10)+'.csv',rows);}
+function bookkeepingTotals(cutoff){const r=getBookkeepingEntries().filter(x=>!cutoff||new Date(x.date+'T23:59:59')<=cutoff),sum=t=>r.filter(x=>x.type===t).reduce((s,x)=>s+(+x.amount||0),0),open=t=>r.filter(x=>x.type===t&&x.status==='open').reduce((s,x)=>s+(+x.amount||0),0),dest=(d,t)=>r.filter(x=>x.type===t&&x.destination===d).reduce((s,x)=>s+(+x.amount||0),0);return {bank:sum('bank')+dest('bank','private_in')-dest('bank','private_out'),cash:sum('cash')+dest('cash','private_in')-dest('cash','private_out'),vatReceivable:sum('vat_receivable'),vatPayable:sum('vat_payable'),debtors:open('debtor'),creditors:open('creditor'),privateIn:sum('private_in'),privateOut:sum('private_out'),debts:Math.max(0,sum('debt')-sum('debt_payment'))};}
+function setBookkeepingDestination(id,destination){const rows=getBookkeepingEntries();const x=rows.find(v=>v.id===id);if(!x)return;if(!destination){const box=document.getElementById('destinationChoice_'+id);if(box){box.classList.toggle('hidden');return;}}if(!['bank','cash'].includes(destination))return;x.destination=destination;setBookkeepingEntries(rows);renderBookkeeping();}
+function renderBookkeeping(){const rows=getBookkeepingEntries().sort((a,b)=>String(b.date).localeCompare(String(a.date))),t=bookkeepingTotals();bookkeepingStats.innerHTML=`<div class="stat">Bankcorrecties<b>${euro(t.bank)}</b></div><div class="stat">Kascorrecties<b>${euro(t.cash)}</b></div><div class="stat">Debiteuren open<b>${euro(t.debtors)}</b></div><div class="stat">Crediteuren open<b>${euro(t.creditors)}</b></div><div class="stat">BTW saldo<b>${euro(t.vatReceivable-t.vatPayable)}</b></div><div class="stat">Schulden<b>${euro(t.debts)}</b></div>`;vatStats.innerHTML=`<div class="stat">Te vorderen<b>${euro(t.vatReceivable)}</b></div><div class="stat">Te betalen<b>${euro(t.vatPayable)}</b></div><div class="stat">Saldo<b>${euro(t.vatReceivable-t.vatPayable)}</b></div>`;bookkeepingList.innerHTML=rows.length?rows.map(x=>`<div class="sale-cart-item"><div><b>${escapeHtml(bkLabel(x.type))}</b><div class="muted">${escapeHtml(x.date)} · ${escapeHtml(x.description)}${x.destination?' · '+(x.destination==='bank'?'🏦 Bank':'💶 Kas'):''}${['debtor','creditor'].includes(x.type)?' · '+(x.status==='open'?'OPEN':'AFGEHANDELD'):''}</div></div><div style="text-align:right"><b>${euro(x.amount)}</b>${['debtor','creditor'].includes(x.type)?`<button class="light" style="display:block;padding:5px 7px;margin-top:4px" onclick="toggleBookkeepingStatus(${x.id})">${x.status==='open'?'Afhandelen':'Heropenen'}</button>`:''}${['private_in','private_out'].includes(x.type)?`<div id="destinationChoice_${x.id}" style="display:flex;gap:5px;margin-top:5px"><button class="${x.destination==='bank'?'primary':'light'}" style="padding:5px 8px" onclick="setBookkeepingDestination(${x.id},'bank')">🏦 Bank</button><button class="${x.destination==='cash'?'primary':'light'}" style="padding:5px 8px" onclick="setBookkeepingDestination(${x.id},'cash')">💶 Kas</button></div>`:''}<button class="danger" style="display:block;padding:5px 7px;margin-top:4px" onclick="deleteBookkeepingEntry(${x.id})">×</button></div></div>`).join(''):'<div class="muted">Nog geen aanvullende financiële posten.</div>';}
+function exportBookkeepingCSV(){const rows=[['Datum','Soort','Omschrijving','Bedrag','Bank/Kas','Status','BTW-tarief'],...getBookkeepingEntries().map(x=>[x.date,bkLabel(x.type),x.description,x.amount,x.destination==='bank'?'Bank':x.destination==='cash'?'Kas':'',x.status,x.vatRate||''])];downloadCsvFile('Psycards_boekhouding_'+new Date().toISOString().slice(0,10)+'.csv',rows);}
 async function exportCSV(){
   const cards=await getAll();await loadBundleData();
   const rows=[['ID','Productsoort','Naam/omschrijving','Conditie','Kaartsoort','Aantal totaal','Aantal verkocht','In bundels','Los beschikbaar','Inkoop per stuk','Vraagprijs per stuk','Minimum per stuk','Status','Totale omzet','Betaalwijze','Datum laatste verkoop']];
