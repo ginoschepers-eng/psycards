@@ -141,6 +141,8 @@
       <button class="quick-action" onclick="show('sold');renderSold()"><span class="ico">✅</span><span>Verkoophistorie</span></button>
     </div>
 
+    <button class="quick-action" style="width:100%;margin-top:12px" onclick="show('calculator')"><span class="ico">🧮</span><span>Prijscalculator <small>Bereken direct 80% en 70%</small></span></button>
+
     <div class="app-section-title">Voorraad</div>
     <div id="homeStats" class="stock-summary"></div>
 
@@ -163,6 +165,22 @@
       <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">Verbonden</span></div>
       <button id="manualSyncButton" class="light" onclick="manualFullSync()">🔄 Synchroniseren</button>
       <div id="lastSyncText" class="muted"></div>
+    </div>
+  </section>
+
+  <section id="calculator" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2>🧮 Prijscalculator</h2>
+      <div class="muted">Vul de kaartwaarde in. De verkoopprijzen worden direct berekend.</div>
+      <label for="calcAmount">Kaartwaarde (€)</label>
+      <input id="calcAmount" type="text" inputmode="decimal" autocomplete="off" placeholder="Bijv. 50,00" oninput="updatePriceCalculator()">
+      <div class="stats" style="margin-top:14px">
+        <div class="stat">80% van kaartwaarde<b id="calc80">€ 0,00</b></div>
+        <div class="stat">70% van kaartwaarde<b id="calc70">€ 0,00</b></div>
+      </div>
+      <div id="calcError" class="muted" role="status" style="margin-top:8px"></div>
+      <button class="light" style="width:100%;margin-top:12px" onclick="document.getElementById('calcAmount').value='';updatePriceCalculator();document.getElementById('calcAmount').focus()">Wissen</button>
     </div>
   </section>
 
@@ -783,6 +801,16 @@ async function loadBundleData(forceRefresh=false){
 function allocatedQuantity(cardId){return bundleItemsCache.filter(x=>String(x.card_id)===String(cardId)).reduce((sum,x)=>sum+(+x.quantity||0),0);}
 function availableQuantity(c){return Math.max(0,c.quantity-c.soldQuantity-allocatedQuantity(c.id));}
 
+function updatePriceCalculator(){
+  const raw=document.getElementById('calcAmount').value.trim().replace(/\s/g,'');
+  const normalized=raw.includes(',')?raw.replace(/\./g,'').replace(',','.'):raw;
+  const valid=normalized!=='' && /^\d+(?:\.\d{0,2})?$/.test(normalized) && Number.isFinite(Number(normalized));
+  const amount=valid?Number(normalized):0;
+  const euro=new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'});
+  document.getElementById('calc80').textContent=euro.format(Math.round(amount*80)/100);
+  document.getElementById('calc70').textContent=euro.format(Math.round(amount*70)/100);
+  document.getElementById('calcError').textContent=raw&&!valid?'Vul een geldig bedrag in (bijv. 12,50).':'';
+}
 function show(id,fromHistory=false){
   const current=document.querySelector('main>section:not(.hidden)')?.id;
   document.querySelectorAll('main>section').forEach(s=>s.classList.add('hidden'));
