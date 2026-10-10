@@ -2405,7 +2405,7 @@ function openBundleFromSearch(id){const bundle=bundlesCache.find(b=>String(b.id)
 const prizeKey=id=>'psycards_bonus25_'+String(id);
 const prizeAwardKey=id=>'psycards_prize_awarded_'+String(id);
 function prizeChoices(id){try{return JSON.parse(localStorage.getItem(prizeKey(id))||'[]')}catch(e){return []}}
-function togglePrizePanel(id,checked){const panel=document.getElementById('prize-panel-'+id);if(!panel)return;panel.classList.toggle('hidden',!checked);if(checked)renderPrizeChoices(id);}
+function togglePrizePanel(id,checked){const panel=document.getElementById('prize-panel-'+id);if(!panel)return;panel.classList.toggle('hidden',!checked);if(checked){suggestPrizeChoices(id);} }
 function renderPrizeChoices(id){
  const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle)return;
  const panel=document.getElementById('prize-panel-'+id);if(!panel)return;
@@ -2415,7 +2415,7 @@ function renderPrizeChoices(id){
  const search=String(document.getElementById('prize-search-'+id)?.value||'').toLowerCase();
  const matches=candidates.filter(c=>(String(c.name)+' '+stockFolderName(c)).toLowerCase().includes(search));
  const selected=chosen.map(cid=>cardsCache.find(c=>String(c.id)===String(cid))).filter(Boolean);
- panel.innerHTML=`<div class="scanbox"><b>🎉 Winactie: 25 extra kaarten</b><div class="muted">Kies 25 losse kaarten uit dezelfde set (${escapeHtml(bundleSetName(bundle))}), die niet in deze bundel zitten. De 3 ex-kaarten zijn een afzonderlijke prijs.</div><p><b>${chosen.length}/25 geselecteerd</b></p><button class="green" style="width:100%;padding:10px;font-size:14px" onclick="suggestPrizeChoices('${id}')">🎲 Stel automatisch 25 bonuskaarten voor</button><input id="prize-search-${id}" placeholder="Zoek kaart of set" value="${escapeHtml(search)}" oninput="renderPrizeChoices('${id}')"><div class="muted" style="margin:8px 0">Alleen kaarten met losse voorraad worden getoond. De bonuskaarten worden pas bij verkoop van de bundel afgeboekt, wanneer de koper de prijs wint.</div><div style="max-height:330px;overflow:auto">${matches.slice(0,120).map(c=>`<label style="display:flex;align-items:center;gap:8px;border-bottom:1px solid #e3e8ef;padding:7px 0;font-size:13px"><input type="checkbox" style="width:20px" ${chosen.includes(String(c.id))?'checked':''} ${chosen.length>=25&&!chosen.includes(String(c.id))?'disabled':''} onchange="changePrizeChoice('${id}','${String(c.id)}',this.checked)"><span>${escapeHtml(c.name)} · ${escapeHtml(stockFolderName(c))} · ${escapeHtml(c.variant||'Normaal')}</span></label>`).join('')||'<div class="muted">Geen geschikte kaarten gevonden.</div>'}</div><h4>Geselecteerde bonuskaarten</h4><div class="muted">${selected.map((c,i)=>(i+1)+'. '+escapeHtml(c.name)+' — '+escapeHtml(stockFolderName(c))).join('<br>')||'Nog geen kaarten geselecteerd'}</div><button class="light" style="width:100%;margin-top:10px" onclick="printPrizeChoices('${id}')" ${chosen.length!==25?'disabled':''}>🖨️ Print lijst van 25 kaarten</button></div>`;
+ panel.innerHTML=`<div class="scanbox"><b>🎉 Winactie: 25 extra kaarten uit ${escapeHtml(bundleSetName(bundle))}</b><p><b>${chosen.length}/25 kaarten automatisch gekozen</b></p><div class="muted">Deze kaarten zitten niet in de oorspronkelijke bundel. Alleen bij een gewonnen prijs en geregistreerde verkoop worden ze afgeboekt.</div><div style="margin-top:10px;font-size:13px">${selected.map((c,i)=>(i+1)+'. '+escapeHtml(c.name)).join('<br>')||'Geen beschikbare kaarten'}</div><button class="light" style="width:100%;margin-top:12px" onclick="suggestPrizeChoices('${id}')">🔄 Kies automatisch 25 andere kaarten</button><button class="light" style="width:100%;margin-top:8px" onclick="printPrizeChoices('${id}')" ${chosen.length!==25?'disabled':''}>🖨️ Print prijslijst</button></div>`;
 }
 function suggestPrizeChoices(id){
  const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle)return;
@@ -2588,7 +2588,7 @@ async function sellBundle(id){
   for(const item of items){const card=cardsCache.find(c=>String(c.id)===String(item.card_id));if(card){const check=collectorCheckCard(card);if(!check.ok)return alert('Bundelverkoop geblokkeerd.\n\n'+check.message+'\n\nWerk eerst de eigen verzameling bij in TCG Collector.');}}
   const prizeWon=document.getElementById('prize-won-'+id)?.checked===true;
   const chosen=prizeWon?prizeChoices(id):[];
-  if(prizeWon&&chosen.length!==25)return alert('Selecteer eerst precies 25 bonuskaarten voor de gewonnen prijs.');
+  if(prizeWon&&chosen.length!==25)return alert('Er zijn onvoldoende geschikte bonuskaarten beschikbaar voor deze prijs.');
   const prizeCards=chosen.map(cid=>cardsCache.find(c=>String(c.id)===String(cid)));
   if(prizeWon&&(prizeCards.some(c=>!c)||new Set(chosen).size!==25||prizeCards.some(c=>availableQuantity(c)<1||normalizeSetName(stockFolderName(c))!==normalizeSetName(bundleSetName(bundle))||items.some(x=>String(x.card_id)===String(c.id)))))return alert('De bonuskaarten zijn niet allemaal beschikbaar. Controleer de selectie.');
   if(!confirm('Deze bundel voor €'+price.toFixed(2)+' als verkocht registreren?'+(prizeWon?'\\nInclusief gewonnen prijs: 25 extra kaarten uit dezelfde set.':'')))return;
