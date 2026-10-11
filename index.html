@@ -2419,8 +2419,8 @@ const exPrizeKey=id=>'psycards_prize_ex3_'+String(id);
 function exPrizeChoices(id){try{return JSON.parse(localStorage.getItem(exPrizeKey(id))||'[]')}catch(e){return []}}
 function suggestExPrizeChoices(id){const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle)return [];const excluded=new Set([...bundleItemsCache.filter(x=>String(x.bundle_id)===String(id)).map(x=>String(x.card_id)),...prizeChoices(id)]);const result=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad'&&!excluded.has(String(c.id))&&normalizeSetName(stockFolderName(c))===normalizeSetName(bundleSetName(bundle))&&availableQuantity(c)>0&&/\bex\b/i.test(String(c.name||'').replace(/^[0-9]+\/[0-9]+\s*[-–]?\s*/,''))&&String(c.variant||'').trim().toLowerCase()==='ex').slice(0,3).map(c=>String(c.id));localStorage.setItem(exPrizeKey(id),JSON.stringify(result));return result;}
 function toggleExPrize(id,checked){const host=document.getElementById('ex-prize-list-'+id);if(!host)return;if(!checked){host.innerHTML='';return;}const selected=suggestExPrizeChoices(id);host.innerHTML='<div class="scanbox"><b>🏆 3 ex-kaarten als prijs</b><div class="muted">'+selected.map((cid,i)=>{const c=cardsCache.find(x=>String(x.id)===cid);return (i+1)+'. '+escapeHtml(c?.name||'')}).join('<br>')+'</div>'+(selected.length!==3?'<p>Let op: slechts '+selected.length+' beschikbare ex-kaarten uit deze set gevonden.</p>':'')+'</div>';}
-function prizeChoices(id){try{return JSON.parse(localStorage.getItem(prizeKey(id))||'[]')}catch(e){return []}}
-function togglePrizePanel(id,checked){const panel=document.getElementById('prize-panel-'+id);if(!panel)return;panel.classList.toggle('hidden',!checked);if(checked){suggestPrizeChoices(id);} }
+function prizeChoices(id){try{const local=JSON.parse(localStorage.getItem(prizeKey(id))||'null');if(Array.isArray(local))return local;const award=getPrizeAward(id);return Array.isArray(award?.preparedIds)?award.preparedIds.map(String):[]}catch(e){return []}}
+function togglePrizePanel(id,checked){const panel=document.getElementById('prize-panel-'+id);if(!panel)return;panel.classList.toggle('hidden',!checked);if(checked){if(prizeChoices(id).length)renderPrizeChoices(id);else suggestPrizeChoices(id);} }
 function renderPrizeChoices(id){
  const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle)return;
  const panel=document.getElementById('prize-panel-'+id);if(!panel)return;
@@ -2430,7 +2430,7 @@ function renderPrizeChoices(id){
  const search=String(document.getElementById('prize-search-'+id)?.value||'').toLowerCase();
  const matches=candidates.filter(c=>(String(c.name)+' '+stockFolderName(c)).toLowerCase().includes(search));
  const selected=chosen.map(cid=>cardsCache.find(c=>String(c.id)===String(cid))).filter(Boolean);
- panel.innerHTML=`<div class="scanbox"><b>🎉 Winactie: 25 extra kaarten uit ${escapeHtml(bundleSetName(bundle))}</b><p><b>${chosen.length}/25 kaarten automatisch gekozen</b></p><div class="muted">Alle 25 kaarten zijn verschillend en zitten niet in de oorspronkelijke bundel. Alleen bij een gewonnen prijs en geregistreerde verkoop worden ze afgeboekt.</div><div style="margin-top:10px;font-size:13px">${selected.map((c,i)=>(i+1)+'. '+escapeHtml(c.name)).join('<br>')||'Geen beschikbare kaarten'}</div><button class="light" style="width:100%;margin-top:12px" onclick="suggestPrizeChoices('${id}')">🔄 Kies automatisch 25 andere kaarten</button><button class="light" style="width:100%;margin-top:8px" onclick="printPrizeChoices('${id}')" ${chosen.length!==25?'disabled':''}>🖨️ Print prijslijst</button></div>`;
+ panel.innerHTML=`<div class="scanbox"><b>🎉 Winactie: 25 extra kaarten uit ${escapeHtml(bundleSetName(bundle))}</b><p><b>${chosen.length}/25 kaarten automatisch gekozen</b></p><div class="muted">Alle 25 kaarten zijn verschillend en zitten niet in de oorspronkelijke bundel. Alleen bij een gewonnen prijs en geregistreerde verkoop worden ze afgeboekt.</div><div style="margin-top:10px;font-size:13px">${selected.map((c,i)=>(i+1)+'. '+escapeHtml(c.name)).join('<br>')||'Geen beschikbare kaarten'}</div><button class="light" style="width:100%;margin-top:12px" onclick="suggestPrizeChoices('${id}')">🔄 Kies automatisch 25 andere kaarten</button><button class="green" style="width:100%;margin-top:8px" onclick="savePrizeChoices('${id}')" ${chosen.length!==25?'disabled':''}>💾 Bonuskaarten opslaan in Supabase</button><div id="prize-save-status-${id}" class="scan-status"></div><button class="light" style="width:100%;margin-top:8px" onclick="printPrizeChoices('${id}')" ${chosen.length!==25?'disabled':''}>🖨️ Print prijslijst</button></div>`;
 }
 function prizeUniqueKey(c){const p=splitStoredName(c.name||'');return (String(p.number||'').trim() || String(p.name||c.name||'').trim().toLowerCase()).replace(/^0+(?=\d)/,'');}
 function suggestPrizeChoices(id){
@@ -2442,6 +2442,30 @@ function suggestPrizeChoices(id){
  const result=[],seen=new Set(bundleUnique);for(const c of eligible){const key=prizeUniqueKey(c);if(seen.has(key))continue;seen.add(key);result.push(String(c.id));if(result.length===25)break;}
  localStorage.setItem(prizeKey(id),JSON.stringify(result));renderPrizeChoices(id);
  if(result.length<25)alert('Er zijn slechts '+result.length+' geschikte losse kaarten beschikbaar uit dezelfde set, maar niet uit de gekozen bundel.');
+}
+async function savePrizeChoices(id){
+ const status=document.getElementById('prize-save-status-'+id);
+ const bundle=bundlesCache.find(b=>String(b.id)===String(id));
+ if(!bundle||bundle.status==='Verkocht')return alert('Deze bundel kan niet worden aangepast.');
+ const ids=prizeChoices(id).map(String);
+ const items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(id));
+ const excluded=new Set(items.map(x=>String(x.card_id)));
+ const excludedKeys=new Set([...excluded].map(cid=>cardsCache.find(c=>String(c.id)===cid)).filter(Boolean).map(prizeUniqueKey));
+ const cards=ids.map(cid=>cardsCache.find(c=>String(c.id)===cid));
+ if(ids.length!==25||new Set(ids).size!==25||cards.some(c=>!c)||new Set(cards.map(prizeUniqueKey)).size!==25||cards.some(c=>excluded.has(String(c.id))||excludedKeys.has(prizeUniqueKey(c))||normalizeSetName(stockFolderName(c))!==normalizeSetName(bundleSetName(bundle))||availableQuantity(c)<1)){
+   if(status)status.textContent='Opslaan niet mogelijk: controleer of alle 25 kaarten beschikbaar, uniek en uit dezelfde set zijn.';
+   return;
+ }
+ if(status)status.textContent='Bezig met opslaan…';
+ try{
+   const previous=getPrizeAward(id)||{};
+   const award={...previous,preparedIds:ids,preparedNames:cards.map(c=>c.name),preparedAt:new Date().toISOString()};
+   const {error}=await cloud.from('bundle_prizes').upsert({bundle_id:id,award},{onConflict:'bundle_id'});
+   if(error)throw error;
+   prizeAwardsCache.set(String(id),award);
+   localStorage.setItem(prizeKey(id),JSON.stringify(ids));
+   if(status)status.textContent='✅ 25 bonuskaarten opgeslagen in Supabase. Er is niets van de voorraad afgeboekt.';
+ }catch(e){if(status)status.textContent='❌ Opslaan mislukt: '+(e?.message||e);}
 }
 function changePrizeChoice(id,cardId,checked){let chosen=prizeChoices(id);chosen=checked?[...chosen.filter(x=>x!==cardId),cardId].slice(0,25):chosen.filter(x=>x!==cardId);localStorage.setItem(prizeKey(id),JSON.stringify(chosen));renderPrizeChoices(id)}
 function printPrizeChoices(id){const bundle=bundlesCache.find(b=>String(b.id)===String(id));const chosen=prizeChoices(id);if(!bundle||chosen.length!==25)return;const lines=chosen.map((cid,i)=>{const c=cardsCache.find(x=>String(x.id)===String(cid));return (i+1)+'. '+(c?c.name+' — '+stockFolderName(c):'Kaart niet gevonden')});const w=window.open('','_blank');if(!w){alert('Sta pop-ups toe om de lijst af te drukken.');return}w.document.write('<html><head><title>Winactie Psycards</title></head><body><h2>Psycards — 25 extra kaarten</h2><p>'+escapeHtml(bundle.name)+'</p><ol>'+lines.map(x=>'<li>'+escapeHtml(x.replace(/^\d+\. /,''))+'</li>').join('')+'</ol><p>De 3 ex-kaarten zijn een afzonderlijke prijs.</p></body></html>');w.document.close();w.print()}
@@ -2616,7 +2640,7 @@ async function sellBundle(id){
   if(prizeWon&&(prizeCards.some(c=>!c)||new Set(chosen).size!==25||new Set(prizeCards.filter(Boolean).map(prizeUniqueKey)).size!==25||prizeCards.some(c=>availableQuantity(c)<1||normalizeSetName(stockFolderName(c))!==normalizeSetName(bundleSetName(bundle))||items.some(x=>{const b=cardsCache.find(card=>String(card.id)===String(x.card_id));return b&&prizeUniqueKey(b)===prizeUniqueKey(c)}))))return alert('De bonuskaarten zijn niet allemaal beschikbaar. Controleer de selectie.');
   if(!confirm('Deze bundel voor €'+price.toFixed(2)+' als verkocht registreren?'+(prizeWon?'\\nInclusief 25 bonuskaarten.':'')+(exWon?'\\nInclusief 3 ex-kaarten.':'')))return;
   // Prijsregistratie vooraf centraal bewaren; als dat niet lukt, verkoop blokkeren.
-  const award={names:prizeCards.map(c=>c.name),ids:chosen,exNames:exCards.map(c=>c.name),exIds:exChosen,date:new Date().toISOString()};
+  const award={...(getPrizeAward(id)||{}),names:prizeCards.map(c=>c.name),ids:chosen,exNames:exCards.map(c=>c.name),exIds:exChosen,date:new Date().toISOString()};
   const {error:awardError}=await cloud.from('bundle_prizes').upsert({bundle_id:id,award},{onConflict:'bundle_id'});
   if(awardError)return alert('Prijsregistratie in Supabase mislukt. Verkoop niet verwerkt. Voer eerst psycards-prijzen-setup.sql uit. '+awardError.message);
   prizeAwardsCache.set(String(id),award);
