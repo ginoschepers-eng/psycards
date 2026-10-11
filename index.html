@@ -2419,14 +2419,16 @@ function renderPrizeChoices(id){
  const search=String(document.getElementById('prize-search-'+id)?.value||'').toLowerCase();
  const matches=candidates.filter(c=>(String(c.name)+' '+stockFolderName(c)).toLowerCase().includes(search));
  const selected=chosen.map(cid=>cardsCache.find(c=>String(c.id)===String(cid))).filter(Boolean);
- panel.innerHTML=`<div class="scanbox"><b>🎉 Winactie: 25 extra kaarten uit ${escapeHtml(bundleSetName(bundle))}</b><p><b>${chosen.length}/25 kaarten automatisch gekozen</b></p><div class="muted">Deze kaarten zitten niet in de oorspronkelijke bundel. Alleen bij een gewonnen prijs en geregistreerde verkoop worden ze afgeboekt.</div><div style="margin-top:10px;font-size:13px">${selected.map((c,i)=>(i+1)+'. '+escapeHtml(c.name)).join('<br>')||'Geen beschikbare kaarten'}</div><button class="light" style="width:100%;margin-top:12px" onclick="suggestPrizeChoices('${id}')">🔄 Kies automatisch 25 andere kaarten</button><button class="light" style="width:100%;margin-top:8px" onclick="printPrizeChoices('${id}')" ${chosen.length!==25?'disabled':''}>🖨️ Print prijslijst</button></div>`;
+ panel.innerHTML=`<div class="scanbox"><b>🎉 Winactie: 25 extra kaarten uit ${escapeHtml(bundleSetName(bundle))}</b><p><b>${chosen.length}/25 kaarten automatisch gekozen</b></p><div class="muted">Alle 25 kaarten zijn verschillend en zitten niet in de oorspronkelijke bundel. Alleen bij een gewonnen prijs en geregistreerde verkoop worden ze afgeboekt.</div><div style="margin-top:10px;font-size:13px">${selected.map((c,i)=>(i+1)+'. '+escapeHtml(c.name)).join('<br>')||'Geen beschikbare kaarten'}</div><button class="light" style="width:100%;margin-top:12px" onclick="suggestPrizeChoices('${id}')">🔄 Kies automatisch 25 andere kaarten</button><button class="light" style="width:100%;margin-top:8px" onclick="printPrizeChoices('${id}')" ${chosen.length!==25?'disabled':''}>🖨️ Print prijslijst</button></div>`;
 }
+function prizeUniqueKey(c){const p=splitStoredName(c.name||'');return (String(p.number||'').trim() || String(p.name||c.name||'').trim().toLowerCase()).replace(/^0+(?=\d)/,'');}
 function suggestPrizeChoices(id){
  const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle)return;
  const originalSet=normalizeSetName(bundleSetName(bundle));
  const inBundle=new Set(bundleItemsCache.filter(x=>String(x.bundle_id)===String(id)).map(x=>String(x.card_id)));
+ const bundleUnique=new Set([...inBundle].map(cid=>cardsCache.find(c=>String(c.id)===cid)).filter(Boolean).map(prizeUniqueKey));
  const eligible=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad'&&!inBundle.has(String(c.id))&&normalizeSetName(stockFolderName(c))===originalSet&&availableQuantity(c)>0&&['Normaal','Holo','Reverse holo'].includes(canonicalBundleVariant(c.variant)));
- const result=[];for(const c of eligible){if(result.length<25)result.push(String(c.id));if(result.length===25)break;}
+ const result=[],seen=new Set(bundleUnique);for(const c of eligible){const key=prizeUniqueKey(c);if(seen.has(key))continue;seen.add(key);result.push(String(c.id));if(result.length===25)break;}
  localStorage.setItem(prizeKey(id),JSON.stringify(result));renderPrizeChoices(id);
  if(result.length<25)alert('Er zijn slechts '+result.length+' geschikte losse kaarten beschikbaar uit dezelfde set, maar niet uit de gekozen bundel.');
 }
@@ -2599,7 +2601,7 @@ async function sellBundle(id){
   if(exWon&&(exCards.some(c=>!c||availableQuantity(c)<1)||exChosen.some(cid=>chosen.includes(cid))))return alert('De 3 ex-kaarten zijn niet meer beschikbaar.');
   if(prizeWon&&chosen.length!==25)return alert('Er zijn onvoldoende geschikte bonuskaarten beschikbaar voor deze prijs.');
   const prizeCards=chosen.map(cid=>cardsCache.find(c=>String(c.id)===String(cid)));
-  if(prizeWon&&(prizeCards.some(c=>!c)||new Set(chosen).size!==25||prizeCards.some(c=>availableQuantity(c)<1||normalizeSetName(stockFolderName(c))!==normalizeSetName(bundleSetName(bundle))||items.some(x=>String(x.card_id)===String(c.id)))))return alert('De bonuskaarten zijn niet allemaal beschikbaar. Controleer de selectie.');
+  if(prizeWon&&(prizeCards.some(c=>!c)||new Set(chosen).size!==25||new Set(prizeCards.filter(Boolean).map(prizeUniqueKey)).size!==25||prizeCards.some(c=>availableQuantity(c)<1||normalizeSetName(stockFolderName(c))!==normalizeSetName(bundleSetName(bundle))||items.some(x=>{const b=cardsCache.find(card=>String(card.id)===String(x.card_id));return b&&prizeUniqueKey(b)===prizeUniqueKey(c)}))))return alert('De bonuskaarten zijn niet allemaal beschikbaar. Controleer de selectie.');
   if(!confirm('Deze bundel voor €'+price.toFixed(2)+' als verkocht registreren?'+(prizeWon?'\\nInclusief 25 bonuskaarten.':'')+(exWon?'\\nInclusief 3 ex-kaarten.':'')))return;
   // Eerst de bonuskaarten afboeken. Bij een fout worden eerdere afboekingen teruggedraaid.
   const changed=[];
