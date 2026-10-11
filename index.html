@@ -2377,8 +2377,8 @@ function renderOwnUse(){
   host.innerHTML=rows.map(r=>'<div class="card"><b>'+escapeHtml(r.name||'Product')+'</b><div class="muted">'+escapeHtml(r.productType||'Product')+' · '+(+r.quantity||0)+' stuks · '+new Date(r.date).toLocaleDateString('nl-NL')+'</div><div style="margin-top:6px">Kosten: <b>€ '+((r.totalCost!=null?(+r.totalCost||0):((+r.buy||0)*(+r.quantity||0)))).toFixed(2).replace('.',',')+'</b></div></div>').join('');
 }
 async function renderBundles(){
-  await loadPrizeAwards();
   await Promise.all([loadCards(),loadBundleData()]);
+  await loadPrizeAwards();
   const host=document.getElementById('bundleExisting');document.getElementById('bundleBuilder').classList.add('hidden');
   if(!bundleTablesReady){host.innerHTML='<div class="card"><b>Database-uitbreiding nodig</b><div class="muted">Voer eerst het nieuwe bestand supabase-setup.sql uit in de SQL Editor van Supabase.</div></div>';return;}
   if(!bundlesCache.length){host.innerHTML='<div class="card muted">Er zijn nog geen bundels samengesteld.</div>';return;}
@@ -2417,7 +2417,7 @@ function getPrizeAward(id){return prizeAwardsCache.get(String(id))||null;}
 
 const exPrizeKey=id=>'psycards_prize_ex3_'+String(id);
 function exPrizeChoices(id){try{return JSON.parse(localStorage.getItem(exPrizeKey(id))||'[]')}catch(e){return []}}
-function suggestExPrizeChoices(id){const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle)return [];const excluded=new Set([...bundleItemsCache.filter(x=>String(x.bundle_id)===String(id)).map(x=>String(x.card_id)),...prizeChoices(id)]);const result=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad'&&!excluded.has(String(c.id))&&normalizeSetName(stockFolderName(c))===normalizeSetName(bundleSetName(bundle))&&availableQuantity(c)>0&&String(c.variant||'').trim().toLowerCase()==='ex').slice(0,3).map(c=>String(c.id));localStorage.setItem(exPrizeKey(id),JSON.stringify(result));return result;}
+function suggestExPrizeChoices(id){const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle)return [];const excluded=new Set([...bundleItemsCache.filter(x=>String(x.bundle_id)===String(id)).map(x=>String(x.card_id)),...prizeChoices(id)]);const result=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad'&&!excluded.has(String(c.id))&&normalizeSetName(stockFolderName(c))===normalizeSetName(bundleSetName(bundle))&&availableQuantity(c)>0&&/\\bex\\b/i.test(String(c.name||'').replace(/^[0-9]+\\/[0-9]+\\s*[-–]?\\s*/,''))&&String(c.variant||'').trim().toLowerCase()==='ex').slice(0,3).map(c=>String(c.id));localStorage.setItem(exPrizeKey(id),JSON.stringify(result));return result;}
 function toggleExPrize(id,checked){const host=document.getElementById('ex-prize-list-'+id);if(!host)return;if(!checked){host.innerHTML='';return;}const selected=suggestExPrizeChoices(id);host.innerHTML='<div class="scanbox"><b>🏆 3 ex-kaarten als prijs</b><div class="muted">'+selected.map((cid,i)=>{const c=cardsCache.find(x=>String(x.id)===cid);return (i+1)+'. '+escapeHtml(c?.name||'')}).join('<br>')+'</div>'+(selected.length!==3?'<p>Let op: slechts '+selected.length+' beschikbare ex-kaarten uit deze set gevonden.</p>':'')+'</div>';}
 function prizeChoices(id){try{return JSON.parse(localStorage.getItem(prizeKey(id))||'[]')}catch(e){return []}}
 function togglePrizePanel(id,checked){const panel=document.getElementById('prize-panel-'+id);if(!panel)return;panel.classList.toggle('hidden',!checked);if(checked){suggestPrizeChoices(id);} }
@@ -2601,6 +2601,7 @@ async function createBundle(){
 }
 async function sellBundle(id){
   const price=+document.getElementById('bundleSalePrice-'+id).value||0,payment=document.getElementById('bundlePayment-'+id).value,bundle=bundlesCache.find(b=>String(b.id)===String(id));
+  if(!bundle||bundle.status==='Verkocht')return alert('Deze bundel is niet beschikbaar voor verkoop.');
   const items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(id));
   for(const item of items){const card=cardsCache.find(c=>String(c.id)===String(item.card_id));if(card){const check=collectorCheckCard(card);if(!check.ok)return alert('Bundelverkoop geblokkeerd.\n\n'+check.message+'\n\nWerk eerst de eigen verzameling bij in TCG Collector.');}}
   const prizeWon=document.getElementById('prize-won-'+id)?.checked===true;
@@ -2609,7 +2610,7 @@ async function sellBundle(id){
   const exChosen=exWon?suggestExPrizeChoices(id):[];
   if(exWon&&exChosen.length!==3)return alert('Er zijn onvoldoende beschikbare ex-kaarten voor deze prijs.');
   const exCards=exChosen.map(cid=>cardsCache.find(c=>String(c.id)===String(cid)));
-  if(exWon&&(exCards.some(c=>!c||availableQuantity(c)<1)||exChosen.some(cid=>chosen.includes(cid))))return alert('De 3 ex-kaarten zijn niet meer beschikbaar.');
+  if(exWon&&(new Set(exChosen).size!==3||exCards.some(c=>!c||availableQuantity(c)<1)||exChosen.some(cid=>chosen.includes(cid))))return alert('De 3 ex-kaarten zijn niet meer beschikbaar.');
   if(prizeWon&&chosen.length!==25)return alert('Er zijn onvoldoende geschikte bonuskaarten beschikbaar voor deze prijs.');
   const prizeCards=chosen.map(cid=>cardsCache.find(c=>String(c.id)===String(cid)));
   if(prizeWon&&(prizeCards.some(c=>!c)||new Set(chosen).size!==25||new Set(prizeCards.filter(Boolean).map(prizeUniqueKey)).size!==25||prizeCards.some(c=>availableQuantity(c)<1||normalizeSetName(stockFolderName(c))!==normalizeSetName(bundleSetName(bundle))||items.some(x=>{const b=cardsCache.find(card=>String(card.id)===String(x.card_id));return b&&prizeUniqueKey(b)===prizeUniqueKey(c)}))))return alert('De bonuskaarten zijn niet allemaal beschikbaar. Controleer de selectie.');
