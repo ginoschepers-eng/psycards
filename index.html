@@ -2419,7 +2419,7 @@ async function loadPrizeAwards(){
 function getPrizeAward(id){return prizeAwardsCache.get(String(id))||null;}
 
 const exPrizeKey=id=>'psycards_prize_ex3_'+String(id);
-function exPrizeChoices(id){try{return JSON.parse(localStorage.getItem(exPrizeKey(id))||'[]')}catch(e){return []}}
+function exPrizeChoices(id){try{const local=JSON.parse(localStorage.getItem(exPrizeKey(id))||'null');if(Array.isArray(local))return local.map(String);}catch(e){}return (getPrizeAward(id)?.preparedExIds||[]).map(String)}
 function eligibleExPrizeCards(id){
  const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle)return [];
  const excluded=new Set([...bundleItemsCache.filter(x=>String(x.bundle_id)===String(id)).map(x=>String(x.card_id)),...prizeChoices(id)]);
@@ -2439,7 +2439,17 @@ function renderExPrizeChoices(id){
  const host=document.getElementById('ex-prize-list-'+id);if(!host)return;
  const selected=suggestExPrizeChoices(id),eligible=eligibleExPrizeCards(id);
  host.innerHTML='<div class="scanbox"><b>🏆 Kies zelf 3 ex-kaarten</b><p><b>'+selected.length+'/3 geselecteerd</b></p><div class="muted">Vink drie beschikbare ex-kaarten uit dezelfde set aan. Deze worden pas bij verkoop afgeboekt.</div>'+
- (eligible.length?eligible.map(c=>'<label style="display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500"><input type="checkbox" style="width:22px;height:22px;flex-shrink:0" '+(selected.includes(String(c.id))?'checked':'')+' onchange="changeExPrizeChoice(\''+id+'\',\''+String(c.id)+'\',this.checked)"><span>'+escapeHtml(c.name)+' <small>(beschikbaar: '+availableQuantity(c)+')</small></span></label>').join(''):'<p>Geen beschikbare ex-kaarten gevonden in deze set.</p>')+'</div>';
+ (eligible.length?eligible.map(c=>'<label style="display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500"><input type="checkbox" style="width:22px;height:22px;flex-shrink:0" '+(selected.includes(String(c.id))?'checked':'')+' onchange="changeExPrizeChoice(\''+id+'\',\''+String(c.id)+'\',this.checked)"><span>'+escapeHtml(c.name)+' <small>(beschikbaar: '+availableQuantity(c)+')</small></span></label>').join(''):'<p>Geen beschikbare ex-kaarten gevonden in deze set.</p>')+'<button class="green" style="width:100%;margin-top:12px" onclick="saveExPrizeChoices(\''+id+'\')" '+(selected.length!==3?'disabled':'')+'>💾 3 ex-prijskaarten opslaan in Supabase</button><div id="ex-prize-status-'+id+'" class="scan-status"></div></div>';
+}
+async function saveExPrizeChoices(id){
+ const status=document.getElementById('ex-prize-status-'+id),ids=suggestExPrizeChoices(id);
+ if(ids.length!==3||new Set(ids).size!==3){alert('Kies precies 3 verschillende ex-kaarten.');return;}
+ const cards=ids.map(cid=>cardsCache.find(c=>String(c.id)===cid));
+ if(cards.some(c=>!c||availableQuantity(c)<1)){alert('Een gekozen kaart is niet meer beschikbaar.');return;}
+ try{const award={...(getPrizeAward(id)||{}),preparedExIds:ids,preparedExNames:cards.map(c=>c.name),preparedExAt:new Date().toISOString()};
+ const {error}=await cloud.from('bundle_prizes').upsert({bundle_id:id,award},{onConflict:'bundle_id'});if(error)throw error;
+ prizeAwardsCache.set(String(id),award);localStorage.removeItem(exPrizeKey(id));if(status)status.textContent='✓ De 3 gekozen ex-kaarten zijn opgeslagen voor deze bundel.';
+ }catch(e){if(status)status.textContent='Opslaan mislukt: '+e.message;}
 }
 function toggleExPrize(id,checked){const host=document.getElementById('ex-prize-list-'+id);if(!host)return;if(!checked){host.innerHTML='';return;}renderExPrizeChoices(id);}
 function prizeChoices(id){
@@ -2671,6 +2681,7 @@ async function sellBundle(id){
   const exWon=document.getElementById('ex-prize-won-'+id)?.checked===true;
   const chosen=prizeWon?prizeChoices(id):[];
   const exChosen=exWon?suggestExPrizeChoices(id):[];
+  if(exWon&&JSON.stringify(exChosen)!==JSON.stringify((getPrizeAward(id)?.preparedExIds||[]).map(String)))return alert('Sla de gekozen 3 ex-kaarten eerst op in Supabase.');
   if(exWon&&exChosen.length!==3)return alert('Selecteer eerst zelf precies 3 beschikbare ex-kaarten voor deze prijs.');
   const exCards=exChosen.map(cid=>cardsCache.find(c=>String(c.id)===String(cid)));
   if(exWon&&(new Set(exChosen).size!==3||exCards.some(c=>!c||availableQuantity(c)<1)||exChosen.some(cid=>chosen.includes(cid))||exCards.some(c=>!eligibleExPrizeCards(id).some(e=>String(e.id)===String(c.id)))))return alert('De 3 ex-kaarten zijn niet meer beschikbaar.');
