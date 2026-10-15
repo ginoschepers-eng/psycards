@@ -116,6 +116,7 @@
     .card-extra-info{margin-top:8px;padding:10px 11px;border:1px solid #dbe4ee;border-radius:11px;background:#f8fafc;font-size:12px;line-height:1.5}
     .card-extra-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;margin-top:7px}.card-extra-grid div{min-width:0}.card-extra-grid b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#667085}.card-extra-note{margin-top:7px;color:#667085;font-size:11px}
   </style>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <header>
@@ -2915,12 +2916,19 @@ async function exportCompleteExcel(button){
   cards.filter(c=>c.productType&&c.productType!=='Kaart'&&c.productType!=='kaart'&&availableQuantity(c)>0).forEach(c=>tallyOther.push([c.productType,c.name,availableQuantity(c),'','','']));
   for(let i=0;i<25;i++)tallyOther.push(['','','','','','']);
   sheets.unshift(['Tellijst kaarten',tallyCards],['Tellijst bundels',tallyBundles],['Tellijst overige',tallyOther]);
-  const xmlEsc=x=>String(x??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[ch]));
-  const xml='<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>'+
-   '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:x="urn:schemas-microsoft-com:office:excel">'+
-   '<Styles><Style ss:ID="header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1F4E78" ss:Pattern="Solid"/></Style><Style ss:ID="entry"><Interior ss:Color="#F2F6FA" ss:Pattern="Solid"/></Style></Styles>'+
-   sheets.map(([name,rows])=>'<Worksheet ss:Name="'+xmlEsc(name)+'"><Table>'+rows.map((row,i)=>'<Row ss:Height="20">'+row.map(v=>{const numeric=typeof v==='number'&&Number.isFinite(v);return '<Cell'+(i===0?' ss:StyleID="header"':'')+'><Data ss:Type="'+(numeric?'Number':'String')+'">'+xmlEsc(v)+'</Data></Cell>';}).join('')+'</Row>').join('')+'</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane><PageSetup><Layout x:Orientation="Landscape"/></PageSetup><FitToPage/><Print><FitWidth>1</FitWidth><FitHeight>0</FitHeight></Print></WorksheetOptions></Worksheet>').join('')+'</Workbook>';
-  const blob=new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Psycards_volledig_overzicht_'+new Date().toISOString().slice(0,10)+'.xml';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+  // Maak een echt Office 365-compatibel XLSX-werkboek (geen verouderde Excel-XML).
+  if(typeof XLSX==='undefined')throw Error('De Excel-module is nog niet geladen. Controleer de internetverbinding en vernieuw de pagina.');
+  const book=XLSX.utils.book_new();
+  sheets.forEach(([name,rows])=>{
+   const sheet=XLSX.utils.aoa_to_sheet(rows);
+   sheet['!cols']=rows[0].map((_,col)=>({wch:Math.min(38,Math.max(14,...rows.slice(0,80).map(r=>String(r[col]??'').length+2)))}));
+   sheet['!rows']=rows.map(()=>({hpt:20}));
+   sheet['!freeze']={xSplit:0,ySplit:1};
+   sheet['!margins']={left:0.25,right:0.25,top:0.4,bottom:0.4,header:0.2,footer:0.2};
+   sheet['!pageSetup']={orientation:'landscape',paperSize:9,fitToWidth:1,fitToHeight:0};
+   XLSX.utils.book_append_sheet(book,sheet,name);
+  });
+  XLSX.writeFile(book,'Psycards_volledig_overzicht_'+new Date().toISOString().slice(0,10)+'.xlsx',{compression:true});
  }catch(e){console.error(e);alert('Excel-overzicht maken mislukt: '+e.message);}
  finally{if(button){button.disabled=false;button.textContent=original;}}
 }
