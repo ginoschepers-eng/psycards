@@ -2452,6 +2452,30 @@ async function saveExPrizeChoices(id){
  }catch(e){if(status)status.textContent='Opslaan mislukt: '+e.message;}
 }
 function toggleExPrize(id,checked){const host=document.getElementById('ex-prize-list-'+id);if(!host)return;if(!checked){host.innerHTML='';return;}renderExPrizeChoices(id);}
+function toggleWinAction(id,enabled){
+ const options=document.getElementById('win-options-'+id);options.classList.toggle('hidden',!enabled);
+ if(enabled)changeWinType(id,document.getElementById('win-type-'+id).value);
+}
+function changeWinType(id,type){
+ const panel=document.getElementById('prize-panel-'+id),ex=document.getElementById('ex-prize-list-'+id),info=document.getElementById('win-selection-'+id);
+ panel.classList.add('hidden');ex.innerHTML='';info.innerHTML='';
+ if(type==='bonus25'){togglePrizePanel(id,true);info.textContent='De 25 kaarten worden uit dezelfde set gekozen. Sla eerst de kaartselectie op.';}
+ if(type==='ex3'){renderExPrizeChoices(id);info.textContent='Kies 3 ex-kaarten en sla de kaartselectie eerst op.';}
+ if(type==='mystery3')info.textContent='3 Mystery kaarten buiten de voorraad. Er worden geen kaarten afgeboekt.';
+}
+async function saveWinAction(id){
+ const enabled=document.getElementById('win-enabled-'+id)?.checked;
+ const type=enabled?document.getElementById('win-type-'+id)?.value:'';
+ const status=document.getElementById('win-status-'+id);
+ if(enabled&&!type)return alert('Kies eerst een prijs.');
+ const existing=getPrizeAward(id)||{};
+ if(type==='bonus25'&&(!Array.isArray(existing.preparedIds)||existing.preparedIds.length!==25))return alert('Sla eerst de 25 bonuskaarten op.');
+ if(type==='ex3'&&(!Array.isArray(existing.preparedExIds)||existing.preparedExIds.length!==3))return alert('Sla eerst de 3 gekozen ex-kaarten op.');
+ const award={...existing,prizeType:type||null,prizeSavedAt:new Date().toISOString()};
+ status.textContent='Opslaan…';
+ try{const {error}=await cloud.from('bundle_prizes').upsert({bundle_id:id,award},{onConflict:'bundle_id'});if(error)throw error;prizeAwardsCache.set(String(id),award);status.textContent=type?'✓ Winactie opgeslagen voor deze bundel.':'✓ Winactie uitgeschakeld.';}
+ catch(e){status.textContent='Opslaan mislukt: '+e.message;}
+}
 function prizeChoices(id){
  const award=getPrizeAward(id);
  // Supabase is de bron voor reeds opgeslagen prijzen, ook op een ander toestel.
@@ -2515,16 +2539,10 @@ function showBundleSet(set){
   const host=document.getElementById('bundleExisting'),matching=bundlesCache.filter(bundle=>bundleSetName(bundle)===set).slice().reverse(),encodedSet=encodeURIComponent(set).replace(/\'/g,'%27');
   host.innerHTML=`<nav><button class="light" onclick="renderBundles()">← Alle sets</button></nav><div class="card"><h2 style="margin:0">${escapeHtml(set)}</h2><div class="muted">${matching.length} aangemaakte bundel${matching.length===1?'':'s'}</div><label>Kaart zoeken in alle bundels van deze set</label><input id="bundleSearchInput" type="search" placeholder="Bijvoorbeeld Psyduck, 025 of bundel 12" oninput="searchCardsInBundles(this.value,decodeURIComponent('${encodedSet}'))"><div id="bundleSearchResults"></div></div>`+matching.map(bundle=>{
     let items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(bundle.id)),count=items.reduce((s,x)=>s+(+x.quantity||0),0),names=items.map(x=>({row:x,card:cardsCache.find(c=>String(c.id)===String(x.card_id))})).sort((a,b)=>bundleCardNumber(a.card||{})-bundleCardNumber(b.card||{})).map(({row,card})=>card?bundleCardLabel(card)+(row.quantity>1?' ×'+row.quantity:''):'Onbekende kaart').join('<br>'); if(!count&&['pitchblack','blackbolt'].includes(normalizeSetName(set))){const n=Number(String(bundle.name||'').match(/Bundel\s+(\d+)\s*$/i)?.[1]||0),spec=(typeof PITCH_BLACK_EXISTING_1_30!=='undefined'&&PITCH_BLACK_EXISTING_1_30[n])||[];if(spec.length){names=spec.map(x=>escapeHtml(x.number)+' – '+escapeHtml(x.name)+' – '+escapeHtml(x.variant)).join('<br>')+'<br><b>⚠️ Nog niet aan de voorraad gekoppeld</b>';}}
-    if(bundle.status==='Verkocht')return `<div class="card" id="bundle-card-${bundle.id}"><h3 style="margin:0">✅ ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · Verkocht voor <b>€${(+bundle.sold_price||0).toFixed(2)}</b></div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><div class="muted">Inkoopprijs bundel €0,50 (€0,25 kaarten + €0,25 materialen) · ${bundle.sold_date?new Date(bundle.sold_date).toLocaleDateString('nl-NL'):''}</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details>${(()=>{const award=getPrizeAward(bundle.id);return award?'<div class="scanbox"><b>🏆 Gewonnen prijzen</b>'+(award.names?.length?'<div><b>25 extra kaarten</b><br>'+award.names.map(escapeHtml).join('<br>')+'</div>':'')+(award.exNames?.length?'<div><b>3 ex-kaarten</b><br>'+award.exNames.map(escapeHtml).join('<br>')+'</div>':'')+'</div>':''})()}</div>`;
-    return `<div class="card" id="bundle-card-${bundle.id}"><h3 style="margin:0">🎁 ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · Vraagprijs <b>€${(+bundle.ask||0).toFixed(2)}</b></div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><div class="muted">Inkoopprijs bundel: €0,50 (€0,25 kaarten + €0,25 materialen)</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details><label class="gold" style="display:block;border-radius:12px;margin-top:10px;font-size:14px;padding:12px">🎉 Winactie: <input type="checkbox" style="width:22px;height:22px;vertical-align:middle" ${hasSavedPrizeChoices(bundle.id)?'checked':''} onchange="togglePrizePanel('${bundle.id}',this.checked)"> ${hasSavedPrizeChoices(bundle.id)?'25 bonuskaarten opgeslagen ✓':'25 bonuskaarten toevoegen'}</label><div id="prize-panel-${bundle.id}" class="hidden"></div><label style="display:flex;gap:9px;align-items:center;font-size:14px"><input id="prize-won-${bundle.id}" type="checkbox" style="width:22px;height:22px"> 🏆 Koper heeft 25 extra kaarten gewonnen (bij verkoop afboeken)</label><label style="display:flex;gap:9px;align-items:center;font-size:14px"><input id="ex-prize-won-${bundle.id}" type="checkbox" style="width:22px;height:22px" onchange="toggleExPrize('${bundle.id}',this.checked)"> 🏆 Koper heeft 3 ex-kaarten gewonnen (bij verkoop afboeken)</label><div id="ex-prize-list-${bundle.id}"></div><label>Verkocht voor €</label><input id="bundleSalePrice-${bundle.id}" type="number" step="0.01" inputmode="decimal" value="${+bundle.ask||0}"><label>Betaalwijze</label><select id="bundlePayment-${bundle.id}"><option>Contant</option><option>Betaalverzoek</option></select><button class="green" style="width:100%;margin-top:12px" onclick="sellBundle('${bundle.id}')">✅ Bundel verkocht</button><button class="danger" style="width:100%;margin-top:8px" onclick="releaseBundle('${bundle.id}')">Bundel opheffen</button></div>`;
+    if(bundle.status==='Verkocht')return `<div class="card" id="bundle-card-${bundle.id}"><h3 style="margin:0">✅ ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · Verkocht voor <b>€${(+bundle.sold_price||0).toFixed(2)}</b></div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><div class="muted">Inkoopprijs bundel €0,50 (€0,25 kaarten + €0,25 materialen) · ${bundle.sold_date?new Date(bundle.sold_date).toLocaleDateString('nl-NL'):''}</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details>${(()=>{const award=getPrizeAward(bundle.id);return award?'<div class="scanbox"><b>🏆 Gewonnen prijzen</b>'+(award.names?.length?'<div><b>25 extra kaarten</b><br>'+award.names.map(escapeHtml).join('<br>')+'</div>':'')+(award.exNames?.length?'<div><b>3 ex-kaarten</b><br>'+award.exNames.map(escapeHtml).join('<br>')+'</div>':'')+(award.mysteryWon?'<div><b>3 Mystery kaarten</b> (buiten voorraad)</div>':'')+'</div>':''})()}</div>`;
+    return `<div class="card" id="bundle-card-${bundle.id}"><h3 style="margin:0">🎁 ${escapeHtml(bundle.name)}</h3><div>${count} kaarten · Vraagprijs <b>€${(+bundle.ask||0).toFixed(2)}</b></div><div id="bundleMarket-${bundle.id}" class="market-price" style="margin-top:8px">Cardmarket-prijs laden…</div><div class="muted">Inkoopprijs bundel: €0,50 (€0,25 kaarten + €0,25 materialen)</div><details style="margin-top:8px"><summary>Bekijk inhoud</summary><div class="muted" style="margin-top:7px">${names}</div></details><div class="gold" style="border-radius:12px;margin-top:10px;padding:12px"><label style="display:flex;align-items:center;gap:10px;margin:0"><input type="checkbox" id="win-enabled-${bundle.id}" style="width:22px;height:22px" ${getPrizeAward(bundle.id)?.prizeType?'checked':''} onchange="toggleWinAction('${bundle.id}',this.checked)">🎉 Winactie toevoegen</label><div id="win-options-${bundle.id}" class="${getPrizeAward(bundle.id)?.prizeType?'':'hidden'}"><label>Kies de prijs</label><select id="win-type-${bundle.id}" onchange="changeWinType('${bundle.id}',this.value)"><option value="">Kies een prijs</option><option value="bonus25" ${getPrizeAward(bundle.id)?.prizeType==='bonus25'?'selected':''}>25 extra kaarten</option><option value="ex3" ${getPrizeAward(bundle.id)?.prizeType==='ex3'?'selected':''}>3 ex-kaarten</option><option value="mystery3" ${getPrizeAward(bundle.id)?.prizeType==='mystery3'?'selected':''}>3 Mystery kaarten</option></select><div id="win-selection-${bundle.id}"></div><div id="win-status-${bundle.id}" class="scan-status"></div><button class="green" style="width:100%;margin-top:10px;padding:12px;font-size:15px" onclick="saveWinAction('${bundle.id}')">💾 Winactie opslaan</button></div></div><div id="prize-panel-${bundle.id}" class="hidden"></div><div id="ex-prize-list-${bundle.id}"></div><label>Verkocht voor €</label><input id="bundleSalePrice-${bundle.id}" type="number" step="0.01" inputmode="decimal" value="${+bundle.ask||0}"><label>Betaalwijze</label><select id="bundlePayment-${bundle.id}"><option>Contant</option><option>Betaalverzoek</option></select><button class="green" style="width:100%;margin-top:12px" onclick="sellBundle('${bundle.id}')">✅ Bundel verkocht</button><button class="danger" style="width:100%;margin-top:8px" onclick="releaseBundle('${bundle.id}')">Bundel opheffen</button></div>`;
   }).join('');
-  // Toon de opgeslagen selectie direct bij het openen van de set/bundel.
-  matching.forEach(bundle=>{
-    if(bundle.status!=='Verkocht'&&hasSavedPrizeChoices(bundle.id)){
-      const panel=document.getElementById('prize-panel-'+bundle.id);
-      if(panel){panel.classList.remove('hidden');renderPrizeChoices(String(bundle.id));}
-    }
-  });
+  matching.forEach(bundle=>{if(bundle.status!=='Verkocht'&&getPrizeAward(bundle.id)?.prizeType)changeWinType(String(bundle.id),getPrizeAward(bundle.id).prizeType);});
   updateExistingBundleMarketValues(matching);
 }
 async function bundleCardmarketValue(bundle){
@@ -2677,8 +2695,12 @@ async function sellBundle(id){
   if(!bundle||bundle.status==='Verkocht')return alert('Deze bundel is niet beschikbaar voor verkoop.');
   const items=bundleItemsCache.filter(x=>String(x.bundle_id)===String(id));
   for(const item of items){const card=cardsCache.find(c=>String(c.id)===String(item.card_id));if(card){const check=collectorCheckCard(card);if(!check.ok)return alert('Bundelverkoop geblokkeerd.\n\n'+check.message+'\n\nWerk eerst de eigen verzameling bij in TCG Collector.');}}
-  const prizeWon=document.getElementById('prize-won-'+id)?.checked===true;
-  const exWon=document.getElementById('ex-prize-won-'+id)?.checked===true;
+  const configured=getPrizeAward(id)?.prizeType||'';
+  const selectedType=document.getElementById('win-enabled-'+id)?.checked?document.getElementById('win-type-'+id)?.value:'';
+  if(selectedType!==configured)return alert('Sla eerst de gekozen winactie op voordat je de bundel verkoopt.');
+  const prizeWon=configured==='bonus25';
+  const exWon=configured==='ex3';
+  const mysteryWon=configured==='mystery3';
   const chosen=prizeWon?prizeChoices(id):[];
   const exChosen=exWon?suggestExPrizeChoices(id):[];
   if(exWon&&JSON.stringify(exChosen)!==JSON.stringify((getPrizeAward(id)?.preparedExIds||[]).map(String)))return alert('Sla de gekozen 3 ex-kaarten eerst op in Supabase.');
@@ -2690,7 +2712,7 @@ async function sellBundle(id){
   if(prizeWon&&(prizeCards.some(c=>!c)||new Set(chosen).size!==25||new Set(prizeCards.filter(Boolean).map(prizeUniqueKey)).size!==25||prizeCards.some(c=>availableQuantity(c)<1||normalizeSetName(stockFolderName(c))!==normalizeSetName(bundleSetName(bundle))||!isRegularBonusCard(c)||items.some(x=>{const b=cardsCache.find(card=>String(card.id)===String(x.card_id));return b&&prizeUniqueKey(b)===prizeUniqueKey(c)}))))return alert('De bonuskaarten zijn niet allemaal beschikbaar. Controleer de selectie.');
   if(!confirm('Deze bundel voor €'+price.toFixed(2)+' als verkocht registreren?'+(prizeWon?'\\nInclusief 25 bonuskaarten.':'')+(exWon?'\\nInclusief 3 ex-kaarten.':'')))return;
   // Prijsregistratie vooraf centraal bewaren; als dat niet lukt, verkoop blokkeren.
-  const award={...(getPrizeAward(id)||{}),names:prizeCards.map(c=>c.name),ids:chosen,exNames:exCards.map(c=>c.name),exIds:exChosen,date:new Date().toISOString()};
+  const award={...(getPrizeAward(id)||{}),names:prizeCards.map(c=>c.name),ids:chosen,exNames:exCards.map(c=>c.name),exIds:exChosen,mysteryWon,date:new Date().toISOString()};
   const {error:awardError}=await cloud.from('bundle_prizes').upsert({bundle_id:id,award},{onConflict:'bundle_id'});
   if(awardError)return alert('Prijsregistratie in Supabase mislukt. Verkoop niet verwerkt. Voer eerst psycards-prijzen-setup.sql uit. '+awardError.message);
   prizeAwardsCache.set(String(id),award);
