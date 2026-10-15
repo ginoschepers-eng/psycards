@@ -143,7 +143,9 @@
 
     <button class="quick-action" style="width:100%;margin-top:12px" onclick="show('calculator')"><span class="ico">🧮</span><span>Prijscalculator <small>Bereken direct 80% en 70%</small></span></button>
 
-    <div class="app-section-title">Voorraad</div>
+    <button class="green" style="width:100%;margin-top:12px;padding:14px;font-size:16px" onclick="exportCompleteExcel(this)">📊 Volledig Excel-overzicht downloaden</button>
+
+     <div class="app-section-title">Voorraad</div>
     <div id="homeStats" class="stock-summary"></div>
 
     <div class="app-section-title">Beheer</div>
@@ -472,7 +474,7 @@
   </section>
 
   <section id="stock" class="hidden">
-    <nav><button class="light" onclick="goBackInApp()">← Terug</button><button class="light" onclick="exportCSV()">⬇️ Export Excel/CSV</button></nav>
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button><button class="light" onclick="exportCompleteExcel(this)">📊 Volledig Excel-overzicht</button><button class="light" onclick="exportCSV()">⬇️ Export CSV</button></nav>
     <div id="stockList"></div>
   </section>
 
@@ -1830,6 +1832,7 @@ async function sellCard(){
     const share=index===items.length-1?totalCents-assigned:Math.round(totalCents*(weightTotal>0?item.weight/weightTotal:item.quantity/unitTotal));assigned+=share;
     item.card.soldQuantity+=item.quantity;item.card.soldPrice+=share/100;item.card.status=item.card.soldQuantity>=item.card.quantity?'Verkocht':'Op voorraad';item.card.payment=payment.value;item.card.soldDate=timestamp;
   });
+  items.forEach(item=>{const key='psycards-sale-history-'+item.card.id;const h=JSON.parse(localStorage.getItem(key)||'[]');h.push({quantity:item.quantity,priceCents:Math.round(totalCents*(item.weight/(weightTotal||1))),date:timestamp});localStorage.setItem(key,JSON.stringify(h));});
   const rows=items.map(item=>({id:item.card.id,...toDb(item.card)})),{error}=await cloud.from('cards').upsert(rows,{onConflict:'id'});if(error)return alert('De gezamenlijke verkoop is niet opgeslagen: '+error.message);
   const totalCost=items.reduce((sum,item)=>sum+(item.card.buy*item.quantity),0),cardCount=items.reduce((sum,item)=>sum+item.quantity,0);
   recordFairTransaction({type:'cards',description:items.map(x=>x.quantity+'× '+splitStoredName(x.card.name).name).join(', '),amount:totalPrice,cost:totalCost,quantity:cardCount,payment:payment.value,channel:document.getElementById('saleChannel')?.value||'',note:document.getElementById('saleNote')?.value||'',cardmarketMinimum:minimumPrice,belowCardmarket:belowCardmarket,belowCardmarketAmount:belowCardmarket?minimumPrice-totalPrice:0});
@@ -1839,11 +1842,11 @@ async function renderSold(){
   const sold=(await getAll()).filter(c=>c.soldQuantity>0).sort((a,b)=>String(b.soldDate).localeCompare(String(a.soldDate)));await loadBundleData();const soldBundles=bundlesCache.filter(b=>b.status==='Verkocht');
   const cards=sold.filter(c=>c.productType==='Pokémonkaart'),products=sold.filter(c=>c.productType!=='Pokémonkaart');
   if(!sold.length&&!soldBundles.length){soldList.innerHTML='<div class="card">Nog geen verkochte items.</div>';return;}
-  const itemHtml=c=>`<div class="card item">${c.photo?`<img class="thumb" src="${c.photo}" onclick="openPhotoViewer(this.src)" style="cursor:zoom-in">`:'<div class="thumb"></div>'}<div><b>${escapeHtml(c.name)}</b><div class="muted">${escapeHtml(c.productType)}${c.productType==='Pokémonkaart'?' · '+escapeHtml(c.condition)+' · '+escapeHtml(c.variant||'Normaal'):''}</div><div><b>${c.soldQuantity}× verkocht</b></div><div>Totale verkoop: <span class="money">€${c.soldPrice.toFixed(2)}</span></div><div class="muted">${c.soldDate?'Laatste verkoop: '+new Date(c.soldDate).toLocaleDateString('nl-NL'):''}</div></div></div>`;
+  const itemHtml=c=>`<div class="card item">${c.photo?`<img class="thumb" src="${c.photo}" onclick="openPhotoViewer(this.src)" style="cursor:zoom-in">`:'<div class="thumb"></div>'}<div><b>${escapeHtml(c.name)}</b><div class="muted">${escapeHtml(c.productType)}${c.productType==='Pokémonkaart'?' · '+escapeHtml(c.condition)+' · '+escapeHtml(c.variant||'Normaal'):''}</div><div><b>${c.soldQuantity}× verkocht</b></div><div>Totale verkoop: <span class="money">€${c.soldPrice.toFixed(2)}</span></div><div class="muted">${c.soldDate?'Laatste verkoop: '+new Date(c.soldDate).toLocaleDateString('nl-NL'):''}</div><button class="light" style="padding:9px;font-size:13px;margin-top:8px" onclick="undoCardSale('${c.id}')">↩ Verkoop ongedaan maken</button></div></div>`;
   soldList.innerHTML='<div class="card"><h2 style="margin:0 0 5px">Verkochte items</h2><div class="muted">Kaarten, bundels en losse Pokémon-producten worden hieronder apart vermeld.</div></div>'+
     (products.length?'<div class="card"><h3 style="margin:0">🧸 Losse producten verkocht</h3></div>'+products.map(itemHtml).join(''):'')+
     (cards.length?'<div class="card"><h3 style="margin:0">🃏 Losse kaarten verkocht</h3></div>'+cards.map(itemHtml).join(''):'')+
-    (soldBundles.length?'<div class="card"><h3 style="margin:0">🎁 Bundels verkocht</h3></div>'+soldBundles.map(b=>`<div class="card"><b>🎁 ${escapeHtml(b.name)}</b><div>25 kaarten als bundel verkocht</div><div>Totale verkoop: <span class="money">€${(+b.sold_price||0).toFixed(2)}</span></div><div class="muted">${b.sold_date?new Date(b.sold_date).toLocaleDateString('nl-NL'):''} · ${escapeHtml(b.payment||'')}</div></div>`).join(''):'');
+    (soldBundles.length?'<div class="card"><h3 style="margin:0">🎁 Bundels verkocht</h3></div>'+soldBundles.map(b=>`<div class="card"><b>🎁 ${escapeHtml(b.name)}</b><div>25 kaarten als bundel verkocht</div><div>Totale verkoop: <span class="money">€${(+b.sold_price||0).toFixed(2)}</span></div><div class="muted">${b.sold_date?new Date(b.sold_date).toLocaleDateString('nl-NL'):''} · ${escapeHtml(b.payment||'')}</div><button class="light" style="padding:9px;font-size:13px;margin-top:8px" onclick="undoBundleSale('${b.id}')">↩ Verkoop ongedaan maken</button></div>`).join(''):'');
 }
 function openValueCheck(){
  show('valuecheck');valueSet.value='';valueNumber.value='';valueResult.innerHTML='';valueSetSuggestions.innerHTML='';valueSetSuggestions.classList.add('hidden');valueSpecialCards.innerHTML='';valueSpecialCards.classList.add('hidden');setTimeout(()=>valueSet.focus(),50);
@@ -2731,6 +2734,41 @@ async function sellBundle(id){
   }
   const {error}=await cloud.from('bundles').update({status:'Verkocht',sold_price:price,payment,sold_date:new Date().toISOString()}).eq('id',id);if(error){for(const prev of changed)await cloud.from('cards').update({sold_quantity:prev.original}).eq('id',prev.id);await cloud.from('bundle_prizes').delete().eq('bundle_id',id);prizeAwardsCache.delete(String(id));return alert('Verkoop opslaan is niet gelukt: '+error.message)}localStorage.removeItem(prizeKey(id));await loadCards(true);recordFairTransaction({type:'bundle',description:bundle.name,amount:price,cost:0.50,quantity:1,payment});await loadBundleData(true);await renderBundles();
 }
+
+async function undoBundleSale(id){
+ await Promise.all([loadCards(true),loadBundleData(true)]);
+ const bundle=bundlesCache.find(b=>String(b.id)===String(id));
+ if(!bundle||bundle.status!=='Verkocht')return alert('Deze bundel is niet als verkocht geregistreerd.');
+ const award=getPrizeAward(id)||{},ids=award.prizeType==='bonus25'?(award.ids||[]):award.prizeType==='ex3'?(award.exIds||[]):[];
+ if(!confirm('Verkoop van '+bundle.name+' ongedaan maken? De bundel wordt weer beschikbaar en gewonnen voorraadkaarten worden teruggeboekt.'))return;
+ const counts={};for(const cid of ids)counts[String(cid)]=(counts[String(cid)]||0)+1;
+ const changed=[];
+ for(const [cid,qty] of Object.entries(counts)){
+  const card=cardsCache.find(c=>String(c.id)===cid);
+  if(!card||(+card.soldQuantity||0)<qty){alert('Terugboeking gestopt: prijskaart ontbreekt of het verkochte aantal is inmiddels gewijzigd.');return;}
+  const original=+card.soldQuantity||0;
+  const {error}=await cloud.from('cards').update({sold_quantity:original-qty}).eq('id',cid).eq('sold_quantity',original);
+  if(error){for(const x of changed)await cloud.from('cards').update({sold_quantity:x.original}).eq('id',x.id);return alert('Terugboeking mislukt: '+error.message);}
+  changed.push({id:cid,original});
+ }
+ const {error}=await cloud.from('bundles').update({status:'Samengesteld',sold_price:null,sold_date:null,payment:null}).eq('id',id).eq('status','Verkocht');
+ if(error){for(const x of changed)await cloud.from('cards').update({sold_quantity:x.original}).eq('id',x.id);return alert('Bundel herstellen mislukt: '+error.message);}
+ await Promise.all([loadCards(true),loadBundleData(true)]);await renderSold();alert('Bundelverkoop ongedaan gemaakt. Prijskeuze blijft bewaard.');
+}
+async function undoCardSale(id){
+ await loadCards(true);const card=cardsCache.find(c=>String(c.id)===String(id));
+ if(!card||!card.soldQuantity)return alert('Geen verkochte kaart gevonden.');
+ const key='psycards-sale-history-'+id,history=JSON.parse(localStorage.getItem(key)||'[]');
+ if(!history.length)return alert('Voor deze eerdere verkoop ontbreekt een afzonderlijke verkoopregistratie. Automatisch terugdraaien is niet veilig.');
+ const last=history[history.length-1];
+ if(last.quantity>card.soldQuantity)return alert('Het verkochte aantal is inmiddels gewijzigd.');
+ if(!confirm('Laatste verkoop van '+last.quantity+'× '+card.name+' ongedaan maken?'))return;
+ const price=Math.min(card.soldPrice||0,last.priceCents/100);
+ const {error}=await cloud.from('cards').update({sold_quantity:card.soldQuantity-last.quantity,sold_price:Math.max(0,(card.soldPrice||0)-price),status:card.soldQuantity-last.quantity?'Op voorraad':'Op voorraad'}).eq('id',id);
+ if(error)return alert('Herstellen mislukt: '+error.message);
+ history.pop();localStorage.setItem(key,JSON.stringify(history));await loadCards(true);await renderSold();alert('Laatste kaartverkoop teruggedraaid.');
+}
+
 async function releaseBundle(id){if(!confirm('Bundel opheffen? De 25 kaarten komen weer terug in de losse voorraad.'))return;const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle||bundle.status==='Verkocht')return alert('Een verkochte bundel kan niet worden opgeheven.');const {error}=await cloud.from('bundles').delete().eq('id',id);if(error)return alert('Bundel opheffen is niet gelukt: '+error.message);await loadBundleData(true);await renderBundles();}
 function openPhotoViewer(src){if(!src)return;document.getElementById('viewerImage').src=src;document.getElementById('photoViewer').classList.remove('hidden');}
 function closePhotoViewer(){document.getElementById('photoViewer').classList.add('hidden');document.getElementById('viewerImage').removeAttribute('src');}
@@ -2833,6 +2871,60 @@ function bookkeepingTotals(cutoff){const r=getBookkeepingEntries().filter(x=>!cu
 function setBookkeepingDestination(id,destination){const rows=getBookkeepingEntries();const x=rows.find(v=>v.id===id);if(!x)return;if(!destination){const box=document.getElementById('destinationChoice_'+id);if(box){box.classList.toggle('hidden');return;}}if(!['bank','cash'].includes(destination))return;x.destination=destination;setBookkeepingEntries(rows);renderBookkeeping();}
 function renderBookkeeping(){const rows=getBookkeepingEntries().sort((a,b)=>String(b.date).localeCompare(String(a.date))),t=bookkeepingTotals();bookkeepingStats.innerHTML=`<div class="stat">Bankcorrecties<b>${euro(t.bank)}</b></div><div class="stat">Kascorrecties<b>${euro(t.cash)}</b></div><div class="stat">Debiteuren open<b>${euro(t.debtors)}</b></div><div class="stat">Crediteuren open<b>${euro(t.creditors)}</b></div><div class="stat">BTW saldo<b>${euro(t.vatReceivable-t.vatPayable)}</b></div><div class="stat">Schulden<b>${euro(t.debts)}</b></div>`;vatStats.innerHTML=`<div class="stat">Te vorderen<b>${euro(t.vatReceivable)}</b></div><div class="stat">Te betalen<b>${euro(t.vatPayable)}</b></div><div class="stat">Saldo<b>${euro(t.vatReceivable-t.vatPayable)}</b></div>`;bookkeepingList.innerHTML=rows.length?rows.map(x=>`<div class="sale-cart-item"><div><b>${escapeHtml(bkLabel(x.type))}</b><div class="muted">${escapeHtml(x.date)} · ${escapeHtml(x.description)}${x.destination?' · '+(x.destination==='bank'?'🏦 Bank':'💶 Kas'):''}${['debtor','creditor'].includes(x.type)?' · '+(x.status==='open'?'OPEN':'AFGEHANDELD'):''}</div></div><div style="text-align:right"><b>${euro(x.amount)}</b>${['debtor','creditor'].includes(x.type)?`<button class="light" style="display:block;padding:5px 7px;margin-top:4px" onclick="toggleBookkeepingStatus(${x.id})">${x.status==='open'?'Afhandelen':'Heropenen'}</button>`:''}${['private_in','private_out'].includes(x.type)?`<div id="destinationChoice_${x.id}" style="display:flex;gap:5px;margin-top:5px"><button class="${x.destination==='bank'?'primary':'light'}" style="padding:5px 8px" onclick="setBookkeepingDestination(${x.id},'bank')">🏦 Bank</button><button class="${x.destination==='cash'?'primary':'light'}" style="padding:5px 8px" onclick="setBookkeepingDestination(${x.id},'cash')">💶 Kas</button></div>`:''}<button class="danger" style="display:block;padding:5px 7px;margin-top:4px" onclick="deleteBookkeepingEntry(${x.id})">×</button></div></div>`).join(''):'<div class="muted">Nog geen aanvullende financiële posten.</div>';}
 function exportBookkeepingCSV(){const rows=[['Datum','Soort','Omschrijving','Bedrag','Bank/Kas','Status','BTW-tarief'],...getBookkeepingEntries().map(x=>[x.date,bkLabel(x.type),x.description,x.amount,x.destination==='bank'?'Bank':x.destination==='cash'?'Kas':'',x.status,x.vatRate||''])];downloadCsvFile('Psycards_boekhouding_'+new Date().toISOString().slice(0,10)+'.csv',rows);}
+
+async function exportCompleteExcel(button){
+ const original=button?.textContent;if(button){button.disabled=true;button.textContent='Overzicht samenstellen…';}
+ try{
+  if(navigator.onLine){await Promise.all([loadCards(true),loadBundleData(true)]);}
+  else {await Promise.all([getAll(),loadBundleData()]);}
+  await loadPrizeAwards();
+  if(!bundleTablesReady)throw Error('Bundelgegevens konden niet worden geladen.');
+  const cards=cardsCache,cardMap=new Map(cards.map(c=>[String(c.id),c]));
+  const prizeLabel=a=>a?.prizeType==='bonus25'?'25 extra kaarten':a?.prizeType==='ex3'?'3 ex-kaarten':a?.prizeType==='mystery3'?'3 Mystery kaarten':(a?.prizeType||'Geen');
+  const sheets=[];
+  const stock=[['Set','Kaartnummer','Kaartnaam / product','Uitvoering','Conditie','Totaal ingevoerd','Los verkocht','In bundels gereserveerd','Los beschikbaar','Inkoop per stuk €','Vraagprijs per stuk €','Status','ID']];
+  cards.forEach(c=>{const parts=splitStoredName(c.name);stock.push([stockFolderName(c)||c.productType,parts.number||'',parts.name||c.name,c.variant||'',c.condition,c.quantity,c.soldQuantity,allocatedQuantity(c.id),availableQuantity(c),c.buy,c.ask,c.status,String(c.id)]);});
+  sheets.push(['Alle kaarten',stock]);
+  const bundles=[['Set','Bundel','Status','Aantal kaarten','Verkoopprijs €','Werkelijk verkocht €','Verkoopdatum','Betaalwijze','Winactie','Bundel ID']];
+  const contents=[['Set','Bundel','Kaartnummer','Kaartnaam','Uitvoering','Aantal','Kaart ID']];
+  const prizes=[['Set','Bundel','Status','Prijssoort','Kaartnummer','Kaartnaam','Aantal','Afboeken bij verkoop','Kaart ID']];
+  const sold=[['Type','Set','Naam','Aantal verkocht','Omzet €','Laatste verkoop','Betaalwijze','ID']];
+  bundlesCache.forEach(b=>{
+   const items=bundleItemsCache.filter(i=>String(i.bundle_id)===String(b.id)),a=getPrizeAward(b.id)||{},set=bundleSetName(b);
+   bundles.push([set,b.name,b.status,items.reduce((n,i)=>n+(+i.quantity||0),0),+b.ask||0,+b.sold_price||0,b.sold_date||'',b.payment||'',prizeLabel(a),String(b.id)]);
+   items.forEach(i=>{const c=cardMap.get(String(i.card_id)),p=c?splitStoredName(c.name):{};contents.push([set,b.name,p.number||'',p.name||c?.name||'Kaart niet gevonden',c?.variant||'',+i.quantity||0,String(i.card_id)]);});
+   if(b.status==='Verkocht')sold.push(['Bundel',set,b.name,1,+b.sold_price||0,b.sold_date||'',b.payment||'',String(b.id)]);
+   const ids=a.prizeType==='bonus25'?(a.preparedIds||a.ids||[]):a.prizeType==='ex3'?(a.preparedExIds||a.exIds||[]):[];
+   if(ids.length){const counts=new Map();ids.forEach(id=>counts.set(String(id),(counts.get(String(id))||0)+1));counts.forEach((qty,id)=>{const c=cardMap.get(id),p=c?splitStoredName(c.name):{};prizes.push([set,b.name,b.status,prizeLabel(a),p.number||'',p.name||c?.name||'Kaart niet gevonden',qty,'Ja',id]);});}
+   else prizes.push([set,b.name,b.status,prizeLabel(a),'','',a.prizeType==='mystery3'?3:0,a.prizeType==='mystery3'?'Nee':'', '']);
+  });
+  cards.filter(c=>c.soldQuantity>0).forEach(c=>sold.push([c.productType,stockFolderName(c),c.name,c.soldQuantity,c.soldPrice,c.soldDate,c.payment,String(c.id)]));
+  sheets.push(['Alle bundels',bundles],['Bundelinhoud',contents],['Verkocht',sold],['Winacties',prizes]);
+  // Printbare beurstellijsten: handmatig verkopen invullen, inclusief lege regels voor niet-geregistreerde producten.
+  const tallyCards=[['Set','Kaartnummer','Product / kaart','Variant','Aanwezig bij start','Al verkocht','Tijdens beurs verkocht (invullen)','Resterend na beurs (invullen)','Opmerking']];
+  cards.filter(c=>availableQuantity(c)>0).sort((a,b)=>(stockFolderName(a)||'').localeCompare(stockFolderName(b)||'')||a.name.localeCompare(b.name)).forEach(c=>{
+   const p=splitStoredName(c.name);tallyCards.push([stockFolderName(c)||c.productType,p.number||'',p.name||c.name,c.variant||'',availableQuantity(c),+c.soldQuantity||0,'','','']);
+  });
+  for(let i=0;i<30;i++)tallyCards.push(['','','','','','','','','']);
+  const tallyBundles=[['Set','Bundel','Aantal kaarten','Beschikbaar bij start','Tijdens beurs verkocht (invullen)','Resterend (invullen)','Winactie','Opmerking']];
+  bundlesCache.filter(b=>b.status!=='Verkocht').sort((a,b)=>bundleSetName(a).localeCompare(bundleSetName(b))||a.name.localeCompare(b.name)).forEach(b=>{
+   const a=getPrizeAward(b.id)||{};tallyBundles.push([bundleSetName(b),b.name,bundleItemsCache.filter(i=>String(i.bundle_id)===String(b.id)).reduce((n,i)=>n+(+i.quantity||0),0),1,'','',prizeLabel(a),'']);
+  });
+  for(let i=0;i<20;i++)tallyBundles.push(['','','','','','','','']);
+  const tallyOther=[['Product','Omschrijving','Aanwezig bij start','Tijdens beurs verkocht (invullen)','Resterend (invullen)','Opmerking']];
+  cards.filter(c=>c.productType&&c.productType!=='Kaart'&&c.productType!=='kaart'&&availableQuantity(c)>0).forEach(c=>tallyOther.push([c.productType,c.name,availableQuantity(c),'','','']));
+  for(let i=0;i<25;i++)tallyOther.push(['','','','','','']);
+  sheets.unshift(['Tellijst kaarten',tallyCards],['Tellijst bundels',tallyBundles],['Tellijst overige',tallyOther]);
+  const xmlEsc=x=>String(x??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[ch]));
+  const xml='<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>'+
+   '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:x="urn:schemas-microsoft-com:office:excel">'+
+   '<Styles><Style ss:ID="header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1F4E78" ss:Pattern="Solid"/></Style><Style ss:ID="entry"><Interior ss:Color="#F2F6FA" ss:Pattern="Solid"/></Style></Styles>'+
+   sheets.map(([name,rows])=>'<Worksheet ss:Name="'+xmlEsc(name)+'"><Table>'+rows.map((row,i)=>'<Row ss:Height="20">'+row.map(v=>{const numeric=typeof v==='number'&&Number.isFinite(v);return '<Cell'+(i===0?' ss:StyleID="header"':'')+'><Data ss:Type="'+(numeric?'Number':'String')+'">'+xmlEsc(v)+'</Data></Cell>';}).join('')+'</Row>').join('')+'</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane><PageSetup><Layout x:Orientation="Landscape"/></PageSetup><FitToPage/><Print><FitWidth>1</FitWidth><FitHeight>0</FitHeight></Print></WorksheetOptions></Worksheet>').join('')+'</Workbook>';
+  const blob=new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Psycards_volledig_overzicht_'+new Date().toISOString().slice(0,10)+'.xml';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+ }catch(e){console.error(e);alert('Excel-overzicht maken mislukt: '+e.message);}
+ finally{if(button){button.disabled=false;button.textContent=original;}}
+}
+
 async function exportCSV(){
   const cards=await getAll();await loadBundleData();
   const rows=[['ID','Productsoort','Naam/omschrijving','Conditie','Kaartsoort','Aantal totaal','Aantal verkocht','In bundels','Los beschikbaar','Inkoop per stuk','Vraagprijs per stuk','Minimum per stuk','Status','Totale omzet','Betaalwijze','Datum laatste verkoop']];
