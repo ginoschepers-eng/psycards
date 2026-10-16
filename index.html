@@ -2778,6 +2778,8 @@ async function repairTemporalBundle25(id){
  const blob=new Blob([JSON.stringify(snapshot,null,2)],{type:'application/json'});
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='psycards-bundel25-backup-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
  if(!confirm('Is de JSON-back-up gedownload? Alleen doorgaan als vóór deze test GEEN echte losse kaarten verkocht waren. Alleen de '+affected.length+' nog foutief verkochte kaarten worden van 1 naar 0 gezet; de totale kaartvoorraad, bundel en winactie blijven behouden.'))return;
+ const verification=prompt('VEILIGHEIDSCONTROLE: typ exact TEST BUNDEL 25 om te bevestigen dat dit uitsluitend testverkopen zijn. Annuleren verandert niets.');
+ if(verification!=='TEST BUNDEL 25')return alert('Herstel geannuleerd. Geen gegevens gewijzigd.');
  if(!confirm('Definitieve bevestiging: herstel uitsluitend deze '+affected.length+' testregistraties?'))return;
  host.textContent='Herstel bezig. Sluit de app niet af…';
  const changed=[];
@@ -2826,17 +2828,23 @@ async function undoBundleSale(id){
  await Promise.all([loadCards(true),loadBundleData(true)]);await renderSold();alert('Bundelverkoop ongedaan gemaakt. Prijskeuze blijft bewaard.');
 }
 async function undoCardSale(id){
- await loadCards(true);const card=cardsCache.find(c=>String(c.id)===String(id));
+ await loadCards(true);
+ const card=cardsCache.find(c=>String(c.id)===String(id));
  if(!card||!card.soldQuantity)return alert('Geen verkochte kaart gevonden.');
- const key='psycards-sale-history-'+id,history=JSON.parse(localStorage.getItem(key)||'[]');
- if(!history.length)return alert('Voor deze eerdere verkoop ontbreekt een afzonderlijke verkoopregistratie. Automatisch terugdraaien is niet veilig.');
+ const key='psycards-sale-history-'+id;
+ let history;
+ try{history=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){return alert('Verkoopgeschiedenis is beschadigd. Geen wijzigingen uitgevoerd.');}
+ if(!Array.isArray(history)||!history.length)return alert('Voor deze eerdere verkoop ontbreekt een afzonderlijke verkoopregistratie. Automatisch terugdraaien is niet veilig.');
  const last=history[history.length-1];
- if(last.quantity>card.soldQuantity)return alert('Het verkochte aantal is inmiddels gewijzigd.');
- if(!confirm('Laatste verkoop van '+last.quantity+'× '+card.name+' ongedaan maken?'))return;
- const price=Math.min(card.soldPrice||0,last.priceCents/100);
- const {error}=await cloud.from('cards').update({sold_quantity:card.soldQuantity-last.quantity,sold_price:Math.max(0,(card.soldPrice||0)-price),status:card.soldQuantity-last.quantity?'Op voorraad':'Op voorraad'}).eq('id',id);
- if(error)return alert('Herstellen mislukt: '+error.message);
- history.pop();localStorage.setItem(key,JSON.stringify(history));await loadCards(true);await renderSold();alert('Laatste kaartverkoop teruggedraaid.');
+ const qty=Number(last.quantity),cents=Number(last.priceCents);
+ if(!Number.isSafeInteger(qty)||qty<1||!Number.isFinite(cents)||cents<0||qty>Number(card.soldQuantity))return alert('De verkoopgegevens zijn niet betrouwbaar. Geen wijzigingen uitgevoerd.');
+ if(!confirm('Laatste verkoop van '+qty+'× '+card.name+' ongedaan maken?'))return;
+ const oldSold=Number(card.soldQuantity),oldPrice=Number(card.soldPrice)||0;
+ const price=Math.min(oldPrice,cents/100);
+ const {data,error}=await cloud.from('cards').update({sold_quantity:oldSold-qty,sold_price:Math.max(0,oldPrice-price),status:'Op voorraad'}).eq('id',id).eq('sold_quantity',oldSold).select('id');
+ if(error||!data||data.length!==1)return alert('Herstellen gestopt: '+(error?.message||'De voorraad is intussen gewijzigd. Vernieuw en controleer opnieuw.'));
+ history.pop();localStorage.setItem(key,JSON.stringify(history));
+ await loadCards(true);await renderSold();alert('Laatste kaartverkoop teruggedraaid.');
 }
 
 async function releaseBundle(id){if(!confirm('Bundel opheffen? De 25 kaarten komen weer terug in de losse voorraad.'))return;const bundle=bundlesCache.find(b=>String(b.id)===String(id));if(!bundle||bundle.status==='Verkocht')return alert('Een verkochte bundel kan niet worden opgeheven.');const {error}=await cloud.from('bundles').delete().eq('id',id);if(error)return alert('Bundel opheffen is niet gelukt: '+error.message);await loadBundleData(true);await renderBundles();}
