@@ -2752,7 +2752,7 @@ async function undoBundleSale(id){
   if(error){for(const x of changed)await cloud.from('cards').update({sold_quantity:x.original}).eq('id',x.id);return alert('Terugboeking mislukt: '+error.message);}
   changed.push({id:cid,original});
  }
- const {error}=await cloud.from('bundles').update({status:'Samengesteld',sold_price:null,sold_date:null,payment:null}).eq('id',id).eq('status','Verkocht');
+ const {error}=await cloud.from('bundles').update({status:'Samengesteld',sold_price:0,sold_date:null,payment:null}).eq('id',id).eq('status','Verkocht');
  if(error){for(const x of changed)await cloud.from('cards').update({sold_quantity:x.original}).eq('id',x.id);return alert('Bundel herstellen mislukt: '+error.message);}
  await Promise.all([loadCards(true),loadBundleData(true)]);await renderSold();alert('Bundelverkoop ongedaan gemaakt. Prijskeuze blijft bewaard.');
 }
