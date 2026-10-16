@@ -2755,7 +2755,7 @@ async function inspectTemporalBundle25(id){
   const sold=rows.filter(x=>x.c&&Number(x.c.soldQuantity)>0);
   const missing=rows.filter(x=>!x.c);
   const list=rows.map(x=>'<tr><td style="padding:5px;border-bottom:1px solid #ddd">'+escapeHtml(x.c?.name||'Onbekende kaart')+'</td><td>'+ (x.c?Number(x.c.soldQuantity)||0:'?')+'</td><td>'+ (x.c?availableQuantity(x.c):'?')+'</td></tr>').join('');
-  host.innerHTML='<p><b>Status bundel:</b> '+escapeHtml(b.status||'Onbekend')+'</p><p><b>Prijskaarten:</b> '+ids.length+' geselecteerd; '+sold.length+' met een verkocht aantal groter dan nul; '+missing.length+' ontbreken in de geladen voorraad.</p><p class="muted">Een verkocht aantal bewijst niet dat het bij deze bundel hoort. Deze controle verandert daarom niets. Ook de drie handmatig herstelde kaarten kunnen niet automatisch worden herkend.</p><div style="overflow-x:auto"><table style="width:100%;font-size:12px"><thead><tr><th>Kaart</th><th>Verkocht</th><th>Vrij</th></tr></thead><tbody>'+list+'</tbody></table></div><button class="light" style="width:100%;margin-top:10px;padding:10px;font-size:13px" onclick="copyTemporalAudit(\''+id+'\')">📋 Kopieer controlerapport</button><p class="muted">Herstel alleen gebruiken wanneer vóór deze test geen echte losse verkopen plaatsvonden. De voorraadhoeveelheid blijft ongewijzigd; uitsluitend foutieve verkoopaantallen worden gecorrigeerd.</p><button class="danger" style="width:100%;margin-top:10px;padding:12px;font-size:15px" onclick="repairTemporalBundle25(\''+id+'\')">🛠️ Back-up maken en 25 prijsregistraties herstellen</button>';
+  host.innerHTML='<p><b>Status bundel:</b> '+escapeHtml(b.status||'Onbekend')+'</p><p><b>Prijskaarten:</b> '+ids.length+' geselecteerd; '+sold.length+' met een verkocht aantal groter dan nul; '+missing.length+' ontbreken in de geladen voorraad.</p><p class="muted">Een verkocht aantal bewijst niet dat het bij deze bundel hoort. Deze controle verandert daarom niets. Ook de drie handmatig herstelde kaarten kunnen niet automatisch worden herkend.</p><div style="overflow-x:auto"><table style="width:100%;font-size:12px"><thead><tr><th>Kaart</th><th>Verkocht</th><th>Vrij</th></tr></thead><tbody>'+list+'</tbody></table></div><button class="light" style="width:100%;margin-top:10px;padding:10px;font-size:13px" onclick="copyTemporalAudit(\''+id+'\')">📋 Kopieer controlerapport</button><p class="muted">Herstel alleen gebruiken wanneer vóór deze test geen echte losse verkopen plaatsvonden. De voorraadhoeveelheid blijft ongewijzigd; uitsluitend foutieve verkoopaantallen worden gecorrigeerd.</p><button class="danger" style="width:100%;margin-top:10px;padding:12px;font-size:15px" onclick="repairTemporalBundle25(\''+id+'\')">🛠️ Back-up maken en foutieve testverkopen herstellen</button>';
   window._temporalAuditText='Bundel: '+b.name+' | status: '+b.status+'\n'+rows.map(x=>(x.c?.name||x.cid)+' | verkocht: '+(x.c?.soldQuantity??'?')+' | vrij: '+(x.c?availableQuantity(x.c):'?')).join('\n');
  }catch(e){host.textContent='Controle mislukt: '+(e?.message||e);}
 }
@@ -2770,17 +2770,19 @@ async function repairTemporalBundle25(id){
  const ids=(award.preparedIds||award.ids||[]).map(String);
  if(ids.length!==25||new Set(ids).size!==25)return alert('Herstel gestopt: de 25 unieke kaart-ID’s ontbreken.');
  const rows=ids.map(cid=>cardsCache.find(c=>String(c.id)===cid));
- if(rows.some(c=>!c||Number(c.soldQuantity)!==1))return alert('Herstel gestopt: niet alle 25 kaarten staan exact 1× verkocht. Eerst opnieuw controleren.');
+ if(rows.some(c=>!c||![0,1].includes(Number(c.soldQuantity))))return alert('Herstel gestopt: één of meer kaarten ontbreken of hebben een afwijkend verkocht aantal. Eerst opnieuw controleren.');
+ const affected=rows.filter(c=>Number(c.soldQuantity)===1);
+ if(!affected.length)return alert('Er zijn geen foutieve testverkopen meer om te herstellen.');
  // Save a complete before-image, including bundle and award, before any remote mutation.
  const snapshot={createdAt:new Date().toISOString(),bundle:b,award,cards:rows.map(c=>({...c})),purpose:'Temporal Forces Bundel 25 testcorrectie'};
  const blob=new Blob([JSON.stringify(snapshot,null,2)],{type:'application/json'});
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='psycards-bundel25-backup-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
- if(!confirm('Is de JSON-back-up gedownload? Alleen doorgaan als vóór deze test GEEN echte losse kaarten verkocht waren. De 25 verkoopaantallen worden van 1 naar 0 gezet; de totale kaartvoorraad, bundel en winactie blijven behouden.'))return;
- if(!confirm('Definitieve bevestiging: herstel uitsluitend deze 25 testregistraties?'))return;
+ if(!confirm('Is de JSON-back-up gedownload? Alleen doorgaan als vóór deze test GEEN echte losse kaarten verkocht waren. Alleen de '+affected.length+' nog foutief verkochte kaarten worden van 1 naar 0 gezet; de totale kaartvoorraad, bundel en winactie blijven behouden.'))return;
+ if(!confirm('Definitieve bevestiging: herstel uitsluitend deze '+affected.length+' testregistraties?'))return;
  host.textContent='Herstel bezig. Sluit de app niet af…';
  const changed=[];
  try{
-  for(const c of rows){
+  for(const c of affected){
    const {data,error}=await cloud.from('cards').update({sold_quantity:0}).eq('id',c.id).eq('sold_quantity',1).select('id');
    if(error)throw Error(c.name+': '+error.message);
    if(!data||data.length!==1)throw Error('Voorraad is intussen gewijzigd bij '+c.name+'.');
@@ -2789,9 +2791,9 @@ async function repairTemporalBundle25(id){
   await loadCards(true);
   const remaining=ids.filter(cid=>{const c=cardsCache.find(x=>String(x.id)===cid);return !c||Number(c.soldQuantity)!==0;});
   if(remaining.length)throw Error('Nacontrole mislukt: '+remaining.length+' kaarten hebben nog een verkocht aantal.');
-  host.textContent='✓ Alle 25 testverkopen hersteld. De totale kaartvoorraad en opgeslagen winactie zijn niet aangepast.';
+  host.textContent='✓ '+affected.length+' foutieve testverkopen hersteld. De totale kaartvoorraad en opgeslagen winactie zijn niet aangepast.';
   await renderSold();
-  alert('✓ 25 testregistraties hersteld. Controleer de verkoophistorie.');
+  alert('✓ '+affected.length+' testregistraties hersteld. Controleer de verkoophistorie.');
  }catch(e){
   let failed=0;
   for(const c of changed.reverse()){
