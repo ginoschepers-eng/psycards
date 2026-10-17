@@ -133,7 +133,7 @@
     </div>
   </section>
 
-  <section id="heerlenClose" class="hidden"><nav><button class="light" onclick="goBackInApp()">← Terug</button></nav><div class="card"><h2>🏁 Beurs Heerlen · 17 oktober 2026</h2><p>Omzet € 710,00 · contant € 430,00 · Tikkie € 280,00. Deze bedragen zijn een totaalregistratie, niet automatisch een bedrag per bundel.</p><p class="muted">Alleen samengestelde bundels worden verwerkt. Reeds verkochte bundels blijven ongemoeid. Bonuskaarten worden alleen afgeboekt wanneer hun kaart-ID's vooraf zijn opgeslagen. Je telt de voorraad later opnieuw. Alleen winactiekaarten met opgeslagen kaart-ID worden automatisch afgeboekt; niet opgeslagen prijzen worden gemeld.</p><button class="primary" style="width:100%" onclick="previewHeerlenClose()">🔎 Voorraad en winacties controleren</button><div id="heerlenPreview" class="scan-status"></div><button id="heerlenExecute" class="danger hidden" style="width:100%;margin-top:12px" onclick="executeHeerlenClose()">✓ Bevestig beursafsluiting</button></div></section>
+  <section id="heerlenClose" class="hidden"><nav><button class="light" onclick="goBackInApp()">← Terug</button></nav><div class="card"><h2>🏁 Beurs Heerlen · 17 oktober 2026</h2><p>Omzet € 710,00 · contant € 430,00 · Tikkie € 280,00. Geschatte bundelomzet € 200,63 (36 actie, 37 los). Deze bedragen zijn een totaalregistratie, niet automatisch een bedrag per bundel.</p><p class="muted">Alle samengestelde bundels worden verkocht gemarkeerd. Voor winacties worden ook opgeslagen prijskaart-ID’s van reeds verkochte bundels gecontroleerd; controleer vóór bevestigen dat deze niet eerder zijn afgeboekt. Je telt de voorraad later opnieuw. Alleen winactiekaarten met opgeslagen kaart-ID worden automatisch afgeboekt; niet opgeslagen prijzen worden gemeld.</p><button class="primary" style="width:100%" onclick="previewHeerlenClose()">🔎 Voorraad en winacties controleren</button><div id="heerlenPreview" class="scan-status"></div><button id="heerlenExecute" class="danger hidden" style="width:100%;margin-top:12px" onclick="executeHeerlenClose()">✓ Bevestig beursafsluiting</button></div></section>
 <section id="home" class="hidden">
     <div class="app-section-title">Snel naar</div>
     <div class="dashboard-primary-grid">
@@ -3066,16 +3066,16 @@ async function previewHeerlenClose(){
  const el=document.getElementById('heerlenPreview'),btn=document.getElementById('heerlenExecute');btn.classList.add('hidden');heerlenPlan=null;el.textContent='Actuele voorraad laden…';
  try{
   await Promise.all([loadCards(true),loadBundleData(true)]);await loadPrizeAwards();
-  const pending=bundlesCache.filter(b=>b.status==='Samengesteld');const changes=new Map(),errors=[];let prizeCount=0;
-  for(const b of pending){
+  const pending=bundlesCache.filter(b=>b.status==='Samengesteld');const prizeBundles=bundlesCache.filter(b=>b.status==='Samengesteld'||b.status==='Verkocht');const changes=new Map(),errors=[];let prizeCount=0;
+  for(const b of prizeBundles){
    const award=getPrizeAward(b.id)||{};const type=award.prizeType||'';
    const ids=type==='bonus25'?(award.preparedIds||award.ids||[]):type==='ex3'?(award.preparedExIds||award.exIds||[]):[];
    if((type==='bonus25'&&ids.length!==25)||(type==='ex3'&&ids.length!==3))errors.push(b.name+': prijskaarten niet volledig geregistreerd (later handmatig tellen)');
    for(const id of ids){const c=cardsCache.find(x=>String(x.id)===String(id));if(!c){errors.push(b.name+': prijskaart ontbreekt ('+id+')');continue;}changes.set(String(id),(changes.get(String(id))||0)+1);prizeCount++;}
   }
   for(const [id,n] of changes){const c=cardsCache.find(x=>String(x.id)===id);if(c&&availableQuantity(c)<n)errors.push('Onvoldoende vrije voorraad voor '+c.name+' ('+n+' nodig)');}
-  el.textContent=pending.length+' nog niet verkochte bundels gevonden; '+prizeCount+' opgeslagen prijskaarten om af te boeken. '+(errors.length?'NIET UITVOEREN: '+errors.join('; '):'Controle klaar. Niet opgeslagen winacties worden bij de hertelling gecorrigeerd.');
-  if(!pending.length)return;
+  el.textContent=pending.length+' nog niet verkochte bundels gevonden (73 totaal verwacht); '+prizeCount+' opgeslagen prijskaarten om af te boeken. '+(errors.length?'NIET UITVOEREN: '+errors.join('; '):'Controle klaar. Niet opgeslagen winacties worden bij de hertelling gecorrigeerd.');
+  if(!pending.length&&!changes.size)return;
   heerlenPlan={ids:pending.map(b=>String(b.id)),changes:[...changes],created:Date.now()};btn.classList.remove('hidden');
  }catch(e){el.textContent='Controle mislukt: '+e.message;}
 }
@@ -3090,7 +3090,7 @@ async function executeHeerlenClose(){
   for(const [id,n] of plan.changes){const c=cardsCache.find(x=>String(x.id)===id),original=Number(c.soldQuantity)||0;const {error}=await cloud.from('cards').update({sold_quantity:original+n}).eq('id',c.id);if(error)throw error;}
   const date='2026-10-17T17:00:00';
   for(const id of plan.ids){const {error}=await cloud.from('bundles').update({status:'Verkocht',sold_price:0,payment:'Beurs Heerlen - totaalomzet apart',sold_date:date}).eq('id',id).eq('status','Samengesteld');if(error)throw error;}
-  localStorage.setItem('psycards-heerlen-2026-10-17',JSON.stringify({date,turnover:710,cash:430,tikkie:280,bundles:plan.ids,prizeChanges:plan.changes,notes:'Omzet totaal; bundelprijzen onbekend; losse verkopen en inkopen niet gespecificeerd.'}));
+  localStorage.setItem('psycards-heerlen-2026-10-17',JSON.stringify({date,turnover:710,cash:430,tikkie:280,bundles:plan.ids,prizeChanges:plan.changes,bundleRevenueEstimate:200.63,bundleSplit:'36 actie (12 x 7,50) + 37 los (37 x 2,99)',notes:'Bundelomzet geschat op 200,63 binnen totaal 710; losse verkopen en inkopen niet gespecificeerd.'}));
   el.textContent='✓ Bundels en opgeslagen prijskaarten verwerkt. De € 710 staat in de lokale beursnotitie, niet in het centrale kasboek. Boek dit bedrag daar één keer apart in. Bundels zijn op € 0 gezet om dubbeltelling te voorkomen.';
   await Promise.all([loadCards(true),loadBundleData(true)]);
  }catch(e){
