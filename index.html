@@ -152,6 +152,7 @@
 
     <button class="gold" style="width:100%;margin-top:12px" onclick="openHeerlenClose()">🏁 Beurs Heerlen 17-10 afsluiten</button>
 <div class="app-section-title">Beheer</div>
+<button class="danger" style="width:100%;margin-top:10px" onclick="openAdminReset()">🗑️ Administratie resetten</button>
     <div class="dashboard-primary-grid">
       <button class="quick-action" onclick="openCollection()"><span class="ico">🃏</span><span>Kaarten & collectie</span></button>
       <button class="quick-action" onclick="openFinance()"><span class="ico">💶</span><span>Financiën</span></button>
@@ -173,6 +174,18 @@
     </div>
   </section>
 
+  <section id="adminReset" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card"><h2>🗑️ Administratie resetten</h2>
+      <p>Hiermee verwijder je de online voorraad, verkopen, bundels, winacties en opgeslagen sets. Ook de lokale financiële administratie, beursgegevens en verzameling op <b>dit toestel</b> worden gewist. De app en de kaartcatalogus blijven bestaan.</p>
+      <p class="muted">Let op: lokale gegevens op andere telefoons worden niet automatisch verwijderd. Voer de reset alleen uit als andere gebruikers de app niet gebruiken en wis daar daarna ook de lokale administratie.</p>
+      <button class="green" style="width:100%" onclick="downloadAdminResetBackup()">1. Maak volledige back-up (JSON)</button>
+      <label style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="adminResetAgree" style="width:24px" onchange="updateAdminResetButton()">Ik heb de back-up veilig opgeslagen en begrijp dat verwijderen definitief is.</label>
+      <label>Typ RESET om te bevestigen</label><input id="adminResetText" autocomplete="off" oninput="updateAdminResetButton()" placeholder="RESET">
+      <button id="adminResetExecute" class="danger" style="width:100%;margin-top:12px" disabled onclick="executeAdminReset()">2. Alles definitief wissen</button>
+      <div id="adminResetStatus" class="scan-status" role="status"></div>
+    </div>
+  </section>
   <section id="calculator" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
     <div class="card">
@@ -3149,6 +3162,46 @@ async function executeHeerlenClose(){
  }
 }
 
+
+// Administratie reset: back-up vóór verwijderen; verwijder per tabel in afhankelijkheidsvolgorde.
+let adminResetBackupReady=false,adminResetBusy=false;
+function openAdminReset(){adminResetBackupReady=false;document.getElementById('adminResetAgree').checked=false;document.getElementById('adminResetText').value='';document.getElementById('adminResetStatus').textContent='';updateAdminResetButton();show('adminReset');}
+function updateAdminResetButton(){document.getElementById('adminResetExecute').disabled=adminResetBusy||!adminResetBackupReady||!document.getElementById('adminResetAgree').checked||document.getElementById('adminResetText').value.trim()!=='RESET';}
+const ADMIN_RESET_TABLES=['bundle_prizes','bundle_items','bundles','cards','psycard_sets'];
+async function adminResetReadTable(table){
+ const rows=[];let offset=0;
+ while(true){const {data,error}=await cloud.from(table).select('*').range(offset,offset+499);if(error)throw new Error(table+': '+error.message);rows.push(...(data||[]));if(!data||data.length<500)break;offset+=500;}
+ return rows;
+}
+async function downloadAdminResetBackup(){
+ const status=document.getElementById('adminResetStatus');adminResetBackupReady=false;updateAdminResetButton();
+ try{
+  if(!navigator.onLine||!cloud)throw Error('Internetverbinding met Supabase is vereist.');
+  status.textContent='Online gegevens ophalen voor de back-up…';const tables={};
+  for(const table of ADMIN_RESET_TABLES)tables[table]=await adminResetReadTable(table);
+  const local={};for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith('psycards'))local[key]=localStorage.getItem(key);}
+  const backup={createdAt:new Date().toISOString(),application:'Psycards',tables,localStorage:local};
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='Psycards-volledige-backup-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  adminResetBackupReady=true;status.textContent='Back-up aangeboden als download. Controleer eerst of het JSON-bestand daadwerkelijk op je toestel staat. Daarna kun je de reset bevestigen.';updateAdminResetButton();
+ }catch(e){status.textContent='Back-up mislukt. Er is niets gewist: '+e.message;}
+}
+async function executeAdminReset(){
+ if(adminResetBusy||!adminResetBackupReady||!document.getElementById('adminResetAgree').checked||document.getElementById('adminResetText').value.trim()!=='RESET')return;
+ if(!confirm('DEFINITIEF: alle online Psycards-gegevens verwijderen? Dit kan niet met één klik ongedaan worden gemaakt.'))return;
+ adminResetBusy=true;updateAdminResetButton();const status=document.getElementById('adminResetStatus');
+ try{
+  if(!navigator.onLine)throw Error('Geen internetverbinding.');
+  for(const table of ADMIN_RESET_TABLES){
+   status.textContent='Verwijderen: '+table+'…';const rows=await adminResetReadTable(table);
+   for(let i=0;i<rows.length;i+=100){const ids=rows.slice(i,i+100).map(x=>x.id??x.bundle_id);if(ids.some(x=>x==null))throw Error('Geen bruikbare sleutel in '+table);const column=table==='bundle_prizes'?'bundle_id':'id';const {error}=await cloud.from(table).delete().in(column,ids);if(error)throw new Error(table+': '+error.message);}
+   const remaining=await adminResetReadTable(table);if(remaining.length)throw Error(table+' bevat nog '+remaining.length+' regels (mogelijk onvoldoende verwijderrechten).');
+  }
+  const keys=[];for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key?.startsWith('psycards'))keys.push(key);}keys.forEach(k=>localStorage.removeItem(k));
+  cardsCache=[];expenseCache=[];bundlesCache=[];bundleItemsCache=[];collectorCards=[];cardsCacheLoaded=false;remoteChangesPending=false;
+  status.textContent='✓ Online administratie gewist. Dit toestel wordt opnieuw geladen.';setTimeout(()=>location.reload(),1500);
+ }catch(e){status.textContent='⚠️ Reset onderbroken: '+e.message+'. Mogelijk is een deel al gewist. Bewaar de back-up en probeer niet zomaar opnieuw.';}
+ finally{adminResetBusy=false;adminResetBackupReady=false;updateAdminResetButton();}
+}
 </script>
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}</script>
 </body>
