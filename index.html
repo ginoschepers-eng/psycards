@@ -553,7 +553,7 @@
       <div id="fairStats" class="fair-kpis"></div>
       <div class="card"><h3 style="margin:0 0 5px">💸 Beurskosten</h3><div class="row"><div><label>Omschrijving</label><input id="fairExpenseDesc" placeholder="Bijv. tafelhuur"></div><div><label>Bedrag €</label><input id="fairExpenseAmount" type="number" min="0" step="0.01" inputmode="decimal"></div></div><button class="light" style="width:100%;margin-top:10px" onclick="addFairExpense()">Kosten toevoegen</button></div>
       <div class="card"><h3 style="margin:0 0 5px">📋 Transacties</h3><div id="fairTransactions" class="muted"></div></div>
-      <div class="card"><h3 style="margin:0 0 5px">🔐 Beurs afsluiten</h3><div class="muted">Tel eerst het contante geld in de kas. De app vergelijkt dit met de verwachte eindkas.</div><label>Werkelijk getelde eindkas €</label><input id="fairActualCash" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Vul het getelde kasbedrag in"><label>Notitie afsluiting (optioneel)</label><input id="fairCloseNote" placeholder="Bijv. kas gecontroleerd door Sem"><button class="danger" style="width:100%;margin-top:12px" onclick="closeFair()">⏹️ Beurs afsluiten & rapport maken</button></div>
+      <div class="card"><h3 style="margin:0 0 5px">🔐 Beurs afsluiten</h3><div class="muted">Tel eerst het contante geld in de kas. De app vergelijkt dit met de verwachte eindkas.</div><label>Werkelijk getelde eindkas €</label><input id="fairActualCash" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Vul het getelde kasbedrag in"><label>Notitie afsluiting (optioneel)</label><input id="fairCloseNote" placeholder="Bijv. kas gecontroleerd door Sem"><button class="danger" style="width:100%;margin-top:12px" onclick="closeFair()">⏹️ Beurs afsluiten & rapport maken</button><button class="light" style="width:100%;margin-top:10px" onclick="closeFairWithoutProcessing()">↩️ Beurs afsluiten zonder verwerking</button></div>
     </div>
     <div id="fairReport" class="hidden"></div>
   </section>
@@ -1780,6 +1780,16 @@ function closeFair(){
   if(!confirm(msg))return;
   f.actualCash=actual;f.cashDifference=difference;f.closeNote=(document.getElementById('fairCloseNote')?.value||'').trim();f.closedAt=new Date().toISOString();
   d.activeId=null;saveFairData(d);renderClosedFair(f);
+}
+function closeFairWithoutProcessing(){
+  const d=fairData(),f=d.sessions.find(x=>x.id===d.activeId&&!x.closedAt);
+  if(!f)return alert('Er is geen actieve beurs.');
+  if(!confirm('Beurs "'+f.name+'" afsluiten zonder kascontrole of eindrapport?\n\nEr worden geen extra verkopen, voorraadmutaties of winacties verwerkt. Al eerder geregistreerde transacties blijven wel bestaan.'))return;
+  f.closedAt=new Date().toISOString();
+  f.closeNote=((f.closeNote||'')+' | Afgesloten zonder verwerking').trim();
+  f.closedWithoutProcessing=true;
+  d.activeId=null;saveFairData(d);renderFairMode();
+  alert('Beurs afgesloten zonder extra verwerking. Bestaande registraties zijn behouden.');
 }
 function renderClosedFair(f){
   fairSetup.classList.add('hidden');fairActive.classList.add('hidden');fairReport.classList.remove('hidden');const t=fairTotals(f);
