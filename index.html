@@ -791,8 +791,9 @@ async function loadCards(forceRefresh=false){
     const all=cached.all.map(fromDb);
     expenseCache=all.filter(c=>c.productType==='Kosten');cardsCache=all.filter(c=>c.productType!=='Kosten');cardsCacheLoaded=true;updateLastSyncText();return cardsCache;
   }
-  const {data,error}=await cloud.from('cards').select('id,name,condition,buy,ask,minimum,status,quantity,sold_quantity,sold_price,payment,sold_date').order('id',{ascending:true});
+  const {data,error}=await fetchAllTableRows('cards');
   if(error){console.error(error);if(cached&&Array.isArray(cached.all)){const all=cached.all.map(fromDb);expenseCache=all.filter(c=>c.productType==='Kosten');cardsCache=all.filter(c=>c.productType!=='Kosten');cardsCacheLoaded=true;return cardsCache;}alert('De gezamenlijke voorraad kon niet worden geladen. Controleer de database-instelling.');return cardsCache;}
+  // Bewaar alleen een volledig opgehaalde voorraad; een mislukte pagina mag de cache niet overschrijven.
   writeJsonCache(DATA_CACHE_KEY,{savedAt:Date.now(),all:data||[]});
   const all=(data||[]).map(fromDb);expenseCache=all.filter(c=>c.productType==='Kosten');cardsCache=all.filter(c=>c.productType!=='Kosten');cardsCacheLoaded=true;remoteChangesPending=false;updateLastSyncText();return cardsCache;
 }
