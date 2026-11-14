@@ -537,6 +537,7 @@
         <button class="quick-action" onclick="openReports();setTimeout(()=>document.getElementById('balanceDate')?.scrollIntoView({behavior:'smooth'}),100)"><span class="ico">🧾</span><span>Balans<small>Overzicht voor administratie</small></span></button>
         <button class="quick-action" onclick="openReports();setTimeout(()=>document.getElementById('inventoryReportStats')?.scrollIntoView({behavior:'smooth'}),100)"><span class="ico">📦</span><span>Voorraadrapport<small>Excel en printoverzicht</small></span></button>
         <button class="quick-action" onclick="openBookkeeping()"><span class="ico">🏦</span><span>Boekhouding<small>Bank, kas, btw, privé en open posten</small></span></button>
+        <button class="quick-action" onclick="openReceiptManager()"><span class="ico">📸</span><span>Bonnetjes &amp; facturen<small>Bon toevoegen en archief bekijken</small></span></button>
       </div>
     </div>
   </section>
@@ -584,6 +585,14 @@
       <div class="row"><div><label>Periode</label><select id="moneyPeriod" onchange="renderMoney()"><option value="all">Alles</option><option value="month">Deze maand</option><option value="year">Dit jaar</option></select></div><div><label>Type</label><select id="moneyType" onchange="renderMoney()"><option value="all">Inkomsten + uitgaven</option><option value="income">Alleen inkomsten</option><option value="expense">Alleen uitgaven</option></select></div></div>
       <div id="moneyPeriodSummary" class="scanbox" style="margin-top:12px"></div>
     </div>
+    <button class="light" style="width:100%;margin:12px 0" onclick="openReceiptManager()">📸 Bon of factuur toevoegen</button>
+    <div id="moneyTransactions"></div>
+    <div id="expenseList" class="hidden"></div>
+  </section>
+
+  <section id="receiptManager" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card"><h2>📸 Bonnetjes &amp; facturen</h2><p class="muted">Registreer een nieuwe zakelijke uitgave en voeg eventueel een foto of PDF toe. De uitgave komt automatisch één keer in het kasboek.</p><p class="muted">Let op: bonnetjes worden alleen op dit apparaat bewaard en niet automatisch geback-upt of gesynchroniseerd.</p></div>
     <div class="card">
       <h2 style="margin:0 0 5px">Nieuwe uitgave</h2>
       <div class="muted">Verkopen worden automatisch als inkomsten verwerkt.</div>
@@ -599,8 +608,6 @@
       <button class="light" style="width:100%;margin-top:8px" onclick="showReceipts()">🧾 Opgeslagen bonnetjes bekijken</button>
       <div id="receiptArchive" class="hidden" style="margin-top:12px"></div>
     </div>
-    <div id="moneyTransactions"></div>
-    <div id="expenseList" class="hidden"></div>
   </section>
 
   <section id="reports" class="hidden">
@@ -1792,6 +1799,7 @@ function saveFairData(d){localStorage.setItem(FAIR_KEY,JSON.stringify(d));}
 function activeFair(){const d=fairData();return d.sessions.find(x=>x.id===d.activeId&&!x.closedAt)||null;}
 function openCollection(){show('collection');renderHomeDashboard();}
 function openFinance(){show('finance');}
+function openReceiptManager(){show('receiptManager');if(!document.getElementById('expenseDate').value)document.getElementById('expenseDate').value=new Date().toLocaleDateString('en-CA');showReceipts();}
 function openFairMode(){show('fair');renderFairMode();}
 function euro(n){return '€'+Number(n||0).toFixed(2).replace('.',',');}
 function startFair(){const name=document.getElementById('fairName').value.trim(),date=document.getElementById('fairDate').value||new Date().toISOString().slice(0,10);if(!name)return alert('Vul de naam van de beurs in.');const d=fairData();if(d.activeId&&!confirm('Er staat al een actieve beurs open. Deze eerst afsluiten?'))return;const old=d.sessions.find(x=>x.id===d.activeId);if(old&&!old.closedAt)old.closedAt=new Date().toISOString();const f={id:'fair-'+Date.now(),name,location:fairLocation.value.trim(),date,openingCash:+fairOpeningCash.value||0,startedAt:new Date().toISOString(),closedAt:null,transactions:[],expenses:[]};d.sessions.push(f);d.activeId=f.id;saveFairData(d);renderFairMode();}
