@@ -592,7 +592,12 @@
       <label>Omschrijving</label><input id="expenseDescription" placeholder="Bijv. tafelkleed of knuffels">
       <label>Bedrag inclusief btw €</label><input id="expenseAmount" type="number" min="0" step="0.01" inputmode="decimal">
       <label>Betaalwijze</label><select id="expensePayment"><option>Bank</option><option>iDEAL</option><option>Wero</option><option>Contant</option><option>Overig</option></select>
+      <label>Wie heeft betaald?</label><select id="expensePayer"><option value="Sem / Psycards">Sem / Psycards</option><option value="Ouder (bijdrage)">Ouder (bijdrage)</option><option value="Ouder (voorgeschoten)">Ouder (voorgeschoten)</option></select>
+      <label>Bon of factuur (foto / PDF, maximaal 10 MB)</label><input id="expenseReceipt" type="file" accept="image/*,.pdf,application/pdf">
+      <div class="muted">Bonnen worden voorlopig alleen op dit toestel bewaard. Maak regelmatig een aparte back-up; synchronisatie naar Supabase is nog niet ingericht.</div>
       <button class="primary" style="width:100%;margin-top:14px" onclick="saveExpense()">Uitgave opslaan</button>
+      <button class="light" style="width:100%;margin-top:8px" onclick="showReceipts()">🧾 Opgeslagen bonnetjes bekijken</button>
+      <div id="receiptArchive" class="hidden" style="margin-top:12px"></div>
     </div>
     <div id="moneyTransactions"></div>
     <div id="expenseList" class="hidden"></div>
@@ -3168,15 +3173,23 @@ async function seedKnownExpenses(){
   if(error){console.error('Beginkosten:',error);return;}
   await loadCards();
 }
+// Bonnenarchief: lokale IndexedDB, niet gesynchroniseerd met Supabase.
+function receiptDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open('psycards-receipts-v1',1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('receipts'))r.result.createObjectStore('receipts',{keyPath:'id'});};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+async function receiptAction(mode,value){const db=await receiptDB();return new Promise((resolve,reject)=>{const tx=db.transaction('receipts',mode==='getAll'?'readonly':'readwrite');const st=tx.objectStore('receipts');const r=mode==='put'?st.put(value):mode==='delete'?st.delete(value):st.getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);tx.oncomplete=()=>db.close();});}
+async function storeReceipt(id,file,meta){if(!['application/pdf','image/jpeg','image/png','image/webp','image/heic','image/heif'].includes(file.type)&&!/^image\//.test(file.type))throw Error('Alleen PDF of afbeeldingen zijn toegestaan.');await receiptAction('put',{id,file,filename:file.name,meta,created:new Date().toISOString()});}
+async function showReceipts(){const host=document.getElementById('receiptArchive');host.classList.remove('hidden');try{const rows=await receiptAction('getAll');host.replaceChildren();const heading=document.createElement('b');heading.textContent='Bonnenarchief ('+rows.length+')';host.append(heading);const warning=document.createElement('p');warning.className='muted';warning.textContent='Alleen op dit apparaat. Download de bonnen voor een veilige externe back-up.';host.append(warning);for(const r of rows.sort((a,b)=>b.created.localeCompare(a.created))){const box=document.createElement('div');box.className='card';const info=document.createElement('div');info.textContent=(r.meta.date||'')+' · '+(r.meta.description||'')+' · € '+Number(r.meta.amount||0).toFixed(2)+' · '+(r.meta.payer||'');box.append(info);const btn=document.createElement('button');btn.className='light';btn.style.cssText='width:100%;margin-top:8px;font-size:14px;padding:10px';btn.textContent='⬇️ Bon openen / downloaden: '+r.filename;btn.onclick=()=>{const u=URL.createObjectURL(r.file),a=document.createElement('a');a.href=u;a.download=r.filename||'bon';a.click();setTimeout(()=>URL.revokeObjectURL(u),60000);};box.append(btn);host.append(box);}}catch(e){host.textContent='Bonnenarchief niet beschikbaar: '+e.message;}}
 async function saveExpense(){
   const amount=+expenseAmount.value||0,description=expenseDescription.value.trim(),date=expenseDate.value;
   if(!description)return alert('Vul een omschrijving in.');
   if(amount<=0)return alert('Vul een bedrag hoger dan €0 in.');
   if(!date)return alert('Kies een datum.');
-  const row={name:description,condition:'Kosten | '+expenseCategory.value,buy:amount,ask:0,minimum:0,status:'Verkocht',quantity:1,sold_quantity:0,sold_price:0,payment:expensePayment.value,sold_date:new Date(date+'T12:00:00').toISOString()};
-  const {error}=await cloud.from('cards').insert(row);
+  const payer=expensePayer.value,receipt=expenseReceipt.files[0];
+  if(receipt&&receipt.size>10*1024*1024)return alert('Bestand is groter dan 10 MB.');
+  const row={name:description+' [Betaald door: '+payer+']',condition:'Kosten | '+expenseCategory.value,buy:amount,ask:0,minimum:0,status:'Verkocht',quantity:1,sold_quantity:0,sold_price:0,payment:expensePayment.value,sold_date:new Date(date+'T12:00:00').toISOString()};
+  const {data,error}=await cloud.from('cards').insert(row).select('id').single();
   if(error)return alert('Uitgave opslaan is niet gelukt: '+error.message);
-  expenseDescription.value='';expenseAmount.value='';await loadCards(true);renderMoney();
+  if(receipt){try{await storeReceipt(String(data.id),receipt,{date,description,amount,payer});}catch(e){alert('Uitgave is opgeslagen, maar de bon NIET: '+e.message);}}
+  expenseDescription.value='';expenseAmount.value='';expenseReceipt.value='';await loadCards(true);renderMoney();
 }
 async function deleteExpense(id){
   if(!confirm('Deze uitgave uit het kasboek verwijderen?'))return;
