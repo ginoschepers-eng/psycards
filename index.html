@@ -214,6 +214,7 @@
         <button class="quick-action" onclick="openValueCheck()"><span class="ico">💶</span><span>Kaartwaarde<small>Cardmarket indicatie</small></span></button>
         <button class="quick-action" onclick="openSetValueCheck()"><span class="ico">🏆</span><span>Duurste kaarten<small>Normal · Holo · Reverse</small></span></button>
         <button class="quick-action" onclick="openMarketTrends()"><span class="ico">📈</span><span>Live Markttrends<small>Kaarten vanaf €1,00</small></span></button>
+        <button class="quick-action" onclick="openPriceLists()"><span class="ico">🖨️</span><span>Actuele prijslijsten<small>Kast 1, Kast 2 of per set</small></span></button>
         <button class="quick-action" onclick="openCollector()"><span class="ico">📚</span><span>TCG Collector<small>Eigen verzameling</small></span></button>
         <button class="quick-action" onclick="openMissingCollector()"><span class="ico">⚠️</span><span>Nog niet in TCG<small>Bewaren of verkoop verwerken</small></span></button>
         <button class="quick-action" onclick="openOwnUse()"><span class="ico">🏠</span><span>Eigen gebruik<small>Sleeves, toploaders en eigen materiaal</small></span></button>
@@ -488,6 +489,22 @@
     </div>
     <div id="marketTrendSummary" class="stats"></div>
     <div id="marketTrendList"></div>
+  </section>
+
+  <section id="pricelists" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">🖨️ Actuele prijslijsten</h2>
+      <div class="muted">Maak een lijst van Kast 1, Kast 2 of één complete set. De Cardmarket-prijzen worden bij het maken opnieuw gecontroleerd.</div>
+      <label>Welke lijst?</label>
+      <select id="priceListType" onchange="updatePriceListControls()"><option value="cabinet1">Kast 1</option><option value="cabinet2">Kast 2</option><option value="set">Per set</option></select>
+      <div id="priceListSetWrap" class="hidden"><label>Set</label><select id="priceListSet"></select></div>
+      <label>Marge boven actuele marktprijs (%)</label>
+      <input id="priceListMargin" type="number" min="0" max="200" step="1" inputmode="numeric" value="20">
+      <div class="muted" style="margin-top:6px">Voorbeeld: marktprijs €10,00 + 20% marge = Psycards vraagprijs €12,00. Dit geeft Sem ruimte om te onderhandelen.</div>
+      <button id="priceListButton" class="primary" style="width:100%;margin-top:14px" onclick="buildAndPrintPriceList()">🔄 Prijzen vernieuwen & printen</button>
+      <div id="priceListStatus" class="scan-status"></div>
+    </div>
   </section>
 
   <section id="stock" class="hidden">
@@ -2147,6 +2164,38 @@ async function checkSetValues(){
   }catch(e){
     console.error(e);setValueStatus.textContent='De setprijzen konden niet volledig worden opgehaald. Probeer het later opnieuw.';
   }finally{setValueButton.disabled=false;}
+}
+
+async function openPriceLists(){
+  show('pricelists');
+  const status=document.getElementById('priceListStatus');if(status)status.textContent='Sets laden…';
+  const cards=(await getAll()).filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad'&&availableQuantity(c)>0);
+  const sets=[...new Set(cards.map(stockFolderName).filter(x=>x&&x!=='Kaarten zonder set'))].sort((a,b)=>a.localeCompare(b,'nl'));
+  const select=document.getElementById('priceListSet');select.innerHTML=sets.map(set=>`<option value="${escapeHtml(set)}">${escapeHtml(set)}</option>`).join('');
+  updatePriceListControls();if(status)status.textContent=sets.length?'Kies Kast 1, Kast 2 of een set.':'Nog geen sets met kaarten op voorraad.';
+}
+function updatePriceListControls(){
+  const type=document.getElementById('priceListType')?.value||'cabinet1';document.getElementById('priceListSetWrap')?.classList.toggle('hidden',type!=='set');
+}
+function priceListRounded(value){return Math.ceil((Number(value)||0)*20)/20;}
+async function buildAndPrintPriceList(){
+  const type=document.getElementById('priceListType').value,set=document.getElementById('priceListSet').value,margin=Math.max(0,parseFloat(document.getElementById('priceListMargin').value)||0),status=document.getElementById('priceListStatus'),button=document.getElementById('priceListButton');
+  const all=(await getAll()).filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad'&&availableQuantity(c)>0);
+  let cards=type==='cabinet1'?all.filter(c=>c.cabinet==='Kast 1'):type==='cabinet2'?all.filter(c=>c.cabinet==='Kast 2'):all.filter(c=>normalizeSetName(stockFolderName(c))===normalizeSetName(set));
+  if(!cards.length)return alert('Er staan geen kaarten in deze selectie.');
+  cards.sort((a,b)=>stockFolderName(a).localeCompare(stockFolderName(b),'nl')||bundleCardNumber(a)-bundleCardNumber(b)||String(a.variant||'').localeCompare(String(b.variant||''),'nl'));
+  button.disabled=true;button.textContent='Prijzen controleren…';status.textContent='0 van '+cards.length+' kaarten gecontroleerd…';
+  const rows=[];
+  try{
+    for(let i=0;i<cards.length;i+=4){
+      const batch=cards.slice(i,i+4);const found=await Promise.all(batch.map(async card=>{const parts=splitStoredName(card.name);try{const pricing=await getCardmarketPrice(card),market=cardmarketVariantRawPrice(pricing,card.variant),ask=market?priceListRounded(market*(1+margin/100)):0;return {card,parts,market,ask};}catch(e){return {card,parts,market:0,ask:0};}}));rows.push(...found);status.textContent=Math.min(i+4,cards.length)+' van '+cards.length+' kaarten gecontroleerd…';
+    }
+    const title=type==='cabinet1'?'Kast 1':type==='cabinet2'?'Kast 2':set;const known=rows.filter(r=>r.market>0).length;
+    const w=window.open('','_blank');if(!w)return alert('Sta pop-ups toe om de prijslijst af te drukken.');
+    const money=v=>v?'€ '+Number(v).toFixed(2).replace('.',','):'—';
+    const body=rows.map(r=>`<tr><td>${escapeHtml(r.parts.number||'')}</td><td><b>${escapeHtml(r.parts.name||r.card.name)}</b><div class="small">${escapeHtml(stockFolderName(r.card))}</div></td><td>${escapeHtml(r.card.variant||'')}</td><td>${r.card.cabinet?escapeHtml(r.card.cabinet):'—'}</td><td>${money(r.market)}</td><td><b>${money(r.ask)}</b></td><td>${availableQuantity(r.card)}</td></tr>`).join('');
+    w.document.write(`<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Psycards · ${escapeHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#14213d;margin:18mm}h1{color:#1f4e78;margin:0 0 4px}.meta{color:#667085;margin-bottom:14px}.small{font-size:10px;color:#667085;margin-top:2px}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border-bottom:1px solid #d6deea;padding:7px 5px;text-align:left;vertical-align:top}th{background:#eef5fb}td:nth-child(5),td:nth-child(6){white-space:nowrap}.note{font-size:10px;color:#667085;margin-top:12px}@page{size:A4 portrait;margin:12mm}@media print{body{margin:0}}</style></head><body><h1>Psycards · ${escapeHtml(title)}</h1><div class="meta">Actuele prijslijst · ${new Date().toLocaleString('nl-NL')} · marge ${margin}% · ${known}/${rows.length} marktprijzen gevonden</div><table><thead><tr><th>Nr.</th><th>Kaart / set</th><th>Variant</th><th>Kast</th><th>Cardmarket</th><th>Psycards +${margin}%</th><th>Aantal</th></tr></thead><tbody>${body}</tbody></table><div class="note">Psycards-prijs is berekend vanaf de gevonden Cardmarket-marktprijs plus ${margin}% en afgerond naar boven op €0,05. Een streepje betekent dat geen actuele prijs kon worden gevonden.</div></body></html>`);w.document.close();w.focus();status.textContent='✓ '+known+' van '+rows.length+' actuele prijzen gevonden. Printvenster geopend.';setTimeout(()=>w.print(),350);
+  }finally{button.disabled=false;button.textContent='🔄 Prijzen vernieuwen & printen';}
 }
 
 async function renderStock(){
