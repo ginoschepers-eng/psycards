@@ -538,6 +538,7 @@
         <button class="quick-action" onclick="openReports();setTimeout(()=>document.getElementById('inventoryReportStats')?.scrollIntoView({behavior:'smooth'}),100)"><span class="ico">📦</span><span>Voorraadrapport<small>Excel en printoverzicht</small></span></button>
         <button class="quick-action" onclick="openBookkeeping()"><span class="ico">🏦</span><span>Boekhouding<small>Bank, kas, btw, privé en open posten</small></span></button>
         <button class="quick-action" onclick="openReceiptManager()"><span class="ico">📸</span><span>Bonnetjes &amp; facturen<small>Bon toevoegen en archief bekijken</small></span></button>
+        <button class="quick-action" onclick="openTaxOverview()"><span class="ico">🧾</span><span>Aangifte voorbereiden<small>Jaaroverzicht omzet, kosten en voorraad</small></span></button>
       </div>
     </div>
   </section>
@@ -635,6 +636,24 @@
       <button class="primary" style="width:100%;margin-top:12px" onclick="exportInventoryExcelCSV()">⬇️ Voorraad openen in Excel</button>
       <button class="light" style="width:100%;margin-top:8px" onclick="printInventoryReport()">🖨️ Voorraadoverzicht printen</button>
     </div>
+  </section>
+
+  <section id="taxOverview" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button><button class="light" onclick="exportTaxOverview()">⬇️ Jaaroverzicht Excel</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">🧾 Jaaroverzicht voor aangifte</h2>
+      <div class="muted">Verzamel omzet, inkoopwaarde, kosten, voorraad en boekhoudposten voor de gekozen jaarperiode.</div>
+      <label for="taxYear">Boekjaar</label><select id="taxYear" onchange="renderTaxOverview()"></select>
+      <div id="taxReportNote" class="scanbox" style="margin-top:12px">Overzicht laden…</div>
+      <div id="taxReportStats" class="stats" style="margin-top:12px"></div>
+      <button class="primary" style="width:100%;margin-top:12px" onclick="exportTaxOverview()">⬇️ Aangifte-overzicht downloaden (Excel)</button>
+      <button class="light" style="width:100%;margin-top:8px" onclick="printTaxOverview()">🖨️ Overzicht afdrukken / opslaan als PDF</button>
+    </div>
+    <div class="card"><h3 style="margin:0 0 5px">Omzet per betaalwijze</h3><div id="taxPaymentSummary" class="scan-status"></div></div>
+    <div class="card"><h3 style="margin:0 0 5px">Kosten per categorie</h3><div id="taxExpenseSummary" class="scan-status"></div></div>
+    <div class="card"><h3 style="margin:0 0 5px">Voorraad en bewijsstukken</h3><div id="taxStockSummary" class="scan-status"></div></div>
+    <div class="card"><h3 style="margin:0 0 5px">Boekhoudposten in dit jaar</h3><div id="taxBookkeepingSummary" class="scan-status"></div></div>
+    <div class="card muted">Dit is een controleerbaar jaaroverzicht voor de boekhouding, geen belastingberekening of ingediende aangifte. Bedragen voor verkopen en gewone uitgaven zijn ingevoerd inclusief eventuele btw; de app splitst deze niet automatisch uit. Bonnen staan alleen op dit toestel: download en bewaar de bestanden apart. De voorraadwaarde is de actuele stand en geen historische jaarultimo-opname. Controleer classificatie, btw en voorraadwaardering vóór indiening.</div>
   </section>
 
   <section id="edit" class="hidden">
@@ -3217,7 +3236,68 @@ async function exportKasboekCSV(){
 }
 function downloadCsvFile(filename,rows){const csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(';')).join('\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();URL.revokeObjectURL(a.href);}
 function reportDateOk(date,year,period,month){if(!date)return false;const d=new Date(date);if(isNaN(d))return false;if(d.getFullYear()!=year)return false;return period!=='month'||d.getMonth()==month;}
-async function reportData(){const cards=await getAll();await loadBundleData();const expenses=expenseCache.map(e=>({date:e.soldDate,description:e.name,category:String(e.condition||'').replace(/^Kosten\s*\|\s*/i,''),amount:+e.buy||0,payment:e.payment||''}));const sales=[];cards.filter(c=>c.soldQuantity>0).forEach(c=>sales.push({date:c.soldDate,description:c.name,type:c.productType||'Kaart',quantity:c.soldQuantity,revenue:+c.soldPrice||0,cost:(+c.buy||0)*(+c.soldQuantity||0),payment:c.payment||''}));bundlesCache.filter(b=>b.status==='Verkocht').forEach(b=>sales.push({date:b.sold_date,description:b.name,type:'Bundel',quantity:1,revenue:+b.sold_price||0,cost:0.50,payment:b.payment||''}));return {cards,expenses,sales};}
+function openTaxOverview(){show('taxOverview');const select=document.getElementById('taxYear');if(select&&!select.options.length){const current=new Date().getFullYear();for(let y=current;y>=2025;y--){const o=document.createElement('option');o.value=y;o.textContent=y;select.appendChild(o);}select.value=current;}renderTaxOverview();}
+function taxPayerLabel(description){const m=String(description||'').match(/\s*\[Betaald door:\s*([^\]]+)\]\s*$/i);return m?m[1]:'Niet vastgelegd';}
+function taxSummaryRows(year,expenses,sales,stockCost,stockRetail,stockQty,receiptIds){
+ const revenue=sales.reduce((a,x)=>a+(+x.revenue||0),0),cogs=sales.reduce((a,x)=>a+(+x.cost||0),0);
+ const stockPurchases=expenses.filter(x=>String(x.category).toLowerCase()==='voorraad').reduce((a,x)=>a+(+x.amount||0),0);
+ const operating=expenses.filter(x=>String(x.category).toLowerCase()!=='voorraad').reduce((a,x)=>a+(+x.amount||0),0);
+ return {year,revenue,cogs,gross:revenue-cogs,stockPurchases,operating,result:revenue-cogs-operating,stockCost,stockRetail,stockQty,receiptCount:expenses.filter(x=>receiptIds.has(String(x.id))).length,missingReceipt:expenses.filter(x=>!receiptIds.has(String(x.id))).length};
+}
+async function renderTaxOverview(){
+ const year=+(document.getElementById('taxYear')?.value||new Date().getFullYear()),note=document.getElementById('taxReportNote');
+ if(note)note.textContent='Jaargegevens en bonnen koppelen…';
+ try{
+  const d=await reportData(),sales=d.sales.filter(x=>reportDateOk(x.date,year,'year',0)),expenses=d.expenses.filter(x=>reportDateOk(x.date,year,'year',0));
+  const stock=d.cards.filter(c=>c.status==='Op voorraad'),bundles=bundlesCache.filter(b=>b.status==='Samengesteld');
+  const stockCost=stock.reduce((sum,c)=>sum+(+c.buy||0)*availableQuantity(c),0)+bundles.length*.50;
+  const stockRetail=stock.reduce((sum,c)=>sum+(+c.ask||0)*availableQuantity(c),0)+bundles.reduce((sum,b)=>sum+(+b.ask||0),0);
+  const stockQty=stock.reduce((sum,c)=>sum+availableQuantity(c),0)+bundles.length;
+  let receiptRows=[];try{receiptRows=await receiptAction('getAll');}catch(e){console.warn('Bonnenarchief niet beschikbaar:',e);}
+  const receiptIds=new Set(receiptRows.map(r=>String(r.id))),t=taxSummaryRows(year,expenses,sales,stockCost,stockRetail,stockQty,receiptIds);
+  const percent=t.revenue?Math.round(t.receiptCount/(t.receiptCount+t.missingReceipt||1)*100):0;
+  if(note)note.innerHTML=`Boekjaar <b>${year}</b> · ${sales.length} verkoopregels · ${expenses.length} uitgaven. ${expenses.length?`Bonnen gevonden bij ${t.receiptCount} van ${expenses.length} uitgaven (${percent}%).`:'Nog geen uitgaven geregistreerd voor dit jaar.'}`;
+  const metrics=[['Omzet geregistreerd',t.revenue],['Inkoopwaarde verkochte artikelen',t.cogs],['Brutomarge indicatief',t.gross],['Voorraadinkoop geboekt',t.stockPurchases],['Overige zakelijke uitgaven',t.operating],['Resultaat indicatief',t.result]];
+  document.getElementById('taxReportStats').innerHTML=metrics.map(([k,v])=>`<div class="stat">${k}<b>${euro(v)}</b></div>`).join('')+`<div class="stat">Huidige voorraad<b>${stockQty} items · ${euro(t.stockCost)}</b></div>`;
+  const byPayment=new Map();sales.forEach(x=>{const k=x.payment||'Niet vastgelegd';byPayment.set(k,(byPayment.get(k)||0)+(+x.revenue||0));});
+  document.getElementById('taxPaymentSummary').innerHTML=byPayment.size?[...byPayment].sort((a,b)=>a[0].localeCompare(b[0],'nl')).map(([k,v])=>`<div>${escapeHtml(k)} <b style="float:right">${euro(v)}</b></div>`).join(''):`<span class="muted">Geen geregistreerde verkopen.</span>`;
+  const byCategory=new Map();expenses.forEach(x=>{const k=x.category||'Overig';byCategory.set(k,(byCategory.get(k)||0)+(+x.amount||0));});
+  document.getElementById('taxExpenseSummary').innerHTML=byCategory.size?[...byCategory].sort((a,b)=>a[0].localeCompare(b[0],'nl')).map(([k,v])=>`<div>${escapeHtml(k)} <b style="float:right">${euro(v)}</b></div>`).join(''):`<span class="muted">Geen geregistreerde uitgaven.</span>`;
+  document.getElementById('taxStockSummary').innerHTML=`Huidige voorraad: <b>${stockQty} items</b> · inkoopwaarde <b>${euro(stockCost)}</b> · verkoopwaarde <b>${euro(stockRetail)}</b><br>Bon/factuur gekoppeld in dit toestel: <b>${t.receiptCount}</b> · ontbrekend / niet gevonden: <b>${t.missingReceipt}</b>.`;
+  const bk=getBookkeepingEntries().filter(x=>String(x.date||'').slice(0,4)===String(year));
+  const bkTotal=bk.reduce((s,x)=>s+(+x.amount||0),0);
+  document.getElementById('taxBookkeepingSummary').innerHTML=bk.length?`${bk.length} posten · totaal van de ingevoerde bedragen ${euro(bkTotal)}<br>`+bk.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(x=>`${escapeHtml(x.date)} · ${escapeHtml(bkLabel(x.type))} · ${escapeHtml(x.description||'')} · <b>${euro(x.amount)}</b>${x.status==='open'?' · open':''}`).join('<br>'):'<span class="muted">Geen boekhoudposten ingevoerd voor dit jaar.</span>';
+ }catch(e){console.error(e);if(note)note.textContent='Jaaroverzicht kon niet worden geladen: '+(e?.message||e);}
+}
+async function taxOverviewData(){
+ const year=+(document.getElementById('taxYear')?.value||new Date().getFullYear()),d=await reportData(),sales=d.sales.filter(x=>reportDateOk(x.date,year,'year',0)),expenses=d.expenses.filter(x=>reportDateOk(x.date,year,'year',0));
+ const cards=d.cards.filter(c=>c.status==='Op voorraad'),bundles=bundlesCache.filter(b=>b.status==='Samengesteld');
+ const stockCost=cards.reduce((sum,c)=>sum+(+c.buy||0)*availableQuantity(c),0)+bundles.length*.50,stockRetail=cards.reduce((sum,c)=>sum+(+c.ask||0)*availableQuantity(c),0)+bundles.reduce((sum,b)=>sum+(+b.ask||0),0),stockQty=cards.reduce((sum,c)=>sum+availableQuantity(c),0)+bundles.length;
+ let receiptRows=[];try{receiptRows=await receiptAction('getAll');}catch(e){}
+ const receiptIds=new Set(receiptRows.map(r=>String(r.id))),t=taxSummaryRows(year,expenses,sales,stockCost,stockRetail,stockQty,receiptIds),bookEntries=getBookkeepingEntries().filter(x=>String(x.date||'').slice(0,4)===String(year));
+ const byPayment=new Map(),byCategory=new Map();sales.forEach(x=>{const k=x.payment||'Niet vastgelegd';byPayment.set(k,(byPayment.get(k)||0)+(+x.revenue||0));});expenses.forEach(x=>{const k=x.category||'Overig';byCategory.set(k,(byCategory.get(k)||0)+(+x.amount||0));});
+ const summary=[['Psycards jaaroverzicht voor boekhouder',year],['Omzet geregistreerd',t.revenue],['Inkoopwaarde verkochte artikelen',t.cogs],['Brutomarge indicatief',t.gross],['Voorraadinkoop geboekt (apart)',t.stockPurchases],['Overige zakelijke uitgaven',t.operating],['Resultaat indicatief (excl. voorraadinkoop)',t.result],['Huidige voorraad aantal',t.stockQty],['Huidige voorraad inkoopwaarde — geen historische peildatum',t.stockCost],['Huidige voorraad verkoopwaarde — indicatief',t.stockRetail],['Bonnen gekoppeld',t.receiptCount],['Uitgaven zonder gekoppelde bon in dit toestel',t.missingReceipt],['Let op','Geen belasting- of btw-berekening. Bedragen volgen invoer en moeten gecontroleerd worden.']];
+ const salesRows=[['Datum','Type','Omschrijving','Aantal','Omzet ingevoerd','Inkoopwaarde','Betaalwijze'],...sales.map(x=>[x.date,x.type,x.description,x.quantity,x.revenue,x.cost,x.payment])];
+ const expenseRows=[['Datum','Categorie','Omschrijving','Bedrag ingevoerd (incl. evt. btw)','Betaalwijze','Betaald door','Bon gekoppeld in dit toestel','Registratie-ID'],...expenses.map(x=>[x.date,x.category,x.description,x.amount,x.payment,taxPayerLabel(x.description),receiptIds.has(String(x.id))?'Ja':'Niet gevonden',x.id])];
+ const paymentRows=[['Betaalwijze','Omzet'],...[...byPayment].map(([k,v])=>[k,v])],categoryRows=[['Uitgavencategorie','Bedrag ingevoerd'],...[...byCategory].map(([k,v])=>[k,v])];
+ const currentStock=await inventoryRows();
+ const bookkeepingRows=[['Datum','Soort','Omschrijving','Bedrag','Status','Bank/kas','BTW-tarief (handmatig)'],...bookEntries.map(x=>[x.date,bkLabel(x.type),x.description,x.amount,x.status,x.destination,x.vatRate||''])];
+ return {year,sheets:[['Jaaroverzicht',summary],['Omzet',salesRows],['Omzet per betaalwijze',paymentRows],['Uitgaven',expenseRows],['Uitgaven per categorie',categoryRows],['Huidige voorraad',currentStock],['Boekhoudposten',bookkeepingRows]]};
+}
+async function exportTaxOverview(){
+ try{const d=await taxOverviewData();if(typeof XLSX==='undefined')throw Error('Excel-module niet geladen. Controleer de internetverbinding en vernieuw de pagina.');const book=XLSX.utils.book_new();d.sheets.forEach(([name,rows])=>{const sh=XLSX.utils.aoa_to_sheet(rows);sh['!cols']=rows[0].map((_,i)=>({wch:Math.min(42,Math.max(14,...rows.slice(0,100).map(r=>String(r[i]??'').length+2)))}));sh['!freeze']={xSplit:0,ySplit:1};XLSX.utils.book_append_sheet(book,sh,name);});XLSX.writeFile(book,`Psycards_aangiftevoorbereiding_${d.year}.xlsx`,{compression:true});}
+ catch(e){console.error(e);alert('Jaaroverzicht exporteren mislukt: '+(e?.message||e));}
+}
+async function printTaxOverview(){
+ try{const d=await taxOverviewData(),sheets=d.sheets,summary=sheets[0][1],sales=sheets[1][1].slice(1),expenses=sheets[3][1].slice(1),stock=sheets[5][1].slice(1);
+ const w=window.open('','_blank');if(!w)return alert('Sta pop-ups toe om het jaaroverzicht af te drukken.');
+ const tableHtml=(headers,rows)=>'<table><thead><tr>'+headers.map(x=>'<th>'+escapeHtml(x)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(x=>'<td>'+escapeHtml(String(x??''))+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
+ const pay=sheets[2][1].slice(1),cats=sheets[4][1].slice(1),bookEntries=sheets[6][1].slice(1);
+ w.document.write('<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Psycards jaaroverzicht '+d.year+'</title><style>body{font:11px Arial,sans-serif;color:#14213d;margin:18mm}h1{color:#1f4e78;font-size:21px}h2{margin:20px 0 8px;color:#1f4e78;font-size:15px}.note{padding:10px;background:#fff1c2;border:1px solid #e2c45e;line-height:1.5}table{width:100%;border-collapse:collapse;margin:7px 0 15px}th,td{border:1px solid #cfd8e3;padding:5px;text-align:left;vertical-align:top}th{background:#163b5c;color:white}tr:nth-child(even){background:#f6f8fa}.small{font-size:9px;color:#596675}@page{size:A4 portrait;margin:14mm}</style></head><body><h1>Psycards — jaaroverzicht '+d.year+'</h1><div class="note">Boekhoudkundig voorbereidingsoverzicht; geen belastingberekening of ingediende aangifte. Bedragen volgen de invoer. Btw-splitsing ontbreekt bij gewone verkoop-/uitgavenregistraties. Voorraad is actuele stand, geen historische jaarultimo-opname.</div><h2>Samenvatting</h2>'+tableHtml(['Post','Bedrag / aantal'],summary.slice(1).filter(r=>r[0]!=='Let op'))+'<h2>Omzet per betaalwijze</h2>'+tableHtml(['Betaalwijze','Omzet'],pay)+'<h2>Uitgaven per categorie</h2>'+tableHtml(['Categorie','Bedrag ingevoerd'],cats)+'<h2>Verkoopregels</h2>'+tableHtml(['Datum','Type','Omschrijving','Aantal','Omzet','Inkoopwaarde','Betaalwijze'],sales)+'<h2>Uitgaven en bonkoppeling</h2>'+tableHtml(['Datum','Categorie','Omschrijving','Bedrag','Betaalwijze','Betaald door','Bon?'],expenses.map(r=>r.slice(0,7)))+'<h2>Boekhoudposten</h2>'+tableHtml(['Datum','Soort','Omschrijving','Bedrag','Status','Bank/kas','BTW-tarief'],bookEntries)+'<h2>Actuele voorraad</h2>'+tableHtml(['Set/product','Naam','Uitvoering','Beschikbaar','Inkoop/stuk','Inkoopwaarde','Vraagprijs','Verkoopwaarde'],stock.map(r=>[r[1],r[2],r[3],r[8],r[9],r[10],r[11],r[12]]))+'<p class="small">Controleer classificatie van voorraadinkopen, btw, kosten en voorraadwaardering met de boekhouder vóór gebruik voor aangifte.</p><script>window.onload=()=>setTimeout(()=>window.print(),250)</script></body></html>');w.document.close();}
+ catch(e){console.error(e);alert('Afdrukoverzicht maken mislukt: '+(e?.message||e));}
+}
+
+async function reportData(){const cards=await getAll();await loadBundleData();const expenses=expenseCache.map(e=>({id:String(e.id),date:e.soldDate,description:e.name,category:String(e.condition||'').replace(/^Kosten\s*\|\s*/i,''),amount:+e.buy||0,payment:e.payment||''}));const sales=[];cards.filter(c=>c.soldQuantity>0).forEach(c=>sales.push({date:c.soldDate,description:c.name,type:c.productType||'Kaart',quantity:c.soldQuantity,revenue:+c.soldPrice||0,cost:(+c.buy||0)*(+c.soldQuantity||0),payment:c.payment||''}));bundlesCache.filter(b=>b.status==='Verkocht').forEach(b=>sales.push({date:b.sold_date,description:b.name,type:'Bundel',quantity:1,revenue:+b.sold_price||0,cost:0.50,payment:b.payment||''}));return {cards,expenses,sales};}
 async function openReports(){show('reports');const now=new Date(),sel=document.getElementById('reportYear');if(sel&&!sel.options.length){for(let y=now.getFullYear();y>=2025;y--){const o=document.createElement('option');o.value=y;o.textContent=y;sel.appendChild(o);}sel.value=now.getFullYear();document.getElementById('reportMonth').value=now.getMonth();document.getElementById('balanceDate').value=now.toISOString().slice(0,10);}await renderReports();}
 async function renderReports(){const {cards,expenses,sales}=await reportData(),year=+(reportYear?.value||new Date().getFullYear()),period=reportPeriod?.value||'year',month=+(reportMonth?.value||0);document.getElementById('reportMonthWrap')?.classList.toggle('hidden',period!=='month');const ss=sales.filter(x=>reportDateOk(x.date,year,period,month)),ee=expenses.filter(x=>reportDateOk(x.date,year,period,month));const revenue=ss.reduce((s,x)=>s+x.revenue,0),cogs=ss.reduce((s,x)=>s+x.cost,0),operating=ee.reduce((s,x)=>s+x.amount,0),gross=revenue-cogs,net=gross-operating,qty=ss.reduce((s,x)=>s+(+x.quantity||0),0);profitReportStats.innerHTML=[['Omzet',revenue],['Inkoopwaarde verkocht',cogs],['Brutowinst',gross],['Overige uitgaven',operating],['Resultaat',net]].map(([k,v])=>`<div class="stat">${k}<b>${euro(v)}</b></div>`).join('')+`<div class="stat">Items verkocht<b>${qty}</b></div>`;
  const open=cards.filter(c=>c.status==='Op voorraad'),openBundles=bundlesCache.filter(b=>b.status==='Samengesteld'),stockCost=open.reduce((s,c)=>s+(+c.buy||0)*availableQuantity(c),0)+openBundles.length*.50,stockRetail=open.reduce((s,c)=>s+(+c.ask||0)*availableQuantity(c),0)+openBundles.reduce((s,b)=>s+(+b.ask||0),0),stockQty=open.reduce((s,c)=>s+availableQuantity(c),0)+openBundles.length;inventoryReportStats.innerHTML=`<div class="stat">Voorraad items<b>${stockQty}</b></div><div class="stat">Inkoopwaarde<b>${euro(stockCost)}</b></div><div class="stat">Verkoopwaarde<b>${euro(stockRetail)}</b></div><div class="stat">Bundels<b>${openBundles.length}</b></div>`;
