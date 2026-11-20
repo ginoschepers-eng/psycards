@@ -250,6 +250,7 @@
       <h2 style="margin:0 0 5px">Mijn sets</h2>
       <div class="muted">Tik op een set om direct kaarten en aantallen in te voeren.</div>
       <div id="dashboardSets"></div>
+      <div class="scanbox" style="margin-top:16px"><b>Bestaande losse kaarten</b><div class="muted">Alle losse Pokémonkaarten die nu in de voorraad staan kunnen eenmalig als eigen inbreng worden gemarkeerd. Aantallen, prijzen, verkopen en bundels blijven ongewijzigd.</div><button id="markOwnStockButton" class="gold" style="width:100%;margin-top:9px" onclick="markCurrentLooseCardsAsOwnStock()">⭐ Huidige losse kaarten = eigen voorraad</button><div id="markOwnStockStatus" class="scan-status"></div></div>
       <details style="margin-top:16px">
         <summary style="cursor:pointer;font-weight:700">🔧 Onderhoud database</summary>
         <div class="muted" style="margin-top:8px">Alleen nodig om kaartgegevens opnieuw met TCGdex te controleren. Normaal maximaal 1× per 4 dagen.</div>
@@ -355,7 +356,7 @@
 
   <section id="setCards" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug naar sets</button></nav>
-    <div class="card"><h2 id="setCardsTitle" style="margin:0 0 5px">Kaarten invoeren</h2><div class="muted">Vink per kaart één of meerdere kaartsoorten aan. Iedere soort wordt apart in de voorraad opgeslagen.</div><div class="scanbox" style="margin-top:12px"><b>Voorraadregel voor deze set</b><label style="display:flex;gap:10px;align-items:center;margin:10px 0 4px"><input id="setKeepOneRule" type="checkbox" style="width:22px;height:22px;margin:0" onchange="changeSetReserveRule(this)"><span>Altijd 1 exemplaar bewaren</span></label><div id="setReserveRuleText" class="muted"></div></div><div id="setCardsStatus" class="scan-status"></div><div class="set-jumpbar"><div><label>🔎 Ga naar kaartnummer</label><input id="setCardJump" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')jumpToSetCard()"></div><button class="light" onclick="jumpToSetCard()">Ga</button></div><button id="setCollectButton" class="light set-star" style="width:100%;margin-bottom:10px" onclick="toggleCurrentSetCollected()">☆ Wordt gespaard</button></div>
+    <div class="card"><h2 id="setCardsTitle" style="margin:0 0 5px">Kaarten invoeren</h2><div class="muted">Vink per kaart één of meerdere kaartsoorten aan. Iedere soort wordt apart in de voorraad opgeslagen.</div><div class="scanbox" style="margin-top:12px"><b>Voorraadregel voor deze set</b><label style="display:flex;gap:10px;align-items:center;margin:10px 0 4px"><input id="setKeepOneRule" type="checkbox" style="width:22px;height:22px;margin:0" onchange="changeSetReserveRule(this)"><span>Altijd 1 exemplaar bewaren</span></label><div id="setReserveRuleText" class="muted"></div></div><div class="scanbox" style="margin-top:12px"><b>Eigen voorraad</b><div class="muted">Voeg met één druk één exemplaar van iedere kaart uit deze set toe als eigen inbreng. Waar mogelijk wordt Normaal gekozen; anders Holo, Reverse holo of de eerste beschikbare uitvoering.</div><button class="gold" style="width:100%;margin-top:9px" onclick="addWholeSetAsOwnStock()">⭐ Hele set als eigen voorraad toevoegen</button></div><div id="setCardsStatus" class="scan-status"></div><div class="set-jumpbar"><div><label>🔎 Ga naar kaartnummer</label><input id="setCardJump" inputmode="numeric" placeholder="Bijv. 182 of 182/182" onkeydown="if(event.key==='Enter')jumpToSetCard()"></div><button class="light" onclick="jumpToSetCard()">Ga</button></div><button id="setCollectButton" class="light set-star" style="width:100%;margin-bottom:10px" onclick="toggleCurrentSetCollected()">☆ Wordt gespaard</button></div>
     <div id="setEntryCards"></div>
     <div id="setEntrySavebar" class="set-savebar hidden"><div id="setEntryCount" class="muted" style="text-align:center;margin-bottom:7px">Nog geen wijzigingen</div><button id="setEntrySaveButton" class="green" style="width:100%;padding:13px;font-size:16px" onclick="saveSetEntry()">💾 Wijzigingen lokaal bewaren</button><button id="setEntrySyncButton" class="primary" style="width:100%;padding:13px;font-size:16px;margin-top:8px" onclick="syncPendingSetEntries()">☁️ Klaar met invoeren · alles doorsturen</button><div id="setEntryPendingStatus" class="muted" style="text-align:center;margin-top:7px"></div></div>
   </section>
@@ -520,7 +521,7 @@
 
   <section id="bundles" class="hidden">
     <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
-    <div class="card"><h2 style="margin:0 0 5px">Kaartenbundels per set</h2><div class="muted">De bundelberekening kijkt naar de waarde van de kaarten samen. Gewone kaarten, reverse holo’s en holo’s mogen door elkaar worden gebruikt; er hoeft geen holo of reverse holo in elke bundel te zitten. Automatische bundels bevatten minimaal 25 kaarten (Pitch Black 30). Bij zelf samenstellen zijn het aantal kaarten en de verkoopprijs vrij. Speciale kaarten zoals ex, V en Illustration Rare worden niet meegenomen.</div><label>Totale kaartwaarde per bundel (standaard ongeveer €2,99)</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><span class="muted">Minimaal €</span><input id="bundleMinCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="2.90"></div><div><span class="muted">Maximaal €</span><input id="bundleMaxCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="3.10"></div></div><label>Verkoopprijs van 1 bundel €</label><input id="newBundleAsk" type="number" step="0.01" inputmode="decimal" value="2.99"><div class="muted" style="margin-top:6px"><b>1 bundel €2,99</b> · actie: <b>3 bundels voor €7,50</b><br>Inkoopprijs per bundel: <b>€0,50</b> (€0,25 kaarten + €0,25 materialen)</div><button class="primary" style="width:100%;margin-top:12px" onclick="startBundleBuilder()">🧮 Bereken mogelijke bundels</button><button class="light" style="width:100%;margin-top:9px" onclick="startManualBundleBuilder()">✋ Zelf een bundel samenstellen</button><button class="gold" style="width:100%;margin-top:10px" onclick="repairPitchBlackBundles()">🔧 Verwerk bestaande Pitch Black bundels 1–30</button><div class="muted" style="margin-top:6px">Eenmalig herstel voor de 30 al gemaakte Pitch Black-bundels uit de printlijst.</div></div>
+    <div class="card"><h2 style="margin:0 0 5px">Kaartenbundels per set</h2><div class="muted">De bundelberekening kijkt naar de waarde van de kaarten samen. Gewone kaarten, reverse holo’s en holo’s mogen door elkaar worden gebruikt; er hoeft geen holo of reverse holo in elke bundel te zitten. Automatische bundels bevatten minimaal 25 kaarten (Pitch Black 30). Bij zelf samenstellen zijn het aantal kaarten en de verkoopprijs vrij. Speciale kaarten zoals ex, V en Illustration Rare worden niet meegenomen.</div><label>Totale kaartwaarde per bundel (standaard ongeveer €2,99)</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><span class="muted">Minimaal €</span><input id="bundleMinCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="2.90"></div><div><span class="muted">Maximaal €</span><input id="bundleMaxCardPrice" type="number" min="0" step="0.01" inputmode="decimal" value="3.10"></div></div><label>Standaard verkoopprijs van 1 bundel €</label><input id="newBundleAsk" type="number" step="0.01" inputmode="decimal" value="2.99"><div class="scanbox" style="margin-top:12px"><b>Eigen bundelprijs per set</b><div class="muted">Iedere set kan een eigen verkoopprijs krijgen. Zonder aparte prijs wordt de standaardprijs gebruikt.</div><div id="bundleSetPrices" style="margin-top:8px"></div><button class="light" style="width:100%;margin-top:8px" onclick="saveBundleSetPrices()">💾 Prijzen per set bewaren</button></div><div class="muted" style="margin-top:6px">Actie: <b>3 bundels voor €7,50</b><br>Inkoopprijs per bundel: <b>€0,50</b> (€0,25 kaarten + €0,25 materialen)</div><button class="primary" style="width:100%;margin-top:12px" onclick="startBundleBuilder()">🧮 Bereken mogelijke bundels</button><button class="light" style="width:100%;margin-top:9px" onclick="startManualBundleBuilder()">✋ Zelf een bundel samenstellen</button><button class="gold" style="width:100%;margin-top:10px" onclick="repairPitchBlackBundles()">🔧 Verwerk bestaande Pitch Black bundels 1–30</button><div class="muted" style="margin-top:6px">Eenmalig herstel voor de 30 al gemaakte Pitch Black-bundels uit de printlijst.</div></div>
     <div id="bundleSaveStatus" class="scan-status"></div>
     <div id="bundleExisting"></div>
     <div id="bundleBuilder" class="hidden"><div id="bundleProgress" class="bundle-progress">Mogelijke bundels per set</div><div id="bundleCardList"></div><button class="light" style="width:100%;margin:12px 0 18px" onclick="cancelBundleBuilder()">Terug naar bundels</button></div>
@@ -912,6 +913,11 @@ let setEntrySet=null,setEntryCardMap=new Map(),savedSetsCache=[],setSearchResult
 const COLLECTED_SETS_KEY='psycards-collected-sets-v1';
 const SET_ENTRY_PENDING_KEY='psycards-set-entry-pending-v1';
 const SET_RESERVE_RULES_KEY='psycards-set-reserve-rules-v1';
+const BUNDLE_SET_PRICES_KEY='psycards-bundle-set-prices-v1';
+function getBundleSetPrices(){try{return JSON.parse(localStorage.getItem(BUNDLE_SET_PRICES_KEY)||'{}')||{};}catch(e){return {};}}
+function bundlePriceForSet(set){const prices=getBundleSetPrices(),specific=Number(prices[normalizeSetName(set)]),fallback=Number(document.getElementById('newBundleAsk')?.value);return Number.isFinite(specific)&&specific>=0?specific:(Number.isFinite(fallback)&&fallback>=0?fallback:2.99);}
+function renderBundleSetPrices(){const host=document.getElementById('bundleSetPrices');if(!host)return;const prices=getBundleSetPrices(),sets=[...new Set((cardsCache||[]).filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad').map(stockFolderName).filter(s=>s&&s!=='Kaarten zonder set'))].sort((a,b)=>a.localeCompare(b,'nl'));host.innerHTML=sets.length?sets.map(set=>`<div class="row" style="align-items:end"><div><label>${escapeHtml(set)}</label></div><div><input class="bundle-set-price" data-set="${escapeHtml(set)}" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Standaard" value="${prices[normalizeSetName(set)]??''}"></div></div>`).join(''):'<div class="muted">Nog geen sets met losse voorraad gevonden.</div>';}
+function saveBundleSetPrices(){const prices={};document.querySelectorAll('.bundle-set-price').forEach(input=>{if(String(input.value).trim()==='')return;const value=Number(input.value);if(Number.isFinite(value)&&value>=0)prices[normalizeSetName(input.dataset.set)]=value;});localStorage.setItem(BUNDLE_SET_PRICES_KEY,JSON.stringify(prices));alert('De bundelprijzen per set zijn bewaard.');}
 function getSetReserveRules(){try{return JSON.parse(localStorage.getItem(SET_RESERVE_RULES_KEY)||'{}')||{};}catch(e){return {};}}
 function reserveRuleKey(saved){return String(saved?.language||'')+'|'+String(saved?.tcgdex_id||saved?.id||'');}
 function keepOneForSet(saved){const rules=getSetReserveRules();return rules[reserveRuleKey(saved)]!==false;}
@@ -1317,6 +1323,25 @@ function updateSetEntryCount(){
   const amount=checked.reduce((sum,box)=>sum+(parseInt(box.closest('.set-variant-option').querySelector('input[type=number]').value)||0),0);
   setEntryCount.textContent=checked.length?checked.length+' kaartsoorten geselecteerd · '+amount+' kaarten totaal':'Nog geen kaartsoorten aangevinkt';
 }
+async function markCurrentLooseCardsAsOwnStock(){
+  const status=document.getElementById('markOwnStockStatus'),button=document.getElementById('markOwnStockButton');
+  if(!confirm('Alle huidige losse Pokémonkaarten als eigen inbreng markeren? Aantallen, prijzen, verkopen en bundels blijven hetzelfde.'))return;
+  if(button)button.disabled=true;if(status)status.textContent='Huidige losse kaarten verwerken…';
+  try{
+    await loadCards(true);const rows=cardsCache.filter(c=>c.productType==='Pokémonkaart');let changed=0;
+    for(const card of rows){if(card.acquisitionType==='private_contribution')continue;card.acquisitionType='private_contribution';card.contributionDate=card.contributionDate||new Date().toISOString().slice(0,10);card.contributionValue=card.contributionValue||card.ask||card.min||0;const {error}=await cloud.from('cards').update(toDb(card)).eq('id',card.id);if(error)throw error;changed++;}
+    await loadCards(true);if(status)status.textContent='✓ '+changed+' kaartregel'+(changed===1?'':'s')+' als eigen voorraad gemarkeerd.';alert(changed?status.textContent:'Alle losse kaarten stonden al als eigen voorraad geregistreerd.');
+  }catch(e){if(status)status.textContent='Verwerken mislukt: '+(e.message||e);alert(status.textContent);}
+  finally{if(button)button.disabled=false;}
+}
+function addWholeSetAsOwnStock(){
+  if(!setEntrySet)return alert('Laad eerst een set.');
+  const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));if(!saved)return alert('De gekozen set is niet gevonden.');
+  if(!confirm('Van iedere kaart uit '+saved.name+' één exemplaar als eigen voorraad klaarzetten? Bestaande hogere aantallen worden niet verlaagd.'))return;
+  const official=setEntrySet.cardCount?.official||setEntrySet.cardCount?.total||'?',pending=getPendingSetEntries(),today=new Date().toISOString().slice(0,10);let added=0;
+  for(const card of setEntrySet.cards){const variants=realVariantsForCard(card),variant=variants.find(v=>canonicalBundleVariant(v)==='Normaal')||variants.find(v=>canonicalBundleVariant(v)==='Holo')||variants.find(v=>canonicalBundleVariant(v)==='Reverse holo')||variants[0];if(!variant)continue;const storedName=setEntryStoredName(card,setEntrySet,official),key=pendingEntryKey(saved,storedName,variant),identity=bundleCardIdentity({name:storedName}),current=(cardsCache||[]).filter(c=>bundleCardIdentity(c)===identity&&canonicalBundleVariant(c.variant)===canonicalBundleVariant(variant)).reduce((sum,c)=>sum+availableQuantity(c),0);pending[key]={language:saved.language,tcgdex_id:saved.tcgdex_id,set_id:saved.id,set_name:saved.name,storedName,variant:canonicalBundleVariant(variant),quantity:Math.max(1,current),cardId:String(card.id),photo:card.image?card.image+'/high.webp':'',ownStock:true,contributionDate:today,savedAt:Date.now()};added++;}
+  savePendingSetEntries(pending);setCardsStatus.textContent='✓ Hele set staat klaar: '+added+' kaarten als eigen voorraad. Tik op “Klaar met invoeren” om alles door te sturen.';alert(setCardsStatus.textContent);
+}
 async function saveSetEntry(){
   if(!setEntrySet)return alert('Laad eerst een set.');
   const saved=savedSetsCache.find(s=>String(s.id)===String(setEntrySelect.value));
@@ -1330,7 +1355,7 @@ async function saveSetEntry(){
     const original=Math.max(0,Number(amount.dataset.original)||0),quantity=box.checked?Math.max(0,parseInt(amount.value)||0):0;
     if(quantity===original)return;
     const storedName=setEntryStoredName(card,setEntrySet,official),variant=canonicalBundleVariant(box.dataset.variant),key=pendingEntryKey(saved,storedName,variant);
-    pending[key]={language:saved.language,tcgdex_id:saved.tcgdex_id,set_id:saved.id,set_name:saved.name,storedName,variant,quantity,cardId:String(card.id),photo:card.image?card.image+'/high.webp':'',savedAt:Date.now()};
+    pending[key]={language:saved.language,tcgdex_id:saved.tcgdex_id,set_id:saved.id,set_name:saved.name,storedName,variant,quantity,cardId:String(card.id),photo:card.image?card.image+'/high.webp':'',ownStock:true,contributionDate:new Date().toISOString().slice(0,10),savedAt:Date.now()};
     changed++;
   });
   if(!changed)return alert('Er zijn geen aantallen gewijzigd.');
@@ -1356,10 +1381,11 @@ async function syncPendingSetEntries(){
       const identity=bundleCardIdentity({name:row.storedName}),matches=current.filter(c=>bundleCardIdentity(c)===identity&&c.condition==='NM'&&c.productType==='Pokémonkaart'&&canonicalBundleVariant(c.variant)===canonicalBundleVariant(row.variant)).sort((a,b)=>(b.soldQuantity+allocatedQuantity(b.id))-(a.soldQuantity+allocatedQuantity(a.id))),existing=matches[0];
       if(existing){
         const reserved=existing.soldQuantity+allocatedQuantity(existing.id),targetAvailable=Math.max(0,Number(row.quantity)||0),newQuantity=reserved+targetAvailable;
-        if(Number(existing.quantity)!==newQuantity){existing.quantity=newQuantity;existing.status=targetAvailable>0?'Op voorraad':existing.status;const advice=cardmarketAdvicePrice(priceCards.get(String(row.cardId))?.pricing?.cardmarket,row.variant);if(existing.ask<=0&&advice>0)existing.ask=advice;const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);if(error)throw new Error(row.storedName+': '+error.message);updated++;}
+        const originChanged=row.ownStock&&existing.acquisitionType!=='private_contribution';
+        if(Number(existing.quantity)!==newQuantity||originChanged){existing.quantity=newQuantity;existing.status=targetAvailable>0?'Op voorraad':existing.status;const advice=cardmarketAdvicePrice(priceCards.get(String(row.cardId))?.pricing?.cardmarket,row.variant);if(existing.ask<=0&&advice>0)existing.ask=advice;if(row.ownStock){existing.acquisitionType='private_contribution';existing.contributionDate=existing.contributionDate||row.contributionDate||new Date().toISOString().slice(0,10);existing.contributionValue=existing.contributionValue||advice||existing.ask||0;}const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);if(error)throw new Error(row.storedName+': '+error.message);updated++;}
         const removable=matches.slice(1).filter(c=>c.soldQuantity===0&&allocatedQuantity(c.id)===0);if(removable.length){const {error}=await cloud.from('cards').delete().in('id',removable.map(c=>c.id));if(error)throw error;removed+=removable.length;}
       }else if(Number(row.quantity)>0){
-        const advice=cardmarketAdvicePrice(priceCards.get(String(row.cardId))?.pricing?.cardmarket,row.variant),payload=toDb({name:row.storedName,productType:'Pokémonkaart',condition:'NM',variant:row.variant,buy:0,ask:advice,min:advice,quantity:Number(row.quantity)||0,soldQuantity:0,status:'Op voorraad',photo:row.photo||'',soldPrice:0,payment:'',soldDate:''});
+        const advice=cardmarketAdvicePrice(priceCards.get(String(row.cardId))?.pricing?.cardmarket,row.variant),payload=toDb({name:row.storedName,productType:'Pokémonkaart',condition:'NM',variant:row.variant,cabinet:'',acquisitionType:row.ownStock?'private_contribution':'unknown',contributionDate:row.ownStock?(row.contributionDate||new Date().toISOString().slice(0,10)):'',contributionValue:row.ownStock?advice:0,buy:row.ownStock?advice:0,ask:advice,min:advice,quantity:Number(row.quantity)||0,soldQuantity:0,status:'Op voorraad',photo:row.photo||'',soldPrice:0,payment:'',soldDate:''});
         const {error}=await cloud.from('cards').insert(payload);if(error)throw new Error(row.storedName+': '+error.message);inserted++;
       }
     }
@@ -2540,6 +2566,7 @@ function renderOwnUse(){
 async function renderBundles(){
   await Promise.all([loadCards(),loadBundleData()]);
   await loadPrizeAwards();
+  renderBundleSetPrices();
   const host=document.getElementById('bundleExisting');document.getElementById('bundleBuilder').classList.add('hidden');
   if(!bundleTablesReady){host.innerHTML='<div class="card"><b>Database-uitbreiding nodig</b><div class="muted">Voer eerst het nieuwe bestand supabase-setup.sql uit in de SQL Editor van Supabase.</div></div>';return;}
   if(!bundlesCache.length){host.innerHTML='<div class="card muted">Er zijn nog geen bundels samengesteld.</div>';return;}
@@ -2851,6 +2878,7 @@ async function startManualBundleBuilder(){
 }
 function renderManualBundleCards(set){
   manualBundleSet=set;const allowed=new Set(['Normaal','Holo','Reverse holo']),host=document.getElementById('manualBundleCards');if(!host)return;
+  const askInput=document.getElementById('manualBundleAsk');if(askInput)askInput.value=bundlePriceForSet(set).toFixed(2);
   const seen=new Set(),cards=cardsCache.filter(c=>c.productType==='Pokémonkaart'&&c.status==='Op voorraad'&&allowed.has(canonicalBundleVariant(c.variant))&&normalizeSetName(stockFolderName(c))===normalizeSetName(set)&&availableQuantity(c)>0).filter(c=>{const key=bundleUniqueKey(c);if(seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>bundleCardNumber(a)-bundleCardNumber(b)||String(a.variant||'').localeCompare(String(b.variant||''),'nl'));
   host.innerHTML=cards.length?cards.map(c=>'<label class="bundle-line"><input class="bundle-check manual-bundle-check" type="checkbox" data-card-id="'+escapeHtml(String(c.id))+'" data-price="'+Math.max(0,Number(c.ask)||0)+'" onchange="updateManualBundleSummary()"><span class="muted">'+escapeHtml(canonicalBundleVariant(c.variant))+'</span><span><b>'+escapeHtml(splitStoredName(c.name).number||'')+' '+escapeHtml(splitStoredName(c.name).name)+'</b><small class="muted" style="display:block">€'+Number(c.ask).toFixed(2)+' per kaart · '+availableQuantity(c)+' beschikbaar</small></span></label>').join(''):'<p class="muted">Geen beschikbare kaarten met een ingevoerde waarde in deze set.</p>';
   updateManualBundleSummary();
@@ -2946,7 +2974,7 @@ async function createPlannedBundles(planIndex){
     if(!bundleTablesReady)throw new Error('De tabellen bundles en bundle_items ontbreken. Voer het nieuwe supabase-setup.sql uit.');
     const needed={};chosen.forEach(bundle=>bundle.items.forEach(card=>needed[card.id]=(needed[card.id]||0)+1));
     for(const [id,quantity] of Object.entries(needed)){const card=cardsCache.find(c=>String(c.id)===String(id));if(!card||availableQuantity(card)<quantity)throw new Error('De voorraad is gewijzigd. Bereken de bundels opnieuw.');}
-    const ask=+document.getElementById('newBundleAsk').value||0;let made=0;
+    const ask=bundlePriceForSet(plan.set);let made=0;
     for(const bundlePlan of chosen){
       status.textContent='Bundel '+(made+1)+' van '+chosen.length+' opslaan…';
       const sameSet=bundlesCache.filter(b=>String(b.name).startsWith(plan.set+' Bundel ')),next=Math.max(0,...sameSet.map(b=>Number(String(b.name).match(/Bundel\s+(\d+)/)?.[1])||0))+1,name=plan.set+' Bundel '+next;
@@ -3006,7 +3034,7 @@ async function createBundle(){
   const selected=[...document.querySelectorAll('.bundle-check:checked')];if(selected.length<25)return alert('Kies minimaal 25 kaarten.');
   await Promise.all([loadCards(),loadBundleData()]);const counts={};selected.forEach(x=>counts[x.dataset.cardId]=(counts[x.dataset.cardId]||0)+1);
   for(const [id,count] of Object.entries(counts)){const card=cardsCache.find(c=>String(c.id)===String(id));if(!card||availableQuantity(card)<count)return alert('De voorraad is ondertussen gewijzigd. Open de bundel opnieuw en kies de kaarten nogmaals.');}
-  const next=Math.max(0,...bundlesCache.map(b=>Number(String(b.name).match(/\d+/)?.[0])||0))+1,name='Bundel '+next,ask=+document.getElementById('newBundleAsk').value||0;
+  const selectedSet=stockFolderName(cardsCache.find(c=>String(c.id)===String(selected[0]?.dataset.cardId))||{}),sameSet=bundlesCache.filter(b=>normalizeSetName(bundleSetName(b))===normalizeSetName(selectedSet)),next=Math.max(0,...sameSet.map(b=>Number(String(b.name).match(/Bundel\s+(\d+)/i)?.[1])||0))+1,name=(selectedSet&&selectedSet!=='Kaarten zonder set'?selectedSet+' ':'')+'Bundel '+next,ask=bundlePriceForSet(selectedSet);
   const {data:bundle,error}=await cloud.from('bundles').insert({name,status:'Samengesteld',ask}).select().single();if(error)return alert('Bundel opslaan is niet gelukt: '+error.message);
   const rows=Object.entries(counts).map(([card_id,quantity])=>({bundle_id:bundle.id,card_id:+card_id,quantity})),{error:itemError}=await cloud.from('bundle_items').insert(rows);if(itemError){await cloud.from('bundles').delete().eq('id',bundle.id);return alert('De kaarten konden niet aan de bundel worden gekoppeld: '+itemError.message);}
   // Eén Lucky Bundle per tien nieuw samengestelde bundels; geen prijs als voorraad ontbreekt.
