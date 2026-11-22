@@ -273,6 +273,7 @@
     <div class="card">
       <h2 style="margin:0 0 5px">🎉 30ste Celebrations · basisset</h2>
       <div class="muted">Vul per kaartnummer 1 t/m 128 in hoeveel gewone en ex-kaarten je hebt. Een leeg veld telt als 0. Wijzigingen worden eerst lokaal bewaard en pas na bevestiging naar de gezamenlijke voorraad gestuurd.</div>
+      <div class="scanbox" style="margin-top:12px"><b>Complete basissets invoeren</b><div class="muted">Voorbeeld: vul 3 in. De app zet dan bij alle kaartnummers 1 t/m 128 het aantal op 3: <b>3 × 128 = 384 kaarten</b>.</div><div class="row" style="align-items:end"><div><label>Aantal complete sets</label><input id="celebrations30CompleteSets" type="number" min="0" step="1" inputmode="numeric" placeholder="Bijv. 3"></div><div><button class="gold" style="width:100%" onclick="applyCelebrations30CompleteSets()">Vul 1 t/m 128</button></div></div><div id="celebrations30CompleteTotal" class="scan-status"></div></div>
       <div class="set-jumpbar" style="margin-top:12px"><div><label>Ga naar kaartnummer</label><input id="celebrations30Jump" type="number" min="1" max="128" inputmode="numeric" placeholder="Bijv. 25"></div><button class="light" onclick="jumpCelebrations30()">Ga</button></div>
       <div id="celebrations30Status" class="scan-status"></div>
     </div>
@@ -1108,6 +1109,14 @@ async function openCelebrations30(){
   status.textContent='✓ Kaarten 1 t/m 128 klaar voor invoer.';updateCelebrations30Count();
 }
 function updateCelebrations30Count(){const inputs=[...document.querySelectorAll('.c30-input')],types=inputs.filter(x=>(+x.value||0)>0).length,total=inputs.reduce((s,x)=>s+(+x.value||0),0);document.getElementById('celebrations30Count').textContent=types+' kaartregels · '+total+' kaarten totaal';}
+function applyCelebrations30CompleteSets(){
+ const input=document.getElementById('celebrations30CompleteSets'),sets=Math.max(0,parseInt(input?.value)||0),total=sets*128;
+ if(!sets)return alert('Vul eerst het aantal complete basissets in, bijvoorbeeld 3.');
+ if(!confirm(sets+' complete set'+(sets===1?'':'s')+' invullen? Dit zet kaartnummer 1 t/m 128 ieder op '+sets+' ('+total+' kaarten totaal).'))return;
+ document.querySelectorAll('.c30-input').forEach(x=>{if(x.dataset.variant==='Normaal')x.value=sets;else x.value='';});
+ document.getElementById('celebrations30CompleteTotal').innerHTML='<b>'+sets+' × 128 = '+total+' kaarten</b> ingevuld. Je kunt losse kaartnummers hieronder nog aanpassen.';
+ updateCelebrations30Count();
+}
 function jumpCelebrations30(){const n=Math.max(1,Math.min(128,parseInt(document.getElementById('celebrations30Jump').value)||0)),el=document.getElementById('c30-'+n);if(!el)return alert('Vul een kaartnummer van 1 t/m 128 in.');el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('set-entry-target');setTimeout(()=>el.classList.remove('set-entry-target'),2200);}
 function saveCelebrations30Local(){const data={};document.querySelectorAll('.c30-input').forEach(x=>data[celebrations30Key(x.dataset.number,x.dataset.variant)]=Math.max(0,parseInt(x.value)||0));localStorage.setItem(CELEBRATIONS30_KEY,JSON.stringify(data));document.getElementById('celebrations30Status').textContent='✓ De aantallen zijn lokaal bewaard. Tik op “Aantallen doorsturen” om de gezamenlijke voorraad bij te werken.';}
 async function syncCelebrations30(){
