@@ -209,6 +209,7 @@
       <div class="muted">Alle functies voor kaarten, sets en je eigen verzameling op één plek.</div>
       <div class="quick-grid" style="margin-top:14px">
         <button class="quick-action featured" onclick="openSetEntry()"><span class="ico">🗂️</span><span>Mijn sets<small>Sets beheren en aantallen invoeren</small></span></button>
+        <button class="quick-action" onclick="openCelebrations30()"><span class="ico">🎉</span><span>30ste Celebrations<small>Kaarten 1 t/m 128 invoeren</small></span></button>
         <button class="quick-action" onclick="openAllCardSearch()"><span class="ico">🔎</span><span>Alle kaarten zoeken<small>Zoek bijvoorbeeld Pikachu in alle sets</small></span></button>
         <button class="quick-action" onclick="openNewProduct()"><span class="ico">📷</span><span>Eén product<small>Los product toevoegen</small></span></button>
         <button class="quick-action" onclick="openValueCheck()"><span class="ico">💶</span><span>Kaartwaarde<small>Cardmarket indicatie</small></span></button>
@@ -257,7 +258,26 @@
         <button id="downloadMySetsButton" class="light" style="width:100%;margin-top:10px" onclick="downloadAllMySets()">🔄 Database controleren en bijwerken</button>
         <div id="downloadMySetsStatus" class="scan-status">Database-onderhoud staat los van de lokale download op het dashboard.</div>
       </details>
+      <details style="margin-top:16px">
+        <summary style="cursor:pointer;font-weight:700">🛟 Lokale voorraad herstellen</summary>
+        <div class="muted" style="margin-top:8px">Controleert de lokale voorraadkopie van vóór het online verversen. Er wordt niets gewijzigd voordat je de controle en back-up hebt bevestigd.</div>
+        <button class="light" style="width:100%;margin-top:10px" onclick="previewLocalStockRecovery()">🔎 Lokale herstelkopie controleren</button>
+        <div id="localRecoveryStatus" class="scan-status"></div>
+        <button id="localRecoveryButton" class="danger hidden" style="width:100%;margin-top:10px" onclick="restoreLocalStockSnapshot()">↩ Voorraad uit lokale kopie herstellen</button>
+      </details>
     </div>
+  </section>
+
+  <section id="celebrations30" class="hidden">
+    <nav><button class="light" onclick="goBackInApp()">← Terug</button></nav>
+    <div class="card">
+      <h2 style="margin:0 0 5px">🎉 30ste Celebrations · basisset</h2>
+      <div class="muted">Vul per kaartnummer 1 t/m 128 in hoeveel gewone en ex-kaarten je hebt. Een leeg veld telt als 0. Wijzigingen worden eerst lokaal bewaard en pas na bevestiging naar de gezamenlijke voorraad gestuurd.</div>
+      <div class="set-jumpbar" style="margin-top:12px"><div><label>Ga naar kaartnummer</label><input id="celebrations30Jump" type="number" min="1" max="128" inputmode="numeric" placeholder="Bijv. 25"></div><button class="light" onclick="jumpCelebrations30()">Ga</button></div>
+      <div id="celebrations30Status" class="scan-status"></div>
+    </div>
+    <div id="celebrations30Rows"></div>
+    <div class="set-savebar"><div id="celebrations30Count" class="muted" style="text-align:center;margin-bottom:7px"></div><button class="green" style="width:100%;padding:13px;font-size:16px" onclick="saveCelebrations30Local()">💾 Aantallen lokaal bewaren</button><button class="primary" style="width:100%;padding:13px;font-size:16px;margin-top:8px" onclick="syncCelebrations30()">☁️ Aantallen doorsturen</button></div>
   </section>
 
   <section id="new" class="hidden">
@@ -717,6 +737,8 @@ if(!cloud)console.error('Supabase bibliotheek kon niet geladen worden.');
 let cardsCache=[],expenseCache=[];
 let cardsCacheLoaded=false;
 const DATA_CACHE_KEY='psycards-data-cache-v2';
+const STOCK_RECOVERY_KEY='psycards-stock-recovery-v1';
+const CELEBRATIONS30_KEY='psycards-celebrations30-v1';
 const BUNDLE_CACHE_KEY='psycards-bundle-cache-v6';
 const DATA_SYNC_MAX_AGE=4*24*60*60*1000;
 const TCGDEX_CATALOG_CACHE_KEY='psycards-tcgdex-catalog-v2';
@@ -766,6 +788,7 @@ async function startApp(){
   history.replaceState({psycardsSection:'home'},'','#home');
   updateConnection();
   loadCollectorCards();
+  captureLocalStockRecoverySnapshot();
   await loadCards(false);
   await seedKnownExpenses();
   await loadBundleData(false);
@@ -774,6 +797,15 @@ async function startApp(){
   // Realtime meldt alleen dat een ander toestel iets wijzigde. Geen volledige tabellen meer downloaden.
   cloud.channel('psycards-live').on('postgres_changes',{event:'*',schema:'public',table:'cards'},()=>markRemoteChange()).subscribe();
   cloud.channel('psycards-bundles-live').on('postgres_changes',{event:'*',schema:'public',table:'bundles'},()=>markRemoteChange()).on('postgres_changes',{event:'*',schema:'public',table:'bundle_items'},()=>markRemoteChange()).subscribe();
+}
+
+function captureLocalStockRecoverySnapshot(){
+  try{
+    const cached=readJsonCache(DATA_CACHE_KEY);if(!cached||!Array.isArray(cached.all)||!cached.all.length)return;
+    const existing=readJsonCache(STOCK_RECOVERY_KEY);
+    if(existing&&Array.isArray(existing.all)&&existing.all.length)return;
+    writeJsonCache(STOCK_RECOVERY_KEY,{capturedAt:new Date().toISOString(),sourceSavedAt:cached.savedAt||null,all:cached.all});
+  }catch(e){console.warn('Lokale herstelkopie kon niet worden vastgezet',e);}
 }
 
 function markRemoteChange(){
@@ -847,6 +879,7 @@ async function loadCards(forceRefresh=false){
     const all=cached.all.map(fromDb);
     expenseCache=all.filter(c=>c.productType==='Kosten');cardsCache=all.filter(c=>c.productType!=='Kosten');cardsCacheLoaded=true;updateLastSyncText();return cardsCache;
   }
+  captureLocalStockRecoverySnapshot();
   const {data,error}=await fetchAllTableRows('cards');
   if(error){console.error(error);if(cached&&Array.isArray(cached.all)){const all=cached.all.map(fromDb);expenseCache=all.filter(c=>c.productType==='Kosten');cardsCache=all.filter(c=>c.productType!=='Kosten');cardsCacheLoaded=true;return cardsCache;}alert('De gezamenlijke voorraad kon niet worden geladen. Controleer de database-instelling.');return cardsCache;}
   // Bewaar alleen een volledig opgehaalde voorraad; een mislukte pagina mag de cache niet overschrijven.
@@ -1056,6 +1089,40 @@ async function removeSavedSet(){
 function setEntryVariantHtml(cardId,variant,currentQuantity=0){
   const hasStock=Number(currentQuantity)>0;
   return `<label class="set-variant-option${hasStock?' active':''}"><input class="set-variant-check" type="checkbox" data-card-id="${escapeHtml(cardId)}" data-variant="${escapeHtml(variant)}"${hasStock?' checked':''} onchange="toggleSetEntryVariant(this)"><span>${escapeHtml(variant)}</span><input class="${hasStock?'':'hidden'}" type="number" min="0" step="1" inputmode="numeric" value="${hasStock?currentQuantity:''}" data-original="${Number(currentQuantity)||0}" placeholder="Aantal" aria-label="Aantal ${escapeHtml(variant)}" oninput="updateSetEntryCount()"></label>`;
+}
+
+function celebrations30StoredName(number,variant){return 'Kaart '+String(number).padStart(3,'0')+(variant==='ex'?' ex':'')+' — 30ste Celebrations '+String(number).padStart(3,'0')+'/128';}
+function readCelebrations30Local(){try{return JSON.parse(localStorage.getItem(CELEBRATIONS30_KEY)||'{}')||{};}catch(e){return {};}}
+function celebrations30Key(number,variant){return number+'|'+variant;}
+async function openCelebrations30(){
+  show('celebrations30');const status=document.getElementById('celebrations30Status');status.textContent='Bestaande aantallen laden…';
+  const local=readCelebrations30Local();let cards=[];try{cards=await getAll();}catch(e){}
+  const values={};
+  for(let n=1;n<=128;n++)for(const variant of ['Normaal','ex']){
+    const key=celebrations30Key(n,variant);
+    if(Object.prototype.hasOwnProperty.call(local,key)){values[key]=Math.max(0,Number(local[key])||0);continue;}
+    const identity=bundleCardIdentity({name:celebrations30StoredName(n,variant)});
+    values[key]=cards.filter(c=>c.productType==='Pokémonkaart'&&bundleCardIdentity(c)===identity&&canonicalBundleVariant(c.variant)===canonicalBundleVariant(variant)).reduce((sum,c)=>sum+availableQuantity(c),0);
+  }
+  document.getElementById('celebrations30Rows').innerHTML='<div class="card">'+Array.from({length:128},(_,i)=>{const n=i+1,normal=values[celebrations30Key(n,'Normaal')]||'',ex=values[celebrations30Key(n,'ex')]||'';return `<div id="c30-${n}" class="row" style="align-items:end;border-bottom:1px solid #e4e8ee;padding:7px 0"><div><b>Kaart ${String(n).padStart(3,'0')}/128</b></div><div><label style="margin-top:0">Gewoon</label><input class="c30-input" data-number="${n}" data-variant="Normaal" type="number" min="0" step="1" inputmode="numeric" value="${normal}" placeholder="0" oninput="updateCelebrations30Count()"><label>ex</label><input class="c30-input" data-number="${n}" data-variant="ex" type="number" min="0" step="1" inputmode="numeric" value="${ex}" placeholder="0" oninput="updateCelebrations30Count()"></div></div>`;}).join('')+'</div>';
+  status.textContent='✓ Kaarten 1 t/m 128 klaar voor invoer.';updateCelebrations30Count();
+}
+function updateCelebrations30Count(){const inputs=[...document.querySelectorAll('.c30-input')],types=inputs.filter(x=>(+x.value||0)>0).length,total=inputs.reduce((s,x)=>s+(+x.value||0),0);document.getElementById('celebrations30Count').textContent=types+' kaartregels · '+total+' kaarten totaal';}
+function jumpCelebrations30(){const n=Math.max(1,Math.min(128,parseInt(document.getElementById('celebrations30Jump').value)||0)),el=document.getElementById('c30-'+n);if(!el)return alert('Vul een kaartnummer van 1 t/m 128 in.');el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('set-entry-target');setTimeout(()=>el.classList.remove('set-entry-target'),2200);}
+function saveCelebrations30Local(){const data={};document.querySelectorAll('.c30-input').forEach(x=>data[celebrations30Key(x.dataset.number,x.dataset.variant)]=Math.max(0,parseInt(x.value)||0));localStorage.setItem(CELEBRATIONS30_KEY,JSON.stringify(data));document.getElementById('celebrations30Status').textContent='✓ De aantallen zijn lokaal bewaard. Tik op “Aantallen doorsturen” om de gezamenlijke voorraad bij te werken.';}
+async function syncCelebrations30(){
+  saveCelebrations30Local();if(!navigator.onLine)return alert('Geen internetverbinding. De lokale aantallen blijven bewaard.');if(!confirm('De aantallen van 30ste Celebrations 1 t/m 128 nu naar de gezamenlijke voorraad sturen?'))return;
+  const status=document.getElementById('celebrations30Status');status.textContent='Gezamenlijke voorraad bijwerken…';
+  try{
+    await loadCards(true);await loadBundleData(true);const current=await getAll(),local=readCelebrations30Local();let updated=0,inserted=0;
+    for(let n=1;n<=128;n++)for(const variant of ['Normaal','ex']){
+      const target=Math.max(0,Number(local[celebrations30Key(n,variant)])||0),name=celebrations30StoredName(n,variant),identity=bundleCardIdentity({name});
+      const matches=current.filter(c=>c.productType==='Pokémonkaart'&&bundleCardIdentity(c)===identity&&canonicalBundleVariant(c.variant)===canonicalBundleVariant(variant)).sort((a,b)=>String(a.id).localeCompare(String(b.id))),existing=matches[0];
+      if(existing){const reserved=existing.soldQuantity+allocatedQuantity(existing.id),quantity=reserved+target;if(Number(existing.quantity)!==quantity){existing.quantity=quantity;existing.status=target>0?'Op voorraad':(reserved>0?'Verkocht':'Op voorraad');const {error}=await cloud.from('cards').update(toDb(existing)).eq('id',existing.id);if(error)throw error;updated++;}}
+      else if(target>0){const payload=toDb({name,productType:'Pokémonkaart',condition:'NM',variant,acquisitionType:'private_contribution',contributionDate:new Date().toISOString().slice(0,10),contributionValue:0,buy:0,ask:0,min:0,quantity:target,soldQuantity:0,status:'Op voorraad',photo:'',soldPrice:0,payment:'',soldDate:''});const {error}=await cloud.from('cards').insert(payload);if(error)throw error;inserted++;}
+    }
+    await loadCards(true);status.textContent='✓ 30ste Celebrations bijgewerkt: '+inserted+' nieuwe en '+updated+' aangepaste kaartregels.';alert(status.textContent);
+  }catch(e){status.textContent='⚠️ Doorsturen gestopt: '+(e.message||e)+'. De lokale aantallen zijn bewaard.';}
 }
 function fixedSpecialVariant(card){
   const name=String(card?.name||'');
@@ -3487,6 +3554,38 @@ async function executeHeerlenClose(){
  }
 }
 
+
+function localRecoveryPokemonRows(rows){return (Array.isArray(rows)?rows:[]).filter(r=>!String(r.condition||'').startsWith('Kosten | '));}
+function recoveryRowPayload(r){const allowed=['id','name','condition','buy','ask','minimum','status','photo','quantity','sold_quantity','sold_price','payment','sold_date'],out={};for(const key of allowed)if(Object.prototype.hasOwnProperty.call(r,key))out[key]=r[key];return out;}
+async function previewLocalStockRecovery(){
+ const status=document.getElementById('localRecoveryStatus'),button=document.getElementById('localRecoveryButton');button.classList.add('hidden');
+ const snap=readJsonCache(STOCK_RECOVERY_KEY);if(!snap||!Array.isArray(snap.all)||!snap.all.length){status.textContent='Geen bruikbare lokale herstelkopie gevonden op dit toestel. Open geen volledige synchronisatie voordat een goede lokale kopie beschikbaar is.';return;}
+ try{
+  status.textContent='Lokale kopie vergelijken met de gezamenlijke voorraad…';const remote=await fetchAllTableRows('cards');if(remote.error)throw remote.error;
+  const oldRows=localRecoveryPokemonRows(snap.all),newRows=localRecoveryPokemonRows(remote.data),oldIds=new Set(oldRows.map(r=>String(r.id))),newIds=new Set(newRows.map(r=>String(r.id)));
+  const added=newRows.filter(r=>!oldIds.has(String(r.id))).length,missing=oldRows.filter(r=>!newIds.has(String(r.id))).length,changed=oldRows.filter(r=>{const now=newRows.find(x=>String(x.id)===String(r.id));return now&&JSON.stringify(recoveryRowPayload(now))!==JSON.stringify(recoveryRowPayload(r));}).length;
+  const stamp=snap.sourceSavedAt?new Date(snap.sourceSavedAt).toLocaleString('nl-NL'):(snap.capturedAt?new Date(snap.capturedAt).toLocaleString('nl-NL'):'onbekend');
+  status.innerHTML='<b>Lokale kopie:</b> '+escapeHtml(stamp)+'<br><b>'+oldRows.length+'</b> kaartregels in de kopie · <b>'+changed+'</b> gewijzigd · <b>'+added+'</b> later toegevoegd · <b>'+missing+'</b> ontbreken online.<br><span class="muted">Bij herstel worden aantallen en kaartgegevens uit deze lokale kopie teruggezet. Nieuwe, onverkochte regels die niet in de kopie staan worden verwijderd. Verkochte kaarten en kaarten in bundels worden nooit automatisch verwijderd.</span>';
+  button.classList.remove('hidden');
+ }catch(e){status.textContent='Controle mislukt: '+(e.message||e);}
+}
+async function restoreLocalStockSnapshot(){
+ const snap=readJsonCache(STOCK_RECOVERY_KEY),status=document.getElementById('localRecoveryStatus'),button=document.getElementById('localRecoveryButton');if(!snap||!Array.isArray(snap.all))return alert('De lokale herstelkopie ontbreekt.');
+ const typed=prompt('Typ HERSTEL om eerst een online back-up te downloaden en daarna de lokale voorraadkopie terug te zetten.');if(typed!=='HERSTEL')return;
+ button.disabled=true;
+ try{
+  status.textContent='Huidige online voorraad veiligstellen…';const remote=await fetchAllTableRows('cards');if(remote.error)throw remote.error;await loadBundleData(true);
+  const backup={createdAt:new Date().toISOString(),application:'Psycards',reason:'voor lokale voorraadherstelactie',cards:remote.data};const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Psycards-backup-voor-herstel-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  const oldRows=localRecoveryPokemonRows(snap.all).map(recoveryRowPayload),oldIds=new Set(oldRows.map(r=>String(r.id))),remotePokemon=localRecoveryPokemonRows(remote.data),bundledIds=new Set(bundleItemsCache.filter(x=>(+x.quantity||0)>0).map(x=>String(x.card_id)));
+  status.textContent='Lokale kaartregels terugzetten…';
+  for(let i=0;i<oldRows.length;i+=100){const {error}=await cloud.from('cards').upsert(oldRows.slice(i,i+100));if(error)throw error;}
+  const removable=remotePokemon.filter(r=>!oldIds.has(String(r.id))&&(+r.sold_quantity||0)===0&&!bundledIds.has(String(r.id))).map(r=>r.id);
+  for(let i=0;i<removable.length;i+=100){const {error}=await cloud.from('cards').delete().in('id',removable.slice(i,i+100));if(error)throw error;}
+  localStorage.removeItem(SET_ENTRY_PENDING_KEY);writeJsonCache(DATA_CACHE_KEY,{savedAt:Date.now(),all:snap.all});cardsCacheLoaded=false;await loadCards(true);updatePendingSetEntryStatus();
+  status.textContent='✓ Voorraad hersteld uit de lokale kopie. '+oldRows.length+' kaartregels teruggezet en '+removable.length+' foutieve, onverkochte regels verwijderd. De invoerlijst met automatisch ingevulde enen is leeggemaakt.';button.classList.add('hidden');alert(status.textContent);
+ }catch(e){status.textContent='⚠️ Herstel onderbroken: '+(e.message||e)+'. Bewaar de zojuist gedownloade back-up en controleer de voorraad voordat je opnieuw probeert.';}
+ finally{button.disabled=false;}
+}
 
 // Administratie reset: back-up vóór verwijderen; verwijder per tabel in afhankelijkheidsvolgorde.
 let adminResetBackupReady=false,adminResetBusy=false;
